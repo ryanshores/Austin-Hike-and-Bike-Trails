@@ -2,7 +2,7 @@
 
 :root { --paper: #f3eddc; --paper-deep: #e7dcc3; --ink: #203b31; --muted: #6f6a56; --orange: #b95d30; --line: rgba(61, 70, 50, .2); }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--paper); color: var(--ink); }
+html, body { margin: 0; min-height: 100%; max-width: 100%; overflow-x: hidden; background: var(--paper); color: var(--ink); }
 body { font-family: Georgia, "Times New Roman", serif; background-image: radial-gradient(rgba(77, 68, 45, .07) .7px, transparent .7px); background-size: 6px 6px; }
 button { font: inherit; }
 .atlas-shell { min-height: 100dvh; padding: 18px; display: grid; grid-template-rows: auto minmax(420px, 1fr) auto; gap: 14px; }
@@ -22,7 +22,7 @@ h2 { font-size: 22px; }
 .stamp-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #66824d; }
 .north-mark { position: absolute; z-index: 500; right: 18px; bottom: 28px; display: flex; flex-direction: column; align-items: center; color: var(--ink); font: 700 10px Arial, sans-serif; text-shadow: 0 1px #fff; }
 .north-mark span { font-size: 28px; line-height: .8; }
-.legend { border: 1px solid var(--line); border-radius: 18px; background: rgba(250, 245, 229, .94); padding: 16px 18px 14px; box-shadow: 0 8px 26px rgba(49, 53, 33, .09); }
+.legend { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 18px; background: rgba(250, 245, 229, .94); padding: 16px 18px 14px; box-shadow: 0 8px 26px rgba(49, 53, 33, .09); }
 .legend-heading { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 12px; }
 .legend-heading > p { margin: 0; color: var(--muted); font: 12px Arial, sans-serif; }
 .legend-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
@@ -46,7 +46,7 @@ h2 { font-size: 22px; }
   .legend-heading { margin-bottom: 8px; }
   .legend-heading h2 { font-size: 18px; }
   .legend-heading > p { display: none; }
-  .legend-grid { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .legend-grid { display: flex; width: 100%; max-width: 100%; gap: 7px; overflow-x: auto; overscroll-behavior-inline: contain; padding-bottom: 4px; scrollbar-width: thin; }
   .legend-item { flex: 0 0 160px; min-height: 54px; }
   .legend-note { display: none; }
 }
