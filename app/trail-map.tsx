@@ -34,6 +34,17 @@ function escapeHtml(value: unknown) {
   return String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character] ?? character));
 }
 
+function routeWeight(category: Category, zoom: number) {
+  const base = zoom <= 10 ? 1.15
+    : zoom <= 12 ? 1.5
+      : zoom <= 14 ? 1.9
+        : zoom <= 16 ? 2.5
+          : zoom === 17 ? 3.1
+            : zoom === 18 ? 3.7
+              : 4.2;
+  return category === "offRoadHike" ? Math.max(1, base - 0.2) : base;
+}
+
 export default function TrailMap() {
   const mapNode = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -59,7 +70,7 @@ export default function TrailMap() {
 
       (Object.keys(categories) as Category[]).forEach((category) => {
         const layer = L.geoJSON(undefined, {
-          style: { color: categories[category].color, weight: category.includes("Hike") ? 4 : 5, opacity: 0.92, dashArray: categories[category].dash },
+          style: { color: categories[category].color, weight: routeWeight(category, map.getZoom()), opacity: 0.92, dashArray: categories[category].dash },
           onEachFeature: (feature, featureLayer) => {
             const p = feature.properties as TrailProperties;
             const name = p.URBAN_TRAIL_NAME || p.URBAN_TRAIL_SYSTEM_NAME || p.FULL_STREET_NAME || "Austin trail segment";
@@ -70,6 +81,14 @@ export default function TrailMap() {
         layersRef.current[category] = layer;
         layer.addTo(map);
       });
+
+      const updateRouteWeights = () => {
+        const zoom = map.getZoom();
+        (Object.keys(categories) as Category[]).forEach((category) => {
+          layersRef.current[category]?.setStyle({ weight: routeWeight(category, zoom) });
+        });
+      };
+      map.on("zoomend", updateRouteWeights);
 
       let hikeCount = 0;
       let bikeCount = 0;
