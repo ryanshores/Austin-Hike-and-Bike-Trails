@@ -62,9 +62,10 @@ export default function TrailMap() {
       if (cancelled || !mapNode.current) return;
       const map = L.map(mapNode.current, { zoomControl: false, preferCanvas: true, minZoom: 9 }).setView([30.2672, -97.7431], 12);
       mapRef.current = map;
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 20,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
       }).addTo(map);
       L.control.zoom({ position: "topright" }).addTo(map);
 
