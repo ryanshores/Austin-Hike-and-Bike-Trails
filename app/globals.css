@@ -25,7 +25,7 @@ h2 { font-size: 22px; }
 .legend { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 18px; background: rgba(250, 245, 229, .94); padding: 16px 18px 14px; box-shadow: 0 8px 26px rgba(49, 53, 33, .09); }
 .legend-heading { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 12px; }
 .legend-heading > p { margin: 0; color: var(--muted); font: 12px Arial, sans-serif; }
-.legend-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.legend-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .legend-item { min-width: 0; min-height: 62px; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; opacity: .42; }
 .legend-item.active { opacity: 1; border-color: var(--line); background: rgba(255,255,255,.38); }
 .legend-item:focus-visible, .location-button:focus-visible { outline: 3px solid rgba(185, 93, 48, .35); outline-offset: 2px; }

@@ -5,26 +5,28 @@ import type { Feature, FeatureCollection, LineString, MultiLineString } from "ge
 import type { GeoJSON as LeafletGeoJSON, Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-type Category = "offRoadBike" | "protectedBike" | "streetBike" | "roadHike" | "offRoadHike";
+type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type TrailProperties = Record<string, string | number | null> & { category?: Category };
 type TrailFeature = Feature<LineString | MultiLineString, TrailProperties>;
+type ArcGISFeatureCollection = FeatureCollection<LineString | MultiLineString, TrailProperties> & {
+  properties?: { exceededTransferLimit?: boolean };
+};
 
 const categories: Record<Category, { label: string; note: string; color: string; dash?: string }> = {
   offRoadBike: { label: "Separated path, off road", note: "Lowest traffic exposure", color: "#1f6b4f" },
   protectedBike: { label: "On road, separated", note: "Protected lane or buffer", color: "#2f7ea1" },
   streetBike: { label: "On road, not separated", note: "Bike lane or shared street", color: "#c76535" },
-  roadHike: { label: "Hiking on road", note: "Sidewalk or road connection", color: "#a85857", dash: "3 7" },
   offRoadHike: { label: "Hiking off road", note: "Park or urban trail", color: "#85944a", dash: "8 5" },
 };
 
-const bikeUrl = "https://maps.austintexas.gov/arcgis/rest/services/AmandaROW/Reference_1/MapServer/0/query?where=1%3D1&outFields=FULL_STREET_NAME%2CLINE_TYPE%2CBICYCLE_FACILITY%2CBIKE_LEVEL_OF_COMFORT&returnGeometry=true&outSR=4326&f=geojson&resultRecordCount=2000";
+const bikeEndpoint = "https://maps.austintexas.gov/arcgis/rest/services/AmandaROW/Reference_1/MapServer/0/query";
 const hikeUrl = "https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/TRANSPORTATION_urban_trails_network/FeatureServer/0/query?where=BUILD_STATUS%3D%27EXISTING%27&outFields=URBAN_TRAIL_SYSTEM_NAME%2CURBAN_TRAIL_NAME%2CTRAIL_SURFACE_TYPE%2CLOCATION%2CLENGTH_MILES&returnGeometry=true&outSR=4326&f=geojson&resultRecordCount=2000";
 
 function classifyBike(properties: TrailProperties): Category {
   const facility = String(properties.BICYCLE_FACILITY ?? "").toLowerCase();
   const lineType = String(properties.LINE_TYPE ?? "").toLowerCase();
   if (lineType.includes("off-street") || facility.includes("trail") || facility.includes("shared use")) return "offRoadBike";
-  if (facility.includes("protected") || facility.includes("buffer") || facility.includes("cycle track")) return "protectedBike";
+  if (facility.includes("protected") || facility.includes("buffer") || facility.includes("cycle track") || facility.includes("wparking")) return "protectedBike";
   return "streetBike";
 }
 
@@ -36,12 +38,13 @@ export default function TrailMap() {
   const mapNode = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const layersRef = useRef<Partial<Record<Category, LeafletGeoJSON>> >({});
-  const [enabled, setEnabled] = useState<Record<Category, boolean>>({ offRoadBike: true, protectedBike: true, streetBike: true, roadHike: true, offRoadHike: true });
+  const [enabled, setEnabled] = useState<Record<Category, boolean>>({ offRoadBike: true, protectedBike: true, streetBike: true, offRoadHike: true });
   const [status, setStatus] = useState("Loading City of Austin trail data…");
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
     let cancelled = false;
+    let bikeRequest: AbortController | null = null;
 
     async function start() {
       const L = await import("leaflet");
@@ -54,41 +57,87 @@ export default function TrailMap() {
       }).addTo(map);
       L.control.zoom({ position: "topright" }).addTo(map);
 
-      try {
-        const [bikeResponse, hikeResponse] = await Promise.all([fetch(bikeUrl), fetch(hikeUrl)]);
-        if (!bikeResponse.ok || !hikeResponse.ok) throw new Error("City trail service unavailable");
-        const bike = (await bikeResponse.json()) as FeatureCollection<LineString | MultiLineString, TrailProperties>;
-        const hike = (await hikeResponse.json()) as FeatureCollection<LineString | MultiLineString, TrailProperties>;
-        const features: TrailFeature[] = [
-          ...bike.features.map((f) => ({ ...f, properties: { ...f.properties, category: classifyBike(f.properties) } })),
-          ...hike.features.map((f) => ({ ...f, properties: { ...f.properties, category: "offRoadHike" as Category } })),
-        ];
-
-        (Object.keys(categories) as Category[]).forEach((category) => {
-          const collection: FeatureCollection<LineString | MultiLineString, TrailProperties> = {
-            type: "FeatureCollection",
-            features: features.filter((feature) => feature.properties.category === category),
-          };
-          const layer = L.geoJSON(collection, {
-            style: { color: categories[category].color, weight: category.includes("Hike") ? 4 : 5, opacity: 0.92, dashArray: categories[category].dash },
-            onEachFeature: (feature, featureLayer) => {
-              const p = feature.properties as TrailProperties;
-              const name = p.URBAN_TRAIL_NAME || p.URBAN_TRAIL_SYSTEM_NAME || p.FULL_STREET_NAME || "Austin trail segment";
-              const detail = p.TRAIL_SURFACE_TYPE || p.BICYCLE_FACILITY || categories[category].note;
-              featureLayer.bindPopup(`<strong>${escapeHtml(name)}</strong><br>${escapeHtml(categories[category].label)}<br><span>${escapeHtml(detail)}</span>`);
-            },
-          });
-          layersRef.current[category] = layer;
-          if (enabled[category]) layer.addTo(map);
+      (Object.keys(categories) as Category[]).forEach((category) => {
+        const layer = L.geoJSON(undefined, {
+          style: { color: categories[category].color, weight: category.includes("Hike") ? 4 : 5, opacity: 0.92, dashArray: categories[category].dash },
+          onEachFeature: (feature, featureLayer) => {
+            const p = feature.properties as TrailProperties;
+            const name = p.URBAN_TRAIL_NAME || p.URBAN_TRAIL_SYSTEM_NAME || p.FULL_STREET_NAME || "Austin trail segment";
+            const detail = p.TRAIL_SURFACE_TYPE || p.BICYCLE_FACILITY || categories[category].note;
+            featureLayer.bindPopup(`<strong>${escapeHtml(name)}</strong><br>${escapeHtml(categories[category].label)}<br><span>${escapeHtml(detail)}</span>`);
+          },
         });
-        setStatus(`${bike.features.length.toLocaleString()} bike segments · ${hike.features.length.toLocaleString()} existing trail segments`);
-      } catch {
-        setStatus("Live trail data could not load. Try refreshing when you have a connection.");
+        layersRef.current[category] = layer;
+        layer.addTo(map);
+      });
+
+      let hikeCount = 0;
+      let bikeCount = 0;
+      const updateStatus = () => setStatus(`${bikeCount.toLocaleString()} bike facilities in view · ${hikeCount.toLocaleString()} existing trail segments`);
+
+      async function loadHikes() {
+        const response = await fetch(hikeUrl);
+        if (!response.ok) throw new Error("Urban trail service unavailable");
+        const data = (await response.json()) as ArcGISFeatureCollection;
+        const features = data.features.map((feature) => ({ ...feature, properties: { ...feature.properties, category: "offRoadHike" as Category } }));
+        layersRef.current.offRoadHike?.addData({ type: "FeatureCollection", features });
+        hikeCount = features.length;
+        updateStatus();
       }
+
+      async function loadBikeFacilities() {
+        bikeRequest?.abort();
+        bikeRequest = new AbortController();
+        const signal = bikeRequest.signal;
+        setStatus("Updating bike routes for this area…");
+        const bounds = map.getBounds();
+        const geometry = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(",");
+        const pageSize = 2000;
+        const features: TrailFeature[] = [];
+
+        for (let offset = 0; offset < 20000; offset += pageSize) {
+          const parameters = new URLSearchParams({
+            where: "BICYCLE_FACILITY IS NOT NULL",
+            outFields: "OBJECTID,FULL_STREET_NAME,LINE_TYPE,BICYCLE_FACILITY,BIKE_LEVEL_OF_COMFORT",
+            returnGeometry: "true",
+            outSR: "4326",
+            geometry,
+            geometryType: "esriGeometryEnvelope",
+            inSR: "4326",
+            spatialRel: "esriSpatialRelIntersects",
+            orderByFields: "OBJECTID",
+            resultOffset: String(offset),
+            resultRecordCount: String(pageSize),
+            f: "geojson",
+          });
+          const response = await fetch(`${bikeEndpoint}?${parameters}`, { signal });
+          if (!response.ok) throw new Error("Bicycle facility service unavailable");
+          const page = (await response.json()) as ArcGISFeatureCollection;
+          features.push(...page.features.map((feature) => ({ ...feature, properties: { ...feature.properties, category: classifyBike(feature.properties) } })));
+          if (!page.properties?.exceededTransferLimit || page.features.length < pageSize) break;
+        }
+
+        if (signal.aborted || cancelled) return;
+        (["offRoadBike", "protectedBike", "streetBike"] as Category[]).forEach((category) => {
+          const layer = layersRef.current[category];
+          layer?.clearLayers();
+          layer?.addData({ type: "FeatureCollection", features: features.filter((feature) => feature.properties.category === category) });
+        });
+        bikeCount = features.length;
+        updateStatus();
+      }
+
+      const refreshBikes = () => { loadBikeFacilities().catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setStatus("Bike routes could not update. Try refreshing when you have a connection.");
+      }); };
+      map.on("moveend", refreshBikes);
+      loadHikes().catch(() => setStatus("Urban trails could not load. Try refreshing when you have a connection."));
+      refreshBikes();
     }
 
     start();
-    return () => { cancelled = true; mapRef.current?.remove(); mapRef.current = null; };
+    return () => { cancelled = true; bikeRequest?.abort(); mapRef.current?.remove(); mapRef.current = null; };
   }, []);
 
   function toggle(category: Category) {
