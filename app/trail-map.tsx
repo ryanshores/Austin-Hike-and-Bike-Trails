@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
 import type { Circle, CircleMarker, GeoJSON as LeafletGeoJSON, LatLng, Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { locationFixAction } from "./location-accuracy";
 
 type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type Orientation = "north" | "forward";
@@ -215,7 +216,10 @@ export default function TrailMap() {
     setEnabled((current) => ({ ...current, [category]: next }));
     const map = mapRef.current;
     const layer = layersRef.current[category];
-    if (map && layer) next ? layer.addTo(map) : layer.removeFrom(map);
+    if (map && layer) {
+      if (next) layer.addTo(map);
+      else layer.removeFrom(map);
+    }
   }
 
   function stopTracking() {
@@ -248,6 +252,17 @@ export default function TrailMap() {
     setStatus("Starting high-accuracy GPS…");
     let firstFix = true;
     watchIdRef.current = navigator.geolocation.watchPosition((position) => {
+      const roundedAccuracy = Math.round(position.coords.accuracy);
+      const fixAction = locationFixAction(position.coords.accuracy, !firstFix);
+      if (fixAction === "wait-for-accurate-fix") {
+        setStatus(`Ride mode · GPS ±${roundedAccuracy} m is approximate · Enable Precise or Accurate Location in your phone's browser settings`);
+        return;
+      }
+      if (fixAction === "keep-last-fix") {
+        setStatus(`Ride mode · GPS weakened to ±${roundedAccuracy} m · Keeping your last accurate position`);
+        return;
+      }
+
       const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
       const previous = lastLocationRef.current;
       const moved = previous?.distanceTo(latlng) ?? 0;
@@ -279,7 +294,7 @@ export default function TrailMap() {
         setBearing((nextBearing + 360) % 360);
       }
       const speed = position.coords.speed && position.coords.speed > 0 ? ` · ${(position.coords.speed * 2.237).toFixed(1)} mph` : "";
-      setStatus(`Ride mode · GPS ±${Math.round(position.coords.accuracy)} m${speed}`);
+      setStatus(`Ride mode · GPS ±${roundedAccuracy} m${speed}`);
     }, (error) => {
       if (error.code === error.PERMISSION_DENIED) {
         if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
