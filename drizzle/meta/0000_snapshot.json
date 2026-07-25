@@ -359,9 +359,9 @@
           "name": "ride_points_heading_check",
           "value": "\"ride_points\".\"heading_degrees\" is null\n        or (\"ride_points\".\"heading_degrees\" >= 0 and \"ride_points\".\"heading_degrees\" < 360)"
         },
-        "ride_points_quality_check": {
-          "name": "ride_points_quality_check",
-          "value": "\"ride_points\".\"quality\" in ('good', 'fair', 'poor')"
+        "ride_points_quality_accuracy_check": {
+          "name": "ride_points_quality_accuracy_check",
+          "value": "(\n        (\"ride_points\".\"quality\" = 'good' and \"ride_points\".\"accuracy_meters\" <= 25)\n        or\n        (\"ride_points\".\"quality\" = 'fair'\n          and \"ride_points\".\"accuracy_meters\" > 25\n          and \"ride_points\".\"accuracy_meters\" <= 75)\n        or\n        (\"ride_points\".\"quality\" = 'poor'\n          and \"ride_points\".\"accuracy_meters\" > 75\n          and \"ride_points\".\"accuracy_meters\" <= 100)\n      )"
         }
       }
     },

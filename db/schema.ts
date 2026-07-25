@@ -249,8 +249,18 @@ export const ridePoints = sqliteTable(
         or (${table.headingDegrees} >= 0 and ${table.headingDegrees} < 360)`,
     ),
     check(
-      "ride_points_quality_check",
-      sql`${table.quality} in ('good', 'fair', 'poor')`,
+      "ride_points_quality_accuracy_check",
+      sql`(
+        (${table.quality} = 'good' and ${table.accuracyMeters} <= 25)
+        or
+        (${table.quality} = 'fair'
+          and ${table.accuracyMeters} > 25
+          and ${table.accuracyMeters} <= 75)
+        or
+        (${table.quality} = 'poor'
+          and ${table.accuracyMeters} > 75
+          and ${table.accuracyMeters} <= 100)
+      )`,
     ),
   ],
 );

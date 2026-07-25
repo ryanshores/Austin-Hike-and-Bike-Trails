@@ -174,13 +174,48 @@ test("ride points enforce quality, ordering, and batch ownership", () => {
     "good",
   );
 
+  for (const [index, accuracy, quality] of [
+    [1, 25, "good"],
+    [2, 25.1, "fair"],
+    [3, 75, "fair"],
+    [4, 75.1, "poor"],
+    [5, 100, "poor"],
+  ]) {
+    insertPoint.run(
+      `quality-boundary-${index}`,
+      "ride-a",
+      "batch-a",
+      index,
+      1_000 + index,
+      30.2672,
+      -97.7431,
+      accuracy,
+      quality,
+    );
+  }
+
+  assert.throws(
+    () =>
+      insertPoint.run(
+        "mismatched-quality",
+        "ride-a",
+        "batch-a",
+        6,
+        2_000,
+        30.2673,
+        -97.7432,
+        100,
+        "good",
+      ),
+    /CHECK constraint failed/,
+  );
   assert.throws(
     () =>
       insertPoint.run(
         "coarse-point",
         "ride-a",
         "batch-a",
-        1,
+        7,
         2_000,
         30.2673,
         -97.7432,
@@ -195,7 +230,7 @@ test("ride points enforce quality, ordering, and batch ownership", () => {
         "foreign-batch-point",
         "ride-a",
         "batch-b",
-        1,
+        8,
         2_000,
         30.2673,
         -97.7432,

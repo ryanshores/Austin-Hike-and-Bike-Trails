@@ -48,7 +48,17 @@ CREATE TABLE `ride_points` (
 	CONSTRAINT "ride_points_speed_check" CHECK("ride_points"."speed_meters_per_second" is null or "ride_points"."speed_meters_per_second" >= 0),
 	CONSTRAINT "ride_points_heading_check" CHECK("ride_points"."heading_degrees" is null
         or ("ride_points"."heading_degrees" >= 0 and "ride_points"."heading_degrees" < 360)),
-	CONSTRAINT "ride_points_quality_check" CHECK("ride_points"."quality" in ('good', 'fair', 'poor'))
+	CONSTRAINT "ride_points_quality_accuracy_check" CHECK((
+        ("ride_points"."quality" = 'good' and "ride_points"."accuracy_meters" <= 25)
+        or
+        ("ride_points"."quality" = 'fair'
+          and "ride_points"."accuracy_meters" > 25
+          and "ride_points"."accuracy_meters" <= 75)
+        or
+        ("ride_points"."quality" = 'poor'
+          and "ride_points"."accuracy_meters" > 75
+          and "ride_points"."accuracy_meters" <= 100)
+      ))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `ride_points_ride_sequence_unique` ON `ride_points` (`ride_id`,`sequence`);--> statement-breakpoint
