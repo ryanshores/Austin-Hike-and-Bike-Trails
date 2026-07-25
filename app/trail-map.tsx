@@ -11,6 +11,7 @@ import {
   locationQuality,
   smoothingWeight,
 } from "./location-accuracy";
+import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 
 type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type Orientation = "north" | "forward";
@@ -138,27 +139,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       await import("leaflet-rotate");
       if (cancelled || !mapNode.current) return;
       leafletRef.current = L;
-      const map = L.map(mapNode.current, {
-        zoomControl: false,
-        // leaflet-rotate keeps SVG vectors in the same transformed pane as the
-        // tiles. Its canvas renderer can drift away from the basemap on mobile.
-        preferCanvas: !isRide,
-        minZoom: 9,
-        rotate: true,
-        rotateControl: false,
-        touchRotate: false,
-        shiftKeyRotate: false,
-      }).setView([30.2672, -97.7431], 12);
+      const map = L.map(mapNode.current, mapOptionsForMode(isRide)).setView([30.2672, -97.7431], 12);
       mapRef.current = map;
-      const syncMapSize = () => {
-        window.requestAnimationFrame(() => {
-          if (!cancelled) map.invalidateSize({ animate: false, pan: false });
-        });
-      };
-      const resizeObserver = new ResizeObserver(syncMapSize);
-      resizeObserver.observe(mapNode.current);
-      window.visualViewport?.addEventListener("resize", syncMapSize);
-      window.visualViewport?.addEventListener("scroll", syncMapSize);
+      const mapSizeSync = installMapSizeSync({ map, mapNode: mapNode.current });
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
         maxZoom: 20,
@@ -278,13 +261,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       map.on("moveend", refreshBikes);
       loadHikes().catch(() => setStatus("Urban trails could not load. Try refreshing when you have a connection."));
       refreshBikes();
-      map.once("load", syncMapSize);
-
-      map.on("unload", () => {
-        resizeObserver.disconnect();
-        window.visualViewport?.removeEventListener("resize", syncMapSize);
-        window.visualViewport?.removeEventListener("scroll", syncMapSize);
-      });
+      map.once("load", mapSizeSync.syncMapSize);
+      map.on("unload", mapSizeSync.disconnect);
     }
 
     start();

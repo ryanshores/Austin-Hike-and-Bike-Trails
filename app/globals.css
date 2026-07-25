@@ -55,7 +55,7 @@ h2 { font-size: 22px; }
 .route-swatch { flex: 0 0 35px; width: 35px; height: 0; border-top: 5px var(--route-dash) var(--route-color); border-radius: 5px; }
 .legend-note { margin: 11px 0 0; color: var(--muted); font: 11px/1.35 Arial, sans-serif; }
 
-.ride-shell { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; min-height: 100svh; overflow: hidden; overscroll-behavior: none; background: #dce1c6; }
+.ride-shell { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; min-height: 100svh; overflow: hidden; overscroll-behavior: none; background: #dce1c6; }
 .ride-map-frame { position: absolute; inset: 0; overflow: hidden; }
 .ride-shell .leaflet-top .leaflet-control-zoom { margin-top: calc(max(12px, env(safe-area-inset-top)) + 52px); margin-right: 12px; }
 .ride-topbar { position: absolute; z-index: 650; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; pointer-events: none; }
