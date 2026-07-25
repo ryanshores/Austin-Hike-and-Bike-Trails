@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if ! sh scripts/select-site-target.sh --quiet; then
+  echo "Sites target was not generated for this branch." >&2
+fi
+
+exit 0

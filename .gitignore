@@ -40,3 +40,6 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Generated locally from branch-specific values in .git/config.
+/.openai/hosting.json
