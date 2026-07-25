@@ -5,14 +5,29 @@
 html, body { margin: 0; min-height: 100%; max-width: 100%; overflow-x: hidden; background: var(--paper); color: var(--ink); }
 body { font-family: Georgia, "Times New Roman", serif; background-image: radial-gradient(rgba(77, 68, 45, .07) .7px, transparent .7px); background-size: 6px 6px; }
 button { font: inherit; }
-.atlas-shell { min-height: 100dvh; padding: 18px; display: grid; grid-template-rows: auto minmax(420px, 1fr) auto; gap: 14px; }
+.atlas-shell { min-height: 100dvh; padding: 18px; display: grid; grid-template-rows: auto auto minmax(420px, 1fr) auto; gap: 14px; }
 .atlas-header { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 6px; }
 .eyebrow { margin: 0 0 4px; color: var(--orange); font: 700 11px/1.2 Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
 h1, h2 { margin: 0; font-weight: 500; }
 h1 { font-size: clamp(29px, 4vw, 46px); letter-spacing: -.035em; }
 h2 { font-size: 22px; }
-.location-button { border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 252, 241, .8); color: var(--ink); min-height: 44px; padding: 0 16px; cursor: pointer; box-shadow: 0 4px 16px rgba(40, 46, 31, .08); }
+.location-button { border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 252, 241, .8); color: var(--ink); min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; cursor: pointer; box-shadow: 0 4px 16px rgba(40, 46, 31, .08); }
 .location-button.tracking { background: var(--ink); color: #fffaf0; }
+.search-panel { position: relative; z-index: 700; display: grid; grid-template-columns: auto minmax(280px, 620px); align-items: center; gap: 14px; padding: 0 6px; }
+.search-panel > label { font: 700 12px Arial, sans-serif; letter-spacing: .02em; }
+.search-field { min-height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 252, 241, .9); box-shadow: 0 6px 20px rgba(40, 46, 31, .08); }
+.search-field > span { font: 22px/1 Arial, sans-serif; color: var(--muted); }
+.search-field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font: 15px Arial, sans-serif; }
+.search-field input::placeholder { color: #817c68; }
+.search-results { position: absolute; right: 6px; top: calc(100% + 7px); width: min(620px, calc(100% - 12px)); overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: #fffaf0; box-shadow: 0 16px 40px rgba(40, 46, 31, .18); }
+.search-results button { width: 100%; display: block; padding: 11px 14px; border: 0; border-bottom: 1px solid rgba(61, 70, 50, .12); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.search-results button:hover, .search-results button:focus-visible { background: #f0e8d4; outline: 0; }
+.search-results button:last-child { border-bottom: 0; }
+.search-results strong, .search-results span { display: block; }
+.search-results strong { font: 700 13px Arial, sans-serif; }
+.search-results span { margin-top: 4px; color: var(--muted); font: 11px Arial, sans-serif; }
+.search-results i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+.search-results p { margin: 0; padding: 14px; color: var(--muted); font: 12px Arial, sans-serif; }
 .map-frame { position: relative; overflow: hidden; border: 1px solid rgba(55, 72, 52, .3); border-radius: 22px; box-shadow: 0 16px 45px rgba(48, 54, 35, .16); background: #dce1c6; }
 .map { position: absolute; inset: 0; }
 .map .leaflet-tile-pane { filter: sepia(.2) saturate(.72) contrast(.93) brightness(1.04); }
@@ -39,13 +54,53 @@ h2 { font-size: 22px; }
 .route-swatch { flex: 0 0 35px; width: 35px; height: 0; border-top: 5px var(--route-dash) var(--route-color); border-radius: 5px; }
 .legend-note { margin: 11px 0 0; color: var(--muted); font: 11px/1.35 Arial, sans-serif; }
 
+.ride-shell { position: fixed; inset: 0; overflow: hidden; background: #dce1c6; }
+.ride-map-frame { position: absolute; inset: 0; overflow: hidden; }
+.ride-topbar { position: absolute; z-index: 650; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; pointer-events: none; }
+.ride-topbar > * { pointer-events: auto; }
+.ride-exit, .ride-more { min-height: 42px; border: 1px solid rgba(45, 59, 42, .22); border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--ink); box-shadow: 0 4px 14px rgba(43, 49, 33, .14); backdrop-filter: blur(8px); }
+.ride-exit { display: flex; align-items: center; gap: 5px; padding: 0 13px; text-decoration: none; font: 700 12px Arial, sans-serif; }
+.ride-more { width: 42px; padding: 0; cursor: pointer; font: 700 13px Arial, sans-serif; }
+.gps-badge { justify-self: center; max-width: min(560px, 100%); min-height: 42px; display: flex; align-items: center; padding: 8px 13px; border: 1px solid rgba(45, 59, 42, .22); border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--ink); box-shadow: 0 4px 14px rgba(43, 49, 33, .14); backdrop-filter: blur(8px); font: 12px/1.25 Arial, sans-serif; }
+.gps-badge.good .stamp-dot { background: #33734c; }
+.gps-badge.fair .stamp-dot { background: #c28b25; }
+.gps-badge.poor .stamp-dot, .gps-badge.unusable .stamp-dot, .gps-badge.blocked .stamp-dot { background: #c75b3a; }
+.ride-start-card { position: absolute; z-index: 620; left: 50%; top: 50%; width: min(360px, calc(100% - 32px)); transform: translate(-50%, -50%); padding: 24px; border: 1px solid rgba(45, 59, 42, .25); border-radius: 20px; background: rgba(255, 250, 240, .96); box-shadow: 0 18px 55px rgba(35, 43, 28, .23); text-align: center; backdrop-filter: blur(12px); }
+.ride-start-card h1 { font-size: 32px; }
+.ride-start-card > p:not(.eyebrow) { margin: 10px 0 18px; color: var(--muted); font: 13px/1.45 Arial, sans-serif; }
+.ride-start-card button { width: 100%; min-height: 48px; border: 0; border-radius: 999px; background: var(--ink); color: #fffaf0; cursor: pointer; font: 700 14px Arial, sans-serif; }
+.ride-start-card > a { display: inline-block; margin-top: 13px; color: var(--muted); font: 12px Arial, sans-serif; }
+.ride-layers { position: fixed; z-index: 610; left: 12px; right: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 70px); overflow: hidden; border: 1px solid rgba(45, 59, 42, .22); border-radius: 14px; background: rgba(255, 250, 240, .93); box-shadow: 0 5px 20px rgba(43, 49, 33, .16); backdrop-filter: blur(9px); }
+.ride-layers .legend-heading, .ride-layers .legend-note { display: none; }
+.ride-layers .legend-grid { display: flex; width: 100%; gap: 4px; overflow-x: auto; padding: 5px; scrollbar-width: none; }
+.ride-layers .legend-grid::-webkit-scrollbar { display: none; }
+.ride-layers .legend-item { flex: 1 0 150px; min-height: 48px; padding: 6px 8px; }
+.ride-layers .legend-item small { display: none; }
+.ride-layers .route-swatch { flex-basis: 28px; width: 28px; border-top-width: 4px; }
+.ride-shell .orientation-control { position: fixed; left: 12px; bottom: max(14px, env(safe-area-inset-bottom)); }
+.ride-shell .north-mark { position: fixed; right: 18px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 5px); }
+.ride-stop { position: fixed; z-index: 610; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); min-height: 42px; transform: translateX(-50%); padding: 0 15px; border: 1px solid rgba(45, 59, 42, .22); border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--ink); box-shadow: 0 4px 14px rgba(43, 49, 33, .14); cursor: pointer; font: 700 12px Arial, sans-serif; }
+.diagnostics-panel { position: fixed; z-index: 700; top: calc(max(12px, env(safe-area-inset-top)) + 52px); right: 12px; width: min(330px, calc(100% - 24px)); padding: 17px; border: 1px solid rgba(45, 59, 42, .25); border-radius: 16px; background: rgba(255, 250, 240, .97); box-shadow: 0 15px 40px rgba(35, 43, 28, .22); backdrop-filter: blur(12px); }
+.diagnostics-panel h2 { font-size: 20px; }
+.diagnostics-panel dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 13px 0; }
+.diagnostics-panel dl div { padding: 8px; border-radius: 8px; background: #eee5d1; }
+.diagnostics-panel dt { color: var(--muted); font: 10px Arial, sans-serif; }
+.diagnostics-panel dd { margin: 3px 0 0; text-transform: capitalize; font: 700 12px Arial, sans-serif; }
+.diagnostics-panel > p { color: var(--muted); font: 11px/1.4 Arial, sans-serif; }
+.diagnostic-actions { display: flex; gap: 7px; }
+.diagnostic-actions button { flex: 1; min-height: 38px; border: 1px solid var(--line); border-radius: 999px; background: #fffaf0; color: var(--ink); cursor: pointer; font: 700 11px Arial, sans-serif; }
+.diagnostic-actions button:disabled { cursor: default; opacity: .45; }
+
 @media (max-width: 800px) {
-  .atlas-shell { height: 100dvh; min-height: 620px; padding: 10px; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; }
+  .atlas-shell { min-height: 100dvh; padding: 10px; grid-template-rows: auto auto minmax(420px, 62dvh) auto; gap: 8px; }
   .atlas-header { min-height: 56px; }
   h1 { font-size: 28px; }
   .location-button span { display: none; }
   .location-button { width: 44px; padding: 0; font-size: 21px; }
   .map-frame { min-height: 310px; border-radius: 16px; }
+  .search-panel { display: block; padding: 0; }
+  .search-panel > label { display: block; margin: 0 0 6px 3px; }
+  .search-results { right: 0; width: 100%; }
   .legend { padding: 12px; border-radius: 15px; }
   .legend-heading { margin-bottom: 8px; }
   .legend-heading h2 { font-size: 18px; }
@@ -56,4 +111,10 @@ h2 { font-size: 22px; }
   .orientation-control { bottom: 22px; }
   .orientation-control button { width: 42px; padding: 0; font-size: 16px; }
   .orientation-control button span { display: none; }
+  .ride-topbar { grid-template-columns: 42px minmax(0, 1fr) 42px; }
+  .ride-exit { width: 42px; padding: 0; justify-content: center; font-size: 18px; }
+  .ride-exit span { display: none; }
+  .gps-badge { min-height: 42px; overflow: hidden; font-size: 10px; }
+  .ride-layers .legend-item { flex-basis: 135px; }
+  .ride-shell .orientation-control { bottom: max(14px, env(safe-area-inset-bottom)); }
 }

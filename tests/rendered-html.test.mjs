@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-async function render() {
+async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", {
+    new Request(`http://localhost${pathname}`, {
       headers: { accept: "text/html" },
     }),
     {
@@ -31,7 +31,8 @@ test("server-renders the Austin trail atlas", async () => {
   assert.match(html, /<title>Austin Hike &amp; Bike Atlas<\/title>/i);
   assert.match(html, /Hike &amp; Bike Atlas/);
   assert.match(html, /Interactive map of Austin hike and bike paths/);
-  assert.match(html, /Start moving ride map/);
+  assert.match(html, /Open full-screen ride map/);
+  assert.match(html, /Find a trail or bike route/);
   assert.match(html, /Trail safety legend/);
 });
 
@@ -41,4 +42,16 @@ test("renders location status as an accessible live region", async () => {
 
   assert.match(html, /class="map-stamp" aria-live="polite"/);
   assert.match(html, /Loading City of Austin trail data/);
+});
+
+test("server-renders the dedicated full-screen ride page", async () => {
+  const response = await render("/ride");
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /Full-screen moving ride map/);
+  assert.match(html, /Ready to ride/);
+  assert.match(html, /Start GPS/);
+  assert.match(html, /GPS diagnostics/);
+  assert.doesNotMatch(html, /Find a trail or bike route/);
 });
