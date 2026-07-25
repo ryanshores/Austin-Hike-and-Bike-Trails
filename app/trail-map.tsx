@@ -140,7 +140,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       leafletRef.current = L;
       const map = L.map(mapNode.current, {
         zoomControl: false,
-        preferCanvas: true,
+        // leaflet-rotate keeps SVG vectors in the same transformed pane as the
+        // tiles. Its canvas renderer can drift away from the basemap on mobile.
+        preferCanvas: !isRide,
         minZoom: 9,
         rotate: true,
         rotateControl: false,
@@ -148,6 +150,15 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         shiftKeyRotate: false,
       }).setView([30.2672, -97.7431], 12);
       mapRef.current = map;
+      const syncMapSize = () => {
+        window.requestAnimationFrame(() => {
+          if (!cancelled) map.invalidateSize({ animate: false, pan: false });
+        });
+      };
+      const resizeObserver = new ResizeObserver(syncMapSize);
+      resizeObserver.observe(mapNode.current);
+      window.visualViewport?.addEventListener("resize", syncMapSize);
+      window.visualViewport?.addEventListener("scroll", syncMapSize);
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
         maxZoom: 20,
@@ -267,6 +278,13 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       map.on("moveend", refreshBikes);
       loadHikes().catch(() => setStatus("Urban trails could not load. Try refreshing when you have a connection."));
       refreshBikes();
+      map.once("load", syncMapSize);
+
+      map.on("unload", () => {
+        resizeObserver.disconnect();
+        window.visualViewport?.removeEventListener("resize", syncMapSize);
+        window.visualViewport?.removeEventListener("scroll", syncMapSize);
+      });
     }
 
     start();
@@ -281,7 +299,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       mapRef.current = null;
       leafletRef.current = null;
     };
-  }, []);
+  }, [isRide]);
 
   function toggle(category: Category) {
     const next = !enabled[category];
@@ -507,7 +525,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             <h1>Hike & Bike Atlas</h1>
           </div>
           <Link className="location-button" href="/ride" aria-label="Open full-screen ride map">
-            ▶ <span>Start ride</span>
+            <span className="location-button-icon" aria-hidden="true" />
+            <span className="location-button-label">Start ride</span>
           </Link>
         </header>
       )}
