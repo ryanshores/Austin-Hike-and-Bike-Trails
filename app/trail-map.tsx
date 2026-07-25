@@ -11,6 +11,7 @@ import {
   locationQuality,
   smoothingWeight,
 } from "./location-accuracy";
+import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 
 type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type Orientation = "north" | "forward";
@@ -138,16 +139,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       await import("leaflet-rotate");
       if (cancelled || !mapNode.current) return;
       leafletRef.current = L;
-      const map = L.map(mapNode.current, {
-        zoomControl: false,
-        preferCanvas: true,
-        minZoom: 9,
-        rotate: true,
-        rotateControl: false,
-        touchRotate: false,
-        shiftKeyRotate: false,
-      }).setView([30.2672, -97.7431], 12);
+      const map = L.map(mapNode.current, mapOptionsForMode(isRide)).setView([30.2672, -97.7431], 12);
       mapRef.current = map;
+      const mapSizeSync = installMapSizeSync({ map, mapNode: mapNode.current });
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
         maxZoom: 20,
@@ -267,6 +261,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       map.on("moveend", refreshBikes);
       loadHikes().catch(() => setStatus("Urban trails could not load. Try refreshing when you have a connection."));
       refreshBikes();
+      map.once("load", mapSizeSync.syncMapSize);
+      map.on("unload", mapSizeSync.disconnect);
     }
 
     start();
@@ -281,7 +277,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       mapRef.current = null;
       leafletRef.current = null;
     };
-  }, []);
+  }, [isRide]);
 
   function toggle(category: Category) {
     const next = !enabled[category];
@@ -507,7 +503,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             <h1>Hike & Bike Atlas</h1>
           </div>
           <Link className="location-button" href="/ride" aria-label="Open full-screen ride map">
-            ▶ <span>Start ride</span>
+            <span className="location-button-icon" aria-hidden="true" />
+            <span className="location-button-label">Start ride</span>
           </Link>
         </header>
       )}
