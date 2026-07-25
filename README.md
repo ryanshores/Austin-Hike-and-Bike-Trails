@@ -3,6 +3,36 @@
 A responsive Austin trail atlas with a desktop planning map and a dedicated
 full-screen ride experience.
 
+## Bicycle facility edge cache
+
+The browser requests bicycle facilities from the same-origin
+`/api/bike-facilities` Worker endpoint. The endpoint expands viewport bounds
+outward to deterministic 0.01-degree buckets, retrieves every ArcGIS result
+page, and stores only complete successful GeoJSON responses in Cloudflare's
+Cache API for five minutes.
+
+Cache keys include the bucketed bounds and the
+`austin-bike-facilities-v1` dataset/schema version. Increment that version in
+`worker/bike-facilities.js` whenever the upstream dataset interpretation,
+selected fields, or normalized response schema changes. This invalidates old
+entries without requiring a cache purge.
+
+Failed or invalid upstream responses are never cached, and stale entries are
+not served after their TTL. A request with no usable cached response receives a
+`502` when ArcGIS is unavailable.
+
+Inspect `X-Cache-Status` and `Server-Timing` to compare a cold request with a
+warm request:
+
+```bash
+curl -i 'https://YOUR_PREVIEW_HOST/api/bike-facilities?bounds=-97.78,30.24,-97.70,30.31'
+curl -i 'https://YOUR_PREVIEW_HOST/api/bike-facilities?bounds=-97.78,30.24,-97.70,30.31'
+```
+
+The first response should report `X-Cache-Status: MISS`; the repeated request
+should report `HIT`. Cache API entries consume normal Cloudflare cache storage
+and request operations—no KV or D1 resources are provisioned by this feature.
+
 ## Prerequisites
 
 - Node.js `>=22.13.0`

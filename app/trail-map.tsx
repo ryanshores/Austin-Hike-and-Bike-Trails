@@ -43,7 +43,6 @@ const categories: Record<Category, { label: string; note: string; color: string;
   offRoadHike: { label: "Hiking off road", note: "Park or urban trail", color: "#85944a", dash: "8 5" },
 };
 
-const bikeEndpoint = "https://maps.austintexas.gov/arcgis/rest/services/AmandaROW/Reference_1/MapServer/0/query";
 const hikeUrl = "https://services.arcgis.com/0L95CJ0VTaxqcmED/arcgis/rest/services/TRANSPORTATION_urban_trails_network/FeatureServer/0/query?where=BUILD_STATUS%3D%27EXISTING%27&outFields=URBAN_TRAIL_SYSTEM_NAME%2CURBAN_TRAIL_NAME%2CTRAIL_SURFACE_TYPE%2CLOCATION%2CLENGTH_MILES&returnGeometry=true&outSR=4326&f=geojson&resultRecordCount=2000";
 
 function classifyBike(properties: TrailProperties): Category {
@@ -211,30 +210,14 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         if (watchIdRef.current === null) setStatus("Updating bike routes for this area…");
         const bounds = visibleBounds.pad(0.5);
         const geometry = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(",");
-        const pageSize = 2000;
-        const features: TrailFeature[] = [];
-
-        for (let offset = 0; offset < 20000; offset += pageSize) {
-          const parameters = new URLSearchParams({
-            where: "BICYCLE_FACILITY IS NOT NULL",
-            outFields: "OBJECTID,FULL_STREET_NAME,LINE_TYPE,BICYCLE_FACILITY,BIKE_LEVEL_OF_COMFORT",
-            returnGeometry: "true",
-            outSR: "4326",
-            geometry,
-            geometryType: "esriGeometryEnvelope",
-            inSR: "4326",
-            spatialRel: "esriSpatialRelIntersects",
-            orderByFields: "OBJECTID",
-            resultOffset: String(offset),
-            resultRecordCount: String(pageSize),
-            f: "geojson",
-          });
-          const response = await fetch(`${bikeEndpoint}?${parameters}`, { signal });
-          if (!response.ok) throw new Error("Bicycle facility service unavailable");
-          const page = (await response.json()) as ArcGISFeatureCollection;
-          features.push(...page.features.map((feature) => ({ ...feature, properties: { ...feature.properties, category: classifyBike(feature.properties) } })));
-          if (!page.properties?.exceededTransferLimit || page.features.length < pageSize) break;
-        }
+        const parameters = new URLSearchParams({ bounds: geometry });
+        const response = await fetch(`/api/bike-facilities?${parameters}`, { signal });
+        if (!response.ok) throw new Error("Bicycle facility service unavailable");
+        const data = (await response.json()) as ArcGISFeatureCollection;
+        const features = data.features.map((feature) => ({
+          ...feature,
+          properties: { ...feature.properties, category: classifyBike(feature.properties) },
+        }));
 
         if (signal.aborted || cancelled) return;
         (["offRoadBike", "protectedBike", "streetBike"] as Category[]).forEach((category) => {
