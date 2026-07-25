@@ -57,6 +57,7 @@ h2 { font-size: 22px; }
 
 .ride-shell { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; min-height: 100svh; overflow: hidden; overscroll-behavior: none; background: #dce1c6; }
 .ride-map-frame { position: absolute; inset: 0; overflow: hidden; }
+.ride-shell .leaflet-top .leaflet-control-zoom { margin-top: calc(max(12px, env(safe-area-inset-top)) + 52px); margin-right: 12px; }
 .ride-topbar { position: absolute; z-index: 650; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; pointer-events: none; }
 .ride-topbar > * { pointer-events: auto; }
 .ride-exit, .ride-more { min-height: 42px; border: 1px solid rgba(45, 59, 42, .22); border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--ink); box-shadow: 0 4px 14px rgba(43, 49, 33, .14); backdrop-filter: blur(8px); }
