@@ -26,6 +26,12 @@ and **Automatic reviews** in Codex settings. The root `AGENTS.md` supplies
 repository-specific review rules. A manual review can be requested by
 commenting `@codex review` on a pull request.
 
+The `Codex Review Gate` workflow waits for Codex to review the pull request's
+current commit. It accepts either a submitted Codex review or Codex's thumbs-up
+reaction when there are no findings. Draft pull requests do not run the gate;
+marking one ready starts both automatic review and the gate. Pushing another
+commit requires a fresh review of that commit.
+
 ## Pull-request previews
 
 ChatGPT Sites versions are releases for a selected Sites project; they are not

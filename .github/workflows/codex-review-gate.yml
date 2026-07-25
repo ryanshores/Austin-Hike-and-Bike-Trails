@@ -1,0 +1,90 @@
+name: Codex Review Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Codex Review Gate
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for Codex to review the current commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const codexActors = new Set([
+              "chatgpt-codex-connector",
+              "chatgpt-codex-connector[bot]",
+            ]);
+            const { owner, repo } = context.repo;
+            const pull_number = context.issue.number;
+            const headSha = context.payload.pull_request.head.sha;
+            const headCommit = await github.rest.repos.getCommit({
+              owner,
+              repo,
+              ref: headSha,
+            });
+            const headTimestamp = Date.parse(
+              headCommit.data.commit.committer?.date
+                ?? headCommit.data.commit.author?.date
+                ?? new Date().toISOString(),
+            );
+
+            for (let attempt = 1; attempt <= 40; attempt += 1) {
+              const reviews = await github.paginate(
+                github.rest.pulls.listReviews,
+                { owner, repo, pull_number, per_page: 100 },
+              );
+              const reviewedCurrentCommit = reviews.some((review) =>
+                codexActors.has(review.user?.login)
+                && review.commit_id === headSha
+                && review.state !== "PENDING"
+              );
+
+              if (reviewedCurrentCommit) {
+                core.info(`Codex reviewed ${headSha}.`);
+                return;
+              }
+
+              const reactions = await github.paginate(
+                github.rest.reactions.listForIssue,
+                { owner, repo, issue_number: pull_number, per_page: 100 },
+              );
+              const approvedCurrentCommit = reactions.some((reaction) =>
+                codexActors.has(reaction.user?.login)
+                && reaction.content === "+1"
+                && Date.parse(reaction.created_at) >= headTimestamp
+              );
+
+              if (approvedCurrentCommit) {
+                core.info(`Codex approved ${headSha} without findings.`);
+                return;
+              }
+
+              core.info(`Waiting for Codex review (${attempt}/40)…`);
+              await new Promise((resolve) => setTimeout(resolve, 30_000));
+            }
+
+            core.setFailed(
+              "Codex did not review the current commit within 20 minutes. "
+              + "Confirm automatic review is enabled, request `@codex review`, "
+              + "then re-run this check.",
+            );
