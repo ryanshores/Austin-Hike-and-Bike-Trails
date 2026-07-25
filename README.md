@@ -35,6 +35,13 @@ npm test
 sh scripts/prepare-site-deployment.sh
 ```
 
+## Contributing
+
+Use one short-lived branch and one pull request per feature. Pull requests run
+lint, build, and test checks and are reviewed using the rules in `AGENTS.md`.
+See [Development and Review Workflow](docs/development-workflow.md) for branch,
+review, staging, and pull-request preview details.
+
 ## Useful Commands
 
 - `npm run dev`: start local development
