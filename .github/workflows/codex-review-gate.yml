@@ -37,15 +37,11 @@ jobs:
             const { owner, repo } = context.repo;
             const pull_number = context.issue.number;
             const headSha = context.payload.pull_request.head.sha;
-            const headCommit = await github.rest.repos.getCommit({
-              owner,
-              repo,
-              ref: headSha,
-            });
-            const headTimestamp = Date.parse(
-              headCommit.data.commit.committer?.date
-                ?? headCommit.data.commit.author?.date
-                ?? new Date().toISOString(),
+            // The PR event timestamp represents when this head became current.
+            // A Git commit date can predate an earlier Codex reaction when
+            // several local commits are pushed at different times.
+            const reviewWindowStart = Date.parse(
+              context.payload.pull_request.updated_at,
             );
 
             for (let attempt = 1; attempt <= 40; attempt += 1) {
@@ -71,7 +67,7 @@ jobs:
               const approvedCurrentCommit = reactions.some((reaction) =>
                 codexActors.has(reaction.user?.login)
                 && reaction.content === "+1"
-                && Date.parse(reaction.created_at) >= headTimestamp
+                && Date.parse(reaction.created_at) >= reviewWindowStart
               );
 
               if (approvedCurrentCommit) {
