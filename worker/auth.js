@@ -3,6 +3,7 @@ const REFRESH_COOKIE = "atlas_refresh";
 const INSTALLATION_COOKIE = "atlas_installation";
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const REFRESH_CONCURRENCY_GRACE_MS = 5 * 1000;
 const INSTALLATION_TTL_SECONDS = 90 * 24 * 60 * 60;
 const JWT_ISSUER = "austin-hike-bike-atlas";
 const JWT_AUDIENCE = "austin-hike-bike-atlas-web";
@@ -739,6 +740,35 @@ async function login(request, dependencies) {
   return response({ user: publicUser(user) }, 200, headers);
 }
 
+async function rejectRefreshReuse({ db, now, oldHash, sessionId }) {
+  const token = await db
+    .prepare(
+      `SELECT used_at
+       FROM auth_refresh_tokens
+       WHERE token_hash = ? AND session_id = ?`,
+    )
+    .bind(oldHash, sessionId)
+    .first();
+  if (
+    token?.used_at !== null &&
+    token?.used_at <= now &&
+    now - token.used_at <= REFRESH_CONCURRENCY_GRACE_MS
+  ) {
+    const error = new HttpError(409, "Refresh already completed");
+    error.retryAfter = 1;
+    throw error;
+  }
+  await db
+    .prepare(
+      `UPDATE auth_sessions
+       SET revoked_at = ?
+       WHERE id = ? AND revoked_at IS NULL`,
+    )
+    .bind(now, sessionId)
+    .run();
+  throw new HttpError(401, "Invalid session");
+}
+
 async function refresh(request, dependencies) {
   assertSameOrigin(request);
   checkRateLimit(request, "refresh", dependencies.now());
@@ -755,26 +785,22 @@ async function refresh(request, dependencies) {
        JOIN auth_sessions AS s ON s.id = t.session_id
        JOIN users AS u ON u.id = s.user_id
        WHERE t.token_hash = ? AND u.deleted_at IS NULL`,
-    )
+  )
     .bind(oldHash)
     .first();
   if (!session) throw new HttpError(401, "Invalid session");
-  if (session.used_at !== null) {
-    await dependencies.db
-      .prepare(
-        `UPDATE auth_sessions
-         SET revoked_at = ?
-         WHERE id = ? AND revoked_at IS NULL`,
-      )
-      .bind(now, session.session_id)
-      .run();
+  if (session.revoked_at !== null || session.expires_at <= now) {
     throw new HttpError(401, "Invalid session");
   }
-  if (
-    session.revoked_at !== null ||
-    session.expires_at <= now ||
-    session.refresh_token_hash !== oldHash
-  ) {
+  if (session.used_at !== null) {
+    return rejectRefreshReuse({
+      db: dependencies.db,
+      now,
+      oldHash,
+      sessionId: session.session_id,
+    });
+  }
+  if (session.refresh_token_hash !== oldHash) {
     throw new HttpError(401, "Invalid session");
   }
 
@@ -806,15 +832,12 @@ async function refresh(request, dependencies) {
       .bind(now, oldHash, session.session_id),
   ]);
   if (results.some((result) => result.meta?.changes !== 1)) {
-    await dependencies.db
-      .prepare(
-        `UPDATE auth_sessions
-         SET revoked_at = ?
-         WHERE id = ? AND revoked_at IS NULL`,
-      )
-      .bind(now, session.session_id)
-      .run();
-    throw new HttpError(401, "Invalid session");
+    return rejectRefreshReuse({
+      db: dependencies.db,
+      now,
+      oldHash,
+      sessionId: session.session_id,
+    });
   }
   const accessToken = await signAccessToken(
     {

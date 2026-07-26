@@ -358,25 +358,46 @@ test("login, refresh rotation, logout, and origin checks protect sessions", asyn
   const oldRefresh = loginJar.atlas_refresh;
   const accessBeforeLogout = loginJar.atlas_access;
 
-  const refreshed = await fixture.handler(
-    request("/api/auth/refresh", { cookies: loginJar, ip: "192.0.2.9" }),
+  const simultaneousRefreshes = await Promise.all([
+    fixture.handler(
+      request("/api/auth/refresh", {
+        cookies: { atlas_refresh: oldRefresh },
+        ip: "192.0.2.9",
+      }),
+    ),
+    fixture.handler(
+      request("/api/auth/refresh", {
+        cookies: { atlas_refresh: oldRefresh },
+        ip: "192.0.2.10",
+      }),
+    ),
+  ]);
+  const successfulRefresh = simultaneousRefreshes.find(
+    (result) => result.status === 200,
   );
-  applyCookies(refreshed, loginJar);
-  assert.equal(refreshed.status, 200);
+  const concurrentRefresh = simultaneousRefreshes.find(
+    (result) => result.status === 409,
+  );
+  assert.ok(successfulRefresh);
+  assert.ok(concurrentRefresh);
+  applyCookies(successfulRefresh, loginJar);
   assert.notEqual(loginJar.atlas_refresh, oldRefresh);
+  assert.equal(concurrentRefresh.status, 409);
+  assert.equal(concurrentRefresh.headers.get("retry-after"), "1");
 
   const onceRotatedRefresh = loginJar.atlas_refresh;
-  const refreshedAgain = await fixture.handler(
-    request("/api/auth/refresh", { cookies: loginJar, ip: "192.0.2.9" }),
+  const stillUsableAfterConcurrentRefresh = await fixture.handler(
+    request("/api/auth/refresh", { cookies: loginJar, ip: "192.0.2.11" }),
   );
-  applyCookies(refreshedAgain, loginJar);
-  assert.equal(refreshedAgain.status, 200);
+  applyCookies(stillUsableAfterConcurrentRefresh, loginJar);
+  assert.equal(stillUsableAfterConcurrentRefresh.status, 200);
   assert.notEqual(loginJar.atlas_refresh, onceRotatedRefresh);
 
+  fixture.setNow(1_800_000_005_001);
   const replay = await fixture.handler(
     request("/api/auth/refresh", {
       cookies: { atlas_refresh: oldRefresh },
-      ip: "192.0.2.10",
+      ip: "192.0.2.12",
     }),
   );
   assert.equal(replay.status, 401);
@@ -384,7 +405,7 @@ test("login, refresh rotation, logout, and origin checks protect sessions", asyn
   const replayRevokedRotatedToken = await fixture.handler(
     request("/api/auth/refresh", {
       cookies: { atlas_refresh: loginJar.atlas_refresh },
-      ip: "192.0.2.11",
+      ip: "192.0.2.13",
     }),
   );
   assert.equal(replayRevokedRotatedToken.status, 401);
