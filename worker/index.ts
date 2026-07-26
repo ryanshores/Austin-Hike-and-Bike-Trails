@@ -1,11 +1,14 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  JWT_SECRET?: string;
+  PASSWORD_PEPPER?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -35,6 +38,14 @@ const worker = {
         ? undefined
         : (caches as CacheStorage & { default: Cache }).default;
       return createBikeFacilitiesHandler({ cache })(request);
+    }
+
+    if (url.pathname.startsWith("/api/auth/")) {
+      return createAuthHandler({
+        db: env.DB,
+        jwtSecret: env.JWT_SECRET,
+        passwordPepper: env.PASSWORD_PEPPER,
+      })(request);
     }
 
     if (url.pathname === "/_vinext/image") {
