@@ -184,6 +184,25 @@ test("anonymous bootstrap issues protected credentials and restores identity", a
   fixture.db.close();
 });
 
+test("anonymous installation restoration expires after 90 days", async () => {
+  const start = 1_800_000_000_000;
+  const fixture = createFixture(start);
+  const first = await bootstrap(fixture);
+  const originalUserId = first.body.user.id;
+  const installation = first.jar.atlas_installation;
+
+  fixture.setNow(start + 90 * 24 * 60 * 60 * 1000);
+  const expired = await bootstrap(
+    fixture,
+    { atlas_installation: installation },
+    "192.0.2.2",
+  );
+
+  assert.equal(expired.result.status, 201);
+  assert.notEqual(expired.body.user.id, originalUserId);
+  fixture.db.close();
+});
+
 test("JWT verification rejects tampering, expiry, and the wrong audience", async () => {
   const nowSeconds = 1_800_000_000;
   const valid = await signAccessToken(
@@ -346,6 +365,14 @@ test("login, refresh rotation, logout, and origin checks protect sessions", asyn
   assert.equal(refreshed.status, 200);
   assert.notEqual(loginJar.atlas_refresh, oldRefresh);
 
+  const onceRotatedRefresh = loginJar.atlas_refresh;
+  const refreshedAgain = await fixture.handler(
+    request("/api/auth/refresh", { cookies: loginJar, ip: "192.0.2.9" }),
+  );
+  applyCookies(refreshedAgain, loginJar);
+  assert.equal(refreshedAgain.status, 200);
+  assert.notEqual(loginJar.atlas_refresh, onceRotatedRefresh);
+
   const replay = await fixture.handler(
     request("/api/auth/refresh", {
       cookies: { atlas_refresh: oldRefresh },
@@ -353,6 +380,14 @@ test("login, refresh rotation, logout, and origin checks protect sessions", asyn
     }),
   );
   assert.equal(replay.status, 401);
+
+  const replayRevokedRotatedToken = await fixture.handler(
+    request("/api/auth/refresh", {
+      cookies: { atlas_refresh: loginJar.atlas_refresh },
+      ip: "192.0.2.11",
+    }),
+  );
+  assert.equal(replayRevokedRotatedToken.status, 401);
 
   const crossOrigin = await fixture.handler(
     new Request(`${ORIGIN}/api/auth/logout`, {

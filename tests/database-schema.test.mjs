@@ -27,6 +27,15 @@ function createTestDatabase() {
   return database;
 }
 
+function applyMigration(database, migrationFile) {
+  database.exec(
+    readFileSync(join(migrationsDirectory, migrationFile), "utf8").replaceAll(
+      "--> statement-breakpoint",
+      "",
+    ),
+  );
+}
+
 function insertAnonymousUser(database, id) {
   database.prepare("INSERT INTO users (id) VALUES (?)").run(id);
 }
@@ -43,6 +52,7 @@ test("route-history migrations create the required tables and indexes", () => {
     .map(({ name }) => name);
   assert.deepEqual(tables, [
     "anonymous_installations",
+    "auth_refresh_tokens",
     "auth_sessions",
     "ride_points",
     "ride_upload_batches",
@@ -62,10 +72,51 @@ test("route-history migrations create the required tables and indexes", () => {
     "ride_points_ride_sequence_unique",
     "ride_upload_batches_ride_sequence_unique",
     "auth_sessions_refresh_token_hash_unique",
+    "auth_refresh_tokens_session_idx",
   ]) {
     assert.ok(indexes.includes(requiredIndex), `missing ${requiredIndex}`);
   }
 
+  database.close();
+});
+
+test("refresh-token history migration backfills existing sessions", () => {
+  const database = new DatabaseSync(":memory:");
+  database.exec("PRAGMA foreign_keys = ON");
+  applyMigration(database, migrationFiles[0]);
+  insertAnonymousUser(database, "existing-user");
+  database
+    .prepare(
+      `INSERT INTO auth_sessions
+        (id, user_id, refresh_token_hash, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "existing-session",
+      "existing-user",
+      "existing-refresh-token",
+      1_000,
+      2_000,
+    );
+
+  applyMigration(database, migrationFiles[1]);
+
+  assert.deepEqual(
+    {
+      ...database
+        .prepare(
+          `SELECT token_hash, session_id, issued_at, used_at
+           FROM auth_refresh_tokens`,
+        )
+        .get(),
+    },
+    {
+      token_hash: "existing-refresh-token",
+      session_id: "existing-session",
+      issued_at: 1_000,
+      used_at: null,
+    },
+  );
   database.close();
 });
 
@@ -314,6 +365,7 @@ test("deleting a user cascades through private route and session data", () => {
   for (const table of [
     "users",
     "anonymous_installations",
+    "auth_refresh_tokens",
     "auth_sessions",
     "rides",
     "ride_upload_batches",

@@ -377,20 +377,31 @@ async function prepareSession({
 
 async function createSession(dependencies) {
   const prepared = await prepareSession(dependencies);
-  await dependencies.db
-    .prepare(
-      `INSERT INTO auth_sessions
-        (id, user_id, refresh_token_hash, created_at, expires_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      prepared.sessionId,
-      dependencies.user.id,
-      prepared.refreshTokenHash,
-      dependencies.now,
-      prepared.expiresAt,
-    )
-    .run();
+  await dependencies.db.batch([
+    dependencies.db
+      .prepare(
+        `INSERT INTO auth_sessions
+          (id, user_id, refresh_token_hash, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        prepared.sessionId,
+        dependencies.user.id,
+        prepared.refreshTokenHash,
+        dependencies.now,
+        prepared.expiresAt,
+      ),
+    dependencies.db
+      .prepare(
+        `INSERT INTO auth_refresh_tokens (token_hash, session_id, issued_at)
+         VALUES (?, ?, ?)`,
+      )
+      .bind(
+        prepared.refreshTokenHash,
+        prepared.sessionId,
+        dependencies.now,
+      ),
+  ]);
   return {
     accessToken: prepared.accessToken,
     refreshToken: prepared.refreshToken,
@@ -444,10 +455,15 @@ async function anonymous(request, dependencies) {
          FROM anonymous_installations AS i
          JOIN users AS u ON u.id = i.user_id
          WHERE i.installation_secret_hash = ?
+           AND i.first_seen_at + ? > ?
            AND u.account_type = 'anonymous'
            AND u.deleted_at IS NULL`,
       )
-      .bind(installationHash)
+      .bind(
+        installationHash,
+        INSTALLATION_TTL_SECONDS * 1000,
+        dependencies.now(),
+      )
       .first();
     if (restored) {
       const session = await createSession({
@@ -499,6 +515,13 @@ async function anonymous(request, dependencies) {
          VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(sessionId, userId, refreshHash, now, now + REFRESH_TTL_MS),
+    dependencies.db
+      .prepare(
+        `INSERT INTO auth_refresh_tokens
+          (token_hash, session_id, issued_at)
+         VALUES (?, ?, ?)`,
+      )
+      .bind(refreshHash, sessionId, now),
   ]);
   const user = {
     id: userId,
@@ -633,8 +656,26 @@ async function register(request, dependencies) {
           email,
           passwordRecord.passwordHash,
         ),
+      dependencies.db
+        .prepare(
+          `INSERT INTO auth_refresh_tokens (token_hash, session_id, issued_at)
+           SELECT ?, id, ?
+           FROM auth_sessions
+           WHERE id = ? AND user_id = ? AND refresh_token_hash = ?`,
+        )
+        .bind(
+          preparedSession.refreshTokenHash,
+          now,
+          preparedSession.sessionId,
+          current.id,
+          preparedSession.refreshTokenHash,
+        ),
     ]);
-    if (results[0].meta?.changes !== 1 || results[2].meta?.changes !== 1) {
+    if (
+      results[0].meta?.changes !== 1 ||
+      results[2].meta?.changes !== 1 ||
+      results[3].meta?.changes !== 1
+    ) {
       throw new HttpError(409, "Account could not be registered");
     }
   } catch (error) {
@@ -707,31 +748,72 @@ async function refresh(request, dependencies) {
   const now = dependencies.now();
   const session = await dependencies.db
     .prepare(
-      `SELECT s.id AS session_id, u.id, u.account_type, u.email,
+      `SELECT s.id AS session_id, s.refresh_token_hash, s.expires_at,
+              s.revoked_at, t.used_at, u.id, u.account_type, u.email,
               u.display_name, u.token_version
-       FROM auth_sessions AS s
+       FROM auth_refresh_tokens AS t
+       JOIN auth_sessions AS s ON s.id = t.session_id
        JOIN users AS u ON u.id = s.user_id
-       WHERE s.refresh_token_hash = ?
-         AND s.revoked_at IS NULL
-         AND s.expires_at > ?
-         AND u.deleted_at IS NULL`,
+       WHERE t.token_hash = ? AND u.deleted_at IS NULL`,
     )
-    .bind(oldHash, now)
+    .bind(oldHash)
     .first();
   if (!session) throw new HttpError(401, "Invalid session");
+  if (session.used_at !== null) {
+    await dependencies.db
+      .prepare(
+        `UPDATE auth_sessions
+         SET revoked_at = ?
+         WHERE id = ? AND revoked_at IS NULL`,
+      )
+      .bind(now, session.session_id)
+      .run();
+    throw new HttpError(401, "Invalid session");
+  }
+  if (
+    session.revoked_at !== null ||
+    session.expires_at <= now ||
+    session.refresh_token_hash !== oldHash
+  ) {
+    throw new HttpError(401, "Invalid session");
+  }
 
   const newToken = randomToken(dependencies.randomBytes);
   const newHash = await sha256(newToken);
-  const result = await dependencies.db
-    .prepare(
-      `UPDATE auth_sessions
-       SET refresh_token_hash = ?, last_used_at = ?, rotated_at = ?
-       WHERE id = ? AND refresh_token_hash = ?
-         AND revoked_at IS NULL AND expires_at > ?`,
-    )
-    .bind(newHash, now, now, session.session_id, oldHash, now)
-    .run();
-  if (result.meta?.changes !== 1) {
+  const results = await dependencies.db.batch([
+    dependencies.db
+      .prepare(
+        `UPDATE auth_sessions
+         SET refresh_token_hash = ?, last_used_at = ?, rotated_at = ?
+         WHERE id = ? AND refresh_token_hash = ?
+           AND revoked_at IS NULL AND expires_at > ?`,
+      )
+      .bind(newHash, now, now, session.session_id, oldHash, now),
+    dependencies.db
+      .prepare(
+        `INSERT INTO auth_refresh_tokens (token_hash, session_id, issued_at)
+         SELECT ?, id, ?
+         FROM auth_sessions
+         WHERE id = ? AND refresh_token_hash = ? AND revoked_at IS NULL`,
+      )
+      .bind(newHash, now, session.session_id, newHash),
+    dependencies.db
+      .prepare(
+        `UPDATE auth_refresh_tokens
+         SET used_at = ?
+         WHERE token_hash = ? AND session_id = ? AND used_at IS NULL`,
+      )
+      .bind(now, oldHash, session.session_id),
+  ]);
+  if (results.some((result) => result.meta?.changes !== 1)) {
+    await dependencies.db
+      .prepare(
+        `UPDATE auth_sessions
+         SET revoked_at = ?
+         WHERE id = ? AND revoked_at IS NULL`,
+      )
+      .bind(now, session.session_id)
+      .run();
     throw new HttpError(401, "Invalid session");
   }
   const accessToken = await signAccessToken(

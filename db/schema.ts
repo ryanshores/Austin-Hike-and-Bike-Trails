@@ -293,3 +293,18 @@ export const authSessions = sqliteTable(
     ),
   ],
 );
+
+export const authRefreshTokens = sqliteTable(
+  "auth_refresh_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => authSessions.id, { onDelete: "cascade" }),
+    issuedAt: integer("issued_at", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("auth_refresh_tokens_session_idx").on(table.sessionId),
+  ],
+);
