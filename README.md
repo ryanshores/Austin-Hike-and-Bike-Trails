@@ -33,6 +33,38 @@ The first response should report `X-Cache-Status: MISS`; the repeated request
 should report `HIT`. Cache API entries consume normal Cloudflare cache storage
 and request operations—no KV or D1 resources are provisioned by this feature.
 
+## Route and geocoding API configuration
+
+Route planning providers stay behind same-origin Worker endpoints:
+
+- `GET /api/geocode?q=…&limit=…`
+- `POST /api/routes`
+- `GET /api/routing-health`
+
+Set `GEOCODER_URL` to the base URL of a Nominatim-compatible geocoder and
+`ROUTING_URL` to the base URL of a Valhalla-compatible routing service. These
+values belong in deployment configuration, not source control. Production
+should also bind Cloudflare rate limiters as `GEOCODE_RATE_LIMITER` and
+`ROUTE_RATE_LIMITER`. The handlers fail closed when a provider is absent,
+enforce an Austin-area service boundary, cap route distance and request sizes,
+and never expose an upstream URL to the browser.
+
+Geocoding is a submitted-search flow, not autocomplete. Successful bounded
+results are cached for 24 hours. If the public OpenStreetMap Nominatim service
+is deliberately selected for a small deployment, its usage policy requires a
+maximum of one request per second for the whole application, identifying
+requests, attribution, and caching. A self-hosted or contracted provider is
+required when traffic outgrows those terms.
+
+Stock Valhalla provides route geometry, maneuvers, and elevation, but not the
+City/OSM edge enrichment needed for an Atlas safety claim. Such routes are
+conservatively classified as `unknown`; a strict safety preference therefore
+shows the route as a divergence. A routing provider may return enriched
+`candidates[].edges[]` with City fields and OSM tags, which the Worker passes
+through the standalone route-safety classifier before ranking candidates.
+Client-visible responses are allowlisted and omit ETA, duration, arrival time,
+and speed-derived wording.
+
 ## Prerequisites
 
 - Node.js `>=22.13.0`
