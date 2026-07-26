@@ -46,7 +46,9 @@ available:
 
 Keep both secrets in the deployment control plane; never commit them or place
 them in public environment variables. Apply the checked-in Drizzle migrations
-to the bound D1 database before enabling the endpoints.
+to the bound D1 database before enabling the endpoints. The same database
+stores short-lived, peppered per-IP auth rate-limit counters so limits apply
+across Worker isolates.
 
 ## Prerequisites
 

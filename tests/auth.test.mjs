@@ -203,6 +203,41 @@ test("anonymous installation restoration expires after 90 days", async () => {
   fixture.db.close();
 });
 
+test("auth rate limits are shared across Worker handlers", async () => {
+  const fixture = createFixture();
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const result = await fixture.handler(
+      request("/api/auth/anonymous", { ip: "192.0.2.42" }),
+    );
+    assert.equal(result.status, 201);
+  }
+
+  const limited = await fixture.handler(
+    request("/api/auth/anonymous", { ip: "192.0.2.42" }),
+  );
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "60");
+
+  const secondWorkerHandler = createAuthHandler({
+    db: fixture.db,
+    jwtSecret: JWT_SECRET,
+    passwordPepper: PASSWORD_PEPPER,
+    randomBytes: deterministicRandomBytes,
+    now: () => 1_800_000_000_000,
+  });
+  const limitedAcrossHandlers = await secondWorkerHandler(
+    request("/api/auth/anonymous", { ip: "192.0.2.42" }),
+  );
+  assert.equal(limitedAcrossHandlers.status, 429);
+  assert.equal(
+    fixture.db.database
+      .prepare("SELECT count(*) AS count FROM auth_rate_limits")
+      .get().count,
+    1,
+  );
+  fixture.db.close();
+});
+
 test("JWT verification rejects tampering, expiry, and the wrong audience", async () => {
   const nowSeconds = 1_800_000_000;
   const valid = await signAccessToken(
@@ -435,6 +470,51 @@ test("login, refresh rotation, logout, and origin checks protect sessions", asyn
     }),
   );
   assert.equal(revokedAccess.status, 401);
+  fixture.db.close();
+});
+
+test("logout revokes a session when given a rotated refresh token", async () => {
+  const fixture = createFixture();
+  const { jar } = await bootstrap(fixture);
+  const registration = await fixture.handler(
+    request("/api/auth/register", {
+      cookies: jar,
+      body: {
+        email: "rider@example.com",
+        password: "correct horse battery staple",
+      },
+    }),
+  );
+  applyCookies(registration, jar);
+
+  const loginJar = {};
+  const login = await fixture.handler(
+    request("/api/auth/login", {
+      body: {
+        email: "rider@example.com",
+        password: "correct horse battery staple",
+      },
+    }),
+  );
+  applyCookies(login, loginJar);
+  const rotatedRefresh = loginJar.atlas_refresh;
+  const refreshed = await fixture.handler(
+    request("/api/auth/refresh", { cookies: loginJar }),
+  );
+  applyCookies(refreshed, loginJar);
+  delete loginJar.atlas_access;
+
+  const logout = await fixture.handler(
+    request("/api/auth/logout", {
+      cookies: { atlas_refresh: rotatedRefresh },
+    }),
+  );
+  assert.equal(logout.status, 204);
+
+  const revoked = await fixture.handler(
+    request("/api/auth/refresh", { cookies: loginJar }),
+  );
+  assert.equal(revoked.status, 401);
   fixture.db.close();
 });
 

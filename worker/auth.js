@@ -11,7 +11,6 @@ const PASSWORD_ALGORITHM = "pbkdf2-sha256";
 const PASSWORD_ITERATIONS = 600_000;
 const PASSWORD_KEY_BYTES = 32;
 const encoder = new TextEncoder();
-const rateBuckets = new Map();
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -308,7 +307,7 @@ function userAgentFamily(request) {
   return "Other";
 }
 
-function checkRateLimit(request, action, now) {
+async function checkRateLimit(request, action, dependencies) {
   const policy = {
     anonymous: [20, 60_000],
     login: [10, 5 * 60_000],
@@ -316,17 +315,37 @@ function checkRateLimit(request, action, now) {
     register: [10, 5 * 60_000],
   }[action];
   if (!policy) return;
+  const [limit, windowMs] = policy;
   const address = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const key = `${action}:${address}`;
-  const current = rateBuckets.get(key);
-  if (!current || now >= current.resetAt) {
-    rateBuckets.set(key, { count: 1, resetAt: now + policy[1] });
-    return;
-  }
-  current.count += 1;
-  if (current.count > policy[0]) {
+  const now = dependencies.now();
+  const keyHash = await sha256(
+    `${action}\u0000${address}\u0000${dependencies.passwordPepper}`,
+  );
+  await dependencies.db
+    .prepare("DELETE FROM auth_rate_limits WHERE reset_at <= ?")
+    .bind(now)
+    .run();
+  const current = await dependencies.db
+    .prepare(
+      `INSERT INTO auth_rate_limits (key_hash, count, reset_at)
+       VALUES (?, 1, ?)
+       ON CONFLICT(key_hash) DO UPDATE SET
+         count = CASE
+           WHEN auth_rate_limits.reset_at <= ? THEN 1
+           ELSE auth_rate_limits.count + 1
+         END,
+         reset_at = CASE
+           WHEN auth_rate_limits.reset_at <= ? THEN excluded.reset_at
+           ELSE auth_rate_limits.reset_at
+         END
+       RETURNING count, reset_at`,
+    )
+    .bind(keyHash, now + windowMs, now, now)
+    .first();
+  if (!current) throw new HttpError(503, "Authentication is unavailable");
+  if (current.count > limit) {
     const error = new HttpError(429, "Too many requests");
-    error.retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+    error.retryAfter = Math.max(1, Math.ceil((current.reset_at - now) / 1000));
     throw error;
   }
 }
@@ -439,7 +458,7 @@ async function authenticate(request, dependencies) {
 
 async function anonymous(request, dependencies) {
   assertSameOrigin(request);
-  checkRateLimit(request, "anonymous", dependencies.now());
+  await checkRateLimit(request, "anonymous", dependencies);
   try {
     const existing = await authenticate(request, dependencies);
     return response({ user: publicUser(existing) });
@@ -554,7 +573,7 @@ async function anonymous(request, dependencies) {
 
 async function register(request, dependencies) {
   assertSameOrigin(request);
-  checkRateLimit(request, "register", dependencies.now());
+  await checkRateLimit(request, "register", dependencies);
   const current = await authenticate(request, dependencies);
   const body = await readJson(request);
   const email = normalizeEmail(body.email);
@@ -701,7 +720,7 @@ async function register(request, dependencies) {
 
 async function login(request, dependencies) {
   assertSameOrigin(request);
-  checkRateLimit(request, "login", dependencies.now());
+  await checkRateLimit(request, "login", dependencies);
   const body = await readJson(request);
   const email = normalizeEmail(body.email);
   const password = validatePassword(body.password);
@@ -771,7 +790,7 @@ async function rejectRefreshReuse({ db, now, oldHash, sessionId }) {
 
 async function refresh(request, dependencies) {
   assertSameOrigin(request);
-  checkRateLimit(request, "refresh", dependencies.now());
+  await checkRateLimit(request, "refresh", dependencies);
   const oldToken = parseCookies(request)[REFRESH_COOKIE];
   if (!oldToken) throw new HttpError(401, "Authentication required");
   const oldHash = await sha256(oldToken);
@@ -871,7 +890,11 @@ async function logout(request, dependencies) {
         .prepare(
           `UPDATE auth_sessions
            SET revoked_at = ?
-           WHERE refresh_token_hash = ? AND revoked_at IS NULL`,
+           WHERE id IN (
+             SELECT session_id
+             FROM auth_refresh_tokens
+             WHERE token_hash = ?
+           ) AND revoked_at IS NULL`,
         )
         .bind(dependencies.now(), await sha256(refreshToken)),
     );

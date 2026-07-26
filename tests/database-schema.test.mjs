@@ -52,6 +52,7 @@ test("route-history migrations create the required tables and indexes", () => {
     .map(({ name }) => name);
   assert.deepEqual(tables, [
     "anonymous_installations",
+    "auth_rate_limits",
     "auth_refresh_tokens",
     "auth_sessions",
     "ride_points",
@@ -72,6 +73,7 @@ test("route-history migrations create the required tables and indexes", () => {
     "ride_points_ride_sequence_unique",
     "ride_upload_batches_ride_sequence_unique",
     "auth_sessions_refresh_token_hash_unique",
+    "auth_rate_limits_reset_idx",
     "auth_refresh_tokens_session_idx",
   ]) {
     assert.ok(indexes.includes(requiredIndex), `missing ${requiredIndex}`);
