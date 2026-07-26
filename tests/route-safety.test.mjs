@@ -86,6 +86,41 @@ test("unknown, unmatched, prohibited, and hiking-only ways remain distinguishabl
   assert.equal(bicycleFootway.safetyClass, SafetyClass.ANY_BICYCLE_LEGAL);
 });
 
+test("general access restrictions apply unless a bicycle-specific tag permits travel", () => {
+  for (const access of ["no", "private", "customers", "delivery"]) {
+    const prohibited = classifyRouteEdge({ osm: { highway: "service", access } });
+    assert.equal(prohibited.finding, SafetyFinding.BICYCLE_PROHIBITED);
+    assert.equal(prohibited.safetyClass, null);
+
+    const bicycleOverride = classifyRouteEdge({
+      osm: { highway: "service", access, bicycle: "yes" },
+    });
+    assert.notEqual(bicycleOverride.finding, SafetyFinding.BICYCLE_PROHIBITED);
+    assert.equal(bicycleOverride.safetyClass, SafetyClass.ANY_BICYCLE_LEGAL);
+  }
+});
+
+test("asymmetric cycleways use the traversed side and default to the weaker side", () => {
+  const osm = {
+    highway: "secondary",
+    "cycleway:left": "track",
+    "cycleway:right": "no",
+  };
+
+  assert.equal(
+    classifyRouteEdge({ osm, travelDirection: "forward" }).safetyClass,
+    SafetyClass.ANY_BICYCLE_LEGAL,
+  );
+  assert.equal(
+    classifyRouteEdge({ osm, travelDirection: "backward" }).safetyClass,
+    SafetyClass.PROTECTED,
+  );
+  assert.equal(
+    classifyRouteEdge({ osm }).safetyClass,
+    SafetyClass.ANY_BICYCLE_LEGAL,
+  );
+});
+
 test("the four preferences enforce their ordered minimum safety classes", () => {
   const classes = Object.values(SafetyClass);
   const preferences = Object.values(SafetyPreference);
@@ -193,5 +228,31 @@ test("a prohibited segment loses even when it is shorter and has fewer warnings"
       SafetyPreference.FULLY_SEPARATED,
     )[0].id,
     "fallback",
+  );
+});
+
+test("candidate ranking recomputes preference-dependent summaries from edges", () => {
+  const staleSummary = summarizeRoute(
+    [edge(SafetyClass.BIKE_FACILITY, 0.5)],
+    SafetyPreference.BIKE_FACILITY_OR_SAFER,
+  );
+  const staleCandidate = {
+    id: "stale",
+    edges: [edge(SafetyClass.BIKE_FACILITY, 0.5)],
+    summary: staleSummary,
+    trafficExposureCost: 0,
+  };
+  const compliantCandidate = {
+    id: "compliant",
+    edges: [edge(SafetyClass.PROTECTED, 1)],
+    trafficExposureCost: 10,
+  };
+
+  assert.deepEqual(
+    rankRouteCandidates(
+      [staleCandidate, compliantCandidate],
+      SafetyPreference.PROTECTED_OR_SEPARATED,
+    ).map(({ id }) => id),
+    ["compliant", "stale"],
   );
 });

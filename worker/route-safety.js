@@ -36,6 +36,15 @@ const CLASS_NAMES = Object.freeze({
 });
 
 const PROHIBITED_ACCESS = new Set(["no", "private", "use_sidepath"]);
+const RESTRICTED_GENERAL_ACCESS = new Set([
+  "no",
+  "private",
+  "customers",
+  "delivery",
+  "agricultural",
+  "forestry",
+  "permit",
+]);
 const PERMITTED_BICYCLE_ACCESS = new Set(["yes", "designated", "permissive", "destination"]);
 const NON_BICYCLE_TRAIL_TYPES = new Set(["footway", "steps", "pedestrian", "bridleway"]);
 const LOW_STRESS_SURFACES = new Set([
@@ -96,25 +105,23 @@ function explicitBicyclePermission(osm) {
   return PERMITTED_BICYCLE_ACCESS.has(normalized(osm.bicycle));
 }
 
-function osmSafetyClass(osm) {
-  const highway = normalized(osm.highway);
+function bicycleAccessProhibited(osm) {
   const bicycle = normalized(osm.bicycle);
-  const cycleway = [
-    osm.cycleway,
-    osm["cycleway:left"],
-    osm["cycleway:right"],
-    osm["cycleway:both"],
-  ].map(normalized).join(" ");
-  const separation = [
-    osm.separation,
-    osm["cycleway:separation"],
-    osm["cycleway:left:separation"],
-    osm["cycleway:right:separation"],
-  ].map(normalized).join(" ");
+  if (PROHIBITED_ACCESS.has(bicycle)) return true;
+  if (explicitBicyclePermission(osm)) return false;
+  return RESTRICTED_GENERAL_ACCESS.has(normalized(osm.access));
+}
 
-  if (PROHIBITED_ACCESS.has(bicycle) || normalized(osm.access) === "private") return null;
-  if (NON_BICYCLE_TRAIL_TYPES.has(highway) && !explicitBicyclePermission(osm)) return null;
+function sideCyclewayValue(osm, side) {
+  return normalized(osm[`cycleway:${side}`]);
+}
 
+function sideSeparationValue(osm, side) {
+  return normalized(osm[`cycleway:${side}:separation`]);
+}
+
+function safetyClassForCycleway(osm, cycleway, separation) {
+  const highway = normalized(osm.highway);
   if (
     highway === "cycleway" &&
     !includesAny(cycleway, ["lane", "shared_lane"]) &&
@@ -141,11 +148,52 @@ function osmSafetyClass(osm) {
   return SafetyClass.ANY_BICYCLE_LEGAL;
 }
 
+function osmSafetyClass(osm, travelDirection = null) {
+  const highway = normalized(osm.highway);
+  if (bicycleAccessProhibited(osm)) return null;
+  if (NON_BICYCLE_TRAIL_TYPES.has(highway) && !explicitBicyclePermission(osm)) return null;
+
+  const generalCycleway = [osm.cycleway, osm["cycleway:both"]].map(normalized).join(" ");
+  const generalSeparation = [osm.separation, osm["cycleway:separation"]].map(normalized).join(" ");
+  const sideForDirection = travelDirection === "forward"
+    ? "right"
+    : travelDirection === "backward"
+      ? "left"
+      : null;
+
+  if (sideForDirection) {
+    const sideCycleway = sideCyclewayValue(osm, sideForDirection);
+    const sideSeparation = sideSeparationValue(osm, sideForDirection);
+    return safetyClassForCycleway(
+      osm,
+      sideCycleway || generalCycleway,
+      sideSeparation || generalSeparation,
+    );
+  }
+
+  const leftCycleway = sideCyclewayValue(osm, "left");
+  const rightCycleway = sideCyclewayValue(osm, "right");
+  const leftSeparation = sideSeparationValue(osm, "left");
+  const rightSeparation = sideSeparationValue(osm, "right");
+  if (leftCycleway || rightCycleway || leftSeparation || rightSeparation) {
+    return Math.min(
+      safetyClassForCycleway(osm, leftCycleway || generalCycleway, leftSeparation || generalSeparation),
+      safetyClassForCycleway(osm, rightCycleway || generalCycleway, rightSeparation || generalSeparation),
+    );
+  }
+  return safetyClassForCycleway(osm, generalCycleway, generalSeparation);
+}
+
 function unknownOsmData(osm) {
   return !osm || Object.keys(osm).length === 0 || (!osm.highway && !osm.bicycle && !osm.cycleway);
 }
 
-export function classifyRouteEdge({ city = null, osm = {}, source = "osm" } = {}) {
+export function classifyRouteEdge({
+  city = null,
+  osm = {},
+  source = "osm",
+  travelDirection = null,
+} = {}) {
   const cityClass = citySafetyClass(city ?? {});
   if (cityClass !== null) {
     return {
@@ -158,12 +206,10 @@ export function classifyRouteEdge({ city = null, osm = {}, source = "osm" } = {}
     };
   }
 
-  const osmClass = osmSafetyClass(osm);
+  const osmClass = osmSafetyClass(osm, travelDirection);
   const highway = normalized(osm?.highway);
-  const bicycle = normalized(osm?.bicycle);
   if (
-    PROHIBITED_ACCESS.has(bicycle) ||
-    normalized(osm?.access) === "private" ||
+    bicycleAccessProhibited(osm) ||
     (NON_BICYCLE_TRAIL_TYPES.has(highway) && !explicitBicyclePermission(osm))
   ) {
     return {
@@ -265,6 +311,7 @@ export function summarizeRoute(edges, preference) {
   closeDivergence();
 
   return {
+    preference,
     totalMiles,
     totalAscentFeet,
     totalDescentFeet,
@@ -277,7 +324,14 @@ export function summarizeRoute(edges, preference) {
 }
 
 export function candidateRank(candidate, preference) {
-  const summary = candidate.summary ?? summarizeRoute(candidate.edges ?? [], preference);
+  const summary = Array.isArray(candidate.edges)
+    ? summarizeRoute(candidate.edges, preference)
+    : candidate.summary?.preference === preference
+      ? candidate.summary
+      : null;
+  if (!summary) {
+    throw new Error("Candidate requires route edges or a summary for the requested safety preference.");
+  }
   return [
     summary.hasBicycleProhibitedEdge ? 1 : 0,
     summary.divergenceCount,
