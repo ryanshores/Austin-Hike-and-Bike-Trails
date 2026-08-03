@@ -64,6 +64,22 @@ shows the route as a divergence. A routing provider may return enriched
 through the standalone route-safety classifier before ranking candidates.
 Client-visible responses are allowlisted and omit ETA, duration, arrival time,
 and speed-derived wording.
+## Route history authentication
+
+The Worker exposes same-origin endpoints under `/api/auth/` for anonymous
+identity bootstrap, registration, login, token refresh, logout, and the current
+user. Authentication fails closed until all of these deployment bindings are
+available:
+
+- D1 database binding: `DB`
+- Worker secret: `JWT_SECRET` (at least 32 characters)
+- Worker secret: `PASSWORD_PEPPER` (at least 32 characters)
+
+Keep both secrets in the deployment control plane; never commit them or place
+them in public environment variables. Apply the checked-in Drizzle migrations
+to the bound D1 database before enabling the endpoints. The same database
+stores short-lived, peppered per-IP auth rate-limit counters so limits apply
+across Worker isolates.
 
 ## Prerequisites
 

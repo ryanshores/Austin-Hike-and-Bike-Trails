@@ -1,6 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
 import { createGeocodeHandler } from "./geocode";
 import { createRoutesHandler, createRoutingHealthHandler } from "./routes";
@@ -16,6 +17,8 @@ interface Env {
   ROUTING_URL?: string;
   GEOCODE_RATE_LIMITER?: RateLimitBinding;
   ROUTE_RATE_LIMITER?: RateLimitBinding;
+  JWT_SECRET?: string;
+  PASSWORD_PEPPER?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -67,6 +70,14 @@ const worker = {
 
     if (url.pathname === "/api/routing-health") {
       return createRoutingHealthHandler({ providerUrl: env.ROUTING_URL })(request);
+    }
+
+    if (url.pathname.startsWith("/api/auth/")) {
+      return createAuthHandler({
+        db: env.DB,
+        jwtSecret: env.JWT_SECRET,
+        passwordPepper: env.PASSWORD_PEPPER,
+      })(request);
     }
 
     if (url.pathname === "/_vinext/image") {
