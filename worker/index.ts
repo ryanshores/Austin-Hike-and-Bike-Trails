@@ -3,10 +3,20 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
+import { createGeocodeHandler } from "./geocode";
+import { createRoutesHandler, createRoutingHealthHandler } from "./routes";
+
+interface RateLimitBinding {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  GEOCODER_URL?: string;
+  ROUTING_URL?: string;
+  GEOCODE_RATE_LIMITER?: RateLimitBinding;
+  ROUTE_RATE_LIMITER?: RateLimitBinding;
   JWT_SECRET?: string;
   PASSWORD_PEPPER?: string;
   IMAGES: {
@@ -38,6 +48,28 @@ const worker = {
         ? undefined
         : (caches as CacheStorage & { default: Cache }).default;
       return createBikeFacilitiesHandler({ cache })(request);
+    }
+
+    if (url.pathname === "/api/geocode") {
+      const cache = typeof caches === "undefined"
+        ? undefined
+        : (caches as CacheStorage & { default: Cache }).default;
+      return createGeocodeHandler({
+        providerUrl: env.GEOCODER_URL,
+        cache,
+        rateLimiter: env.GEOCODE_RATE_LIMITER,
+      })(request);
+    }
+
+    if (url.pathname === "/api/routes") {
+      return createRoutesHandler({
+        providerUrl: env.ROUTING_URL,
+        rateLimiter: env.ROUTE_RATE_LIMITER,
+      })(request);
+    }
+
+    if (url.pathname === "/api/routing-health") {
+      return createRoutingHealthHandler({ providerUrl: env.ROUTING_URL })(request);
     }
 
     if (url.pathname.startsWith("/api/auth/")) {
