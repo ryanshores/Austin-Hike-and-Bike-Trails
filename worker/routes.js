@@ -93,7 +93,18 @@ function candidateGeometry(candidate) {
     Array.isArray(candidate.geometry.coordinates) &&
     candidate.geometry.coordinates.length >= 2
   ) {
-    return candidate.geometry;
+    const coordinates = candidate.geometry.coordinates.map((coordinate) => {
+      if (
+        !Array.isArray(coordinate) ||
+        coordinate.length < 2 ||
+        !Number.isFinite(coordinate[0]) ||
+        !Number.isFinite(coordinate[1])
+      ) {
+        throw new Error("Routing provider returned invalid geometry coordinates.");
+      }
+      return [coordinate[0], coordinate[1]];
+    });
+    return { type: "LineString", coordinates };
   }
   if (typeof candidate.shape === "string") {
     return { type: "LineString", coordinates: decodePolyline6(candidate.shape) };
@@ -204,6 +215,41 @@ function totalMilesFor(candidate) {
   );
 }
 
+function explicitElevation(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function distributeRouteElevation(edges, property, total) {
+  const missing = edges.filter((edge) => explicitElevation(edge[property]) === null);
+  if (missing.length === 0) {
+    return edges.map((edge) => ({ ...edge, [property]: explicitElevation(edge[property]) }));
+  }
+
+  const supplied = edges.reduce(
+    (sum, edge) => sum + (explicitElevation(edge[property]) ?? 0),
+    0,
+  );
+  const remaining = Math.max(0, total - supplied);
+  const totalMissingMiles = missing.reduce((sum, edge) => sum + edge.miles, 0);
+  let allocated = 0;
+  let remainingCount = missing.length;
+
+  return edges.map((edge) => {
+    const existing = explicitElevation(edge[property]);
+    if (existing !== null) return { ...edge, [property]: existing };
+    remainingCount -= 1;
+    const amount = remainingCount === 0
+      ? remaining - allocated
+      : totalMissingMiles > 0
+        ? remaining * (edge.miles / totalMissingMiles)
+        : remaining / missing.length;
+    allocated += amount;
+    return { ...edge, [property]: amount };
+  });
+}
+
 function normalizedEdges(candidate, geometry, elevation) {
   const providerEdges = Array.isArray(candidate.edges) ? candidate.edges : [];
   if (providerEdges.length === 0) {
@@ -216,7 +262,7 @@ function normalizedEdges(candidate, geometry, elevation) {
       geometry,
     }];
   }
-  return providerEdges.map((edge) => ({
+  const classified = providerEdges.map((edge) => ({
     ...edge,
     ...classifyRouteEdge({
       city: edge.city,
@@ -225,9 +271,12 @@ function normalizedEdges(candidate, geometry, elevation) {
       travelDirection: edge.travelDirection,
     }),
     miles: finiteNonNegative(edge.miles),
-    ascentFeet: finiteNonNegative(edge.ascentFeet),
-    descentFeet: finiteNonNegative(edge.descentFeet),
   }));
+  return distributeRouteElevation(
+    distributeRouteElevation(classified, "ascentFeet", elevation.totalAscentFeet),
+    "descentFeet",
+    elevation.totalDescentFeet,
+  );
 }
 
 async function normalizeCandidate(candidate, preference, providerUrl, fetchImpl, signal) {

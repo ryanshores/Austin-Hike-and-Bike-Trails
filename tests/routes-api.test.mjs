@@ -186,6 +186,78 @@ test("enriched candidates are ranked by safety before distance", async () => {
   assert.equal(body.route.versions.dataset, "city-2026-07-25");
 });
 
+test("enriched edges retain route elevation and geometry is allowlisted", async () => {
+  const providerGeometry = {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+    duration: 123,
+    internalMetadata: { time: 456 },
+  };
+  const handle = createRoutesHandler({
+    providerUrl: "https://routing.internal",
+    fetchImpl: async () => Response.json({
+      routingGraphVersion: "osm-test",
+      candidates: [{
+        geometry: providerGeometry,
+        totalAscentFeet: 20,
+        totalDescentFeet: 15,
+        edges: [{
+          geometry: providerGeometry,
+          miles: 1.2,
+          city: { BICYCLE_FACILITY: "Protected Bike Lane" },
+        }, {
+          geometry: providerGeometry,
+          miles: 0.8,
+          city: { BICYCLE_FACILITY: "Protected Bike Lane" },
+        }],
+      }],
+    }),
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.route.totalAscentFeet, 20);
+  assert.equal(body.route.totalDescentFeet, 15);
+  assert.deepEqual(body.route.geometry, {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+  });
+  assert.equal(recursivelyHasForbiddenKey(body), false);
+});
+
+test("enriched edges retain elevation sampled from the route profile", async () => {
+  const geometry = {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+  };
+  const handle = createRoutesHandler({
+    providerUrl: "https://routing.internal",
+    fetchImpl: async (url) => {
+      if (new URL(url).pathname === "/route") {
+        return Response.json({
+          routingGraphVersion: "osm-test",
+          candidates: [{
+            geometry,
+            edges: [{
+              geometry,
+              miles: 1,
+              city: { BICYCLE_FACILITY: "Protected Bike Lane" },
+            }],
+          }],
+        });
+      }
+      return Response.json({ range_height: [[0, 100], [100, 110], [200, 105]] });
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.ok(Math.abs(body.route.totalAscentFeet - 32.8084) < 0.0001);
+  assert.ok(Math.abs(body.route.totalDescentFeet - 16.4042) < 0.0001);
+});
+
 test("routes reject prohibited-only candidates with a clear failure state", async () => {
   const geometry = {
     type: "LineString",

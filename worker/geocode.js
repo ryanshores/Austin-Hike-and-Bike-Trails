@@ -10,6 +10,17 @@ export const GEOCODE_CACHE_VERSION = "austin-geocode-v1";
 export const GEOCODE_CACHE_TTL_SECONDS = 86_400;
 export const GEOCODE_MAX_RESULTS = 5;
 export const GEOCODE_MAX_QUERY_LENGTH = 120;
+const PUBLIC_NOMINATIM_RATE_LIMIT_KEY = "public-nominatim-application";
+
+function sharedGeocoderRateLimitKey(providerUrl) {
+  try {
+    return new URL(providerUrl).hostname.toLowerCase() === "nominatim.openstreetmap.org"
+      ? PUBLIC_NOMINATIM_RATE_LIMIT_KEY
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 function normalizedQuery(value) {
   const query = String(value ?? "").trim().replace(/\s+/g, " ");
@@ -110,7 +121,11 @@ export function createGeocodeHandler({
 } = {}) {
   return async function handleGeocode(request) {
     if (request.method !== "GET") return jsonError("Method not allowed.", 405);
-    if (!(await requestAllowed(rateLimiter, request))) {
+    if (!(await requestAllowed(
+      rateLimiter,
+      request,
+      sharedGeocoderRateLimitKey(providerUrl),
+    ))) {
       return jsonError("Too many geocoding requests. Try again shortly.", 429);
     }
 

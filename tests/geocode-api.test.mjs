@@ -134,3 +134,42 @@ test("geocoding fails closed when unconfigured and honors the request limiter", 
   assert.equal(response.status, 429);
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
+
+test("public Nominatim uses one application-wide limiter key", async () => {
+  const publicKeys = [];
+  const publicNominatim = createGeocodeHandler({
+    providerUrl: "https://nominatim.openstreetmap.org",
+    rateLimiter: {
+      async limit({ key }) {
+        publicKeys.push(key);
+        return { success: false };
+      },
+    },
+  });
+
+  await publicNominatim(new Request("https://atlas.example/api/geocode?q=library", {
+    headers: { "cf-connecting-ip": "203.0.113.1" },
+  }));
+  await publicNominatim(new Request("https://atlas.example/api/geocode?q=trail", {
+    headers: { "cf-connecting-ip": "203.0.113.2" },
+  }));
+  assert.deepEqual(publicKeys, [
+    "public-nominatim-application",
+    "public-nominatim-application",
+  ]);
+
+  const privateKeys = [];
+  const privateGeocoder = createGeocodeHandler({
+    providerUrl: "https://geocoder.internal",
+    rateLimiter: {
+      async limit({ key }) {
+        privateKeys.push(key);
+        return { success: false };
+      },
+    },
+  });
+  await privateGeocoder(new Request("https://atlas.example/api/geocode?q=library", {
+    headers: { "cf-connecting-ip": "203.0.113.3" },
+  }));
+  assert.deepEqual(privateKeys, ["203.0.113.3"]);
+});

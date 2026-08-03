@@ -67,9 +67,9 @@ export function providerEndpoint(baseUrl, pathname) {
   return url;
 }
 
-export async function requestAllowed(rateLimiter, request) {
+export async function requestAllowed(rateLimiter, request, sharedKey = null) {
   if (!rateLimiter) return true;
-  const key =
+  const key = sharedKey ??
     request.headers.get("cf-connecting-ip") ??
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "unknown";
