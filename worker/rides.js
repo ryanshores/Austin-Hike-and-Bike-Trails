@@ -1,4 +1,4 @@
-import { authenticateRequest } from "./auth.js";
+import { authenticateRequest, HttpError } from "./auth.js";
 
 const MAX_BATCH_POINTS = 100;
 const MAX_CREATE_BYTES = 4 * 1024;
@@ -7,19 +7,22 @@ const MAX_POINT_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_MS = 5 * 60 * 1000;
 const MAX_CYCLING_SPEED_MPS = 35;
 
-class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "Cache-Control": "no-store",
       "Content-Type": "application/json; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+function emptyResponse(status = 204) {
+  return new Response(null, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
     },
   });
@@ -201,6 +204,90 @@ async function completeRide(request, dependencies, rideId) {
   return response({ ride: { ...ride, status: "completed", endedAt: now } });
 }
 
+function listLimit(request) {
+  const value = new URL(request.url).searchParams.get("limit");
+  if (value === null) return 50;
+  if (!/^\d+$/u.test(value)) throw new HttpError(400, "Invalid history limit");
+  return Math.min(Math.max(Number(value), 1), 100);
+}
+
+function encodeCursor(ride) {
+  return btoa(JSON.stringify({ id: ride.id, startedAt: ride.startedAt }))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function decodeCursor(request) {
+  const value = new URL(request.url).searchParams.get("cursor");
+  if (value === null) return null;
+  if (value.length > 256) throw new HttpError(400, "Invalid history cursor");
+  try {
+    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const cursor = JSON.parse(atob(padded));
+    if (!Number.isInteger(cursor.startedAt) || !isId(cursor.id)) throw new Error("Invalid cursor");
+    return cursor;
+  } catch {
+    throw new HttpError(400, "Invalid history cursor");
+  }
+}
+
+async function listRides(request, dependencies) {
+  const user = await authenticateRequest(request, dependencies);
+  const limit = listLimit(request);
+  const cursor = decodeCursor(request);
+  const rides = await dependencies.db.prepare(
+    `SELECT id, status, title, started_at AS startedAt, ended_at AS endedAt,
+            distance_meters AS distanceMeters, accepted_point_count AS acceptedPointCount
+     FROM rides
+     WHERE user_id = ? AND deleted_at IS NULL
+       AND (? IS NULL OR started_at < ? OR (started_at = ? AND id < ?))
+     ORDER BY started_at DESC, id DESC
+     LIMIT ?`,
+  ).bind(
+    user.id,
+    cursor?.startedAt ?? null,
+    cursor?.startedAt ?? null,
+    cursor?.startedAt ?? null,
+    cursor?.id ?? null,
+    limit + 1,
+  ).all();
+  const records = rides.results ?? [];
+  const page = records.slice(0, limit);
+  return response({
+    rides: page,
+    nextCursor: records.length > limit ? encodeCursor(page.at(-1)) : null,
+  });
+}
+
+async function getRide(request, dependencies, rideId) {
+  const user = await authenticateRequest(request, dependencies);
+  const ride = await dependencies.db.prepare(
+    `SELECT id, status, title, started_at AS startedAt, ended_at AS endedAt,
+            distance_meters AS distanceMeters, accepted_point_count AS acceptedPointCount
+     FROM rides WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+  ).bind(rideId, user.id).first();
+  if (!ride) throw new HttpError(404, "Ride not found");
+  const points = await dependencies.db.prepare(
+    `SELECT sequence, recorded_at AS recordedAt, latitude, longitude, accuracy_meters AS accuracyMeters,
+            altitude_meters AS altitudeMeters, speed_meters_per_second AS speedMetersPerSecond,
+            heading_degrees AS headingDegrees, quality
+     FROM ride_points WHERE ride_id = ? ORDER BY sequence ASC`,
+  ).bind(rideId).all();
+  return response({ ride, points: points.results ?? [] });
+}
+
+async function deleteRide(request, dependencies, rideId) {
+  assertSameOrigin(request);
+  const user = await authenticateRequest(request, dependencies);
+  const deleted = await dependencies.db.prepare(
+    "DELETE FROM rides WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+  ).bind(rideId, user.id).run();
+  if (deleted.meta?.changes !== 1) throw new HttpError(404, "Ride not found");
+  return emptyResponse();
+}
+
 export function createRideHandler(options) {
   if (!options.db || typeof options.jwtSecret !== "string" || options.jwtSecret.length < 32) {
     return async () => response({ error: "Ride history is unavailable" }, 503);
@@ -209,7 +296,15 @@ export function createRideHandler(options) {
   return async function handleRide(request) {
     try {
       const path = new URL(request.url).pathname;
-      if (path === "/api/rides" && request.method === "POST") return await createRide(request, dependencies);
+      if (path === "/api/rides") {
+        if (request.method === "POST") return await createRide(request, dependencies);
+        if (request.method === "GET") return await listRides(request, dependencies);
+      }
+      const ride = path.match(/^\/api\/rides\/([A-Za-z0-9_-]{16,128})$/u);
+      if (ride) {
+        if (request.method === "GET") return await getRide(request, dependencies, ride[1]);
+        if (request.method === "DELETE") return await deleteRide(request, dependencies, ride[1]);
+      }
       const match = path.match(/^\/api\/rides\/([A-Za-z0-9_-]{16,128})\/(batches|complete)$/u);
       if (!match || request.method !== "POST") throw new HttpError(404, "Not found");
       return match[2] === "batches" ? await uploadBatch(request, dependencies, match[1]) : await completeRide(request, dependencies, match[1]);

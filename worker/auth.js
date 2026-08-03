@@ -12,7 +12,7 @@ const PASSWORD_ITERATIONS = 600_000;
 const PASSWORD_KEY_BYTES = 32;
 const encoder = new TextEncoder();
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;
@@ -934,6 +934,21 @@ async function logout(request, dependencies) {
   return new Response(null, { status: 204, headers });
 }
 
+async function deleteAccount(request, dependencies) {
+  assertSameOrigin(request);
+  const user = await authenticateRequest(request, dependencies);
+  const deleted = await dependencies.db
+    .prepare("DELETE FROM users WHERE id = ? AND deleted_at IS NULL")
+    .bind(user.id)
+    .run();
+  if (deleted.meta?.changes !== 1) throw new HttpError(404, "Account not found");
+  const headers = new Headers();
+  appendClearedCookies(headers, request);
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(null, { status: 204, headers });
+}
+
 function method(request, expected) {
   if (request.method !== expected) throw new HttpError(405, "Method not allowed");
 }
@@ -975,6 +990,10 @@ export function createAuthHandler(options) {
       if (path === "/api/auth/logout") {
         method(request, "POST");
         return await logout(request, dependencies);
+      }
+      if (path === "/api/auth/account") {
+        method(request, "DELETE");
+        return await deleteAccount(request, dependencies);
       }
       if (path === "/api/auth/me") {
         method(request, "GET");
