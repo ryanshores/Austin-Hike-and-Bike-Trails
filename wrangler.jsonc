@@ -29,6 +29,23 @@
     }
   ],
 
+  "env": {
+    "preview": {
+      "name": "austin-trails-preview",
+      "images": {
+        "binding": "IMAGES"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "austin-trails-preview",
+          "database_id": "07ab33cf-23cb-419d-8cc7-41d407e49990",
+          "migrations_dir": "drizzle"
+        }
+      ]
+    }
+  },
+
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

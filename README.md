@@ -113,6 +113,13 @@ named `database`; apply its checked-in migrations before enabling auth:
 npm run db:migrate:remote
 ```
 
+Pull-request previews use the isolated `austin-trails-preview` database. Apply
+the same migrations there before enabling preview auth or ride-history testing:
+
+```bash
+npm run db:migrate:preview
+```
+
 For local development, copy `.dev.vars.example` to `.dev.vars` and provide
 local-only secret values. Leave provider URLs unset until their services are
 available. Local D1 simulation is the default; do not point ordinary local
@@ -127,6 +134,9 @@ npm run check:worker
 ```
 
 Use `npm run deploy` only for an explicit production release from `main`.
+The command refuses to deploy from any other branch. For a preview upload, use
+`CLOUDFLARE_ENV=preview npm run build` followed by
+`npx wrangler versions upload --env preview`.
 
 ## Contributing
 
@@ -140,5 +150,8 @@ review, staging, and pull-request preview details.
 - `npm run dev`: start local development
 - `npm test`: build the app and run the route and GPS policy tests
 - `npm run check:worker`: build and validate the generated Worker configuration
+- `npm run check:preview-worker`: validate the isolated preview Worker configuration
+- `npm run build:preview`: build with the isolated preview environment
 - `npm run db:generate`: generate Drizzle migrations after schema changes
+- `npm run db:migrate:preview`: apply migrations to the isolated preview D1 database
 - `npm run db:migrate:remote`: apply checked-in migrations to the configured D1 database

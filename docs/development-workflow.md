@@ -38,13 +38,15 @@ Cloudflare Workers provides the deployment path for both isolated pull-request
 previews and production. Configure the GitHub integration with:
 
 - Production branch: `main`
-- Build command: `npm ci && npm run build`
+- Build command: `npm ci && CLOUDFLARE_ENV=preview npm run build`
 - Production deploy command: disabled until an explicit release from `main`
   is authorized
-- Non-production deploy command: `npx wrangler versions upload`
+- Non-production deploy command: `npx wrangler versions upload --env preview`
 - Preview URLs: enabled, with Cloudflare Access when previews must be private
 
 Cloudflare posts a commit-specific and branch-stable preview URL on each pull
-request. Runtime configuration is committed in `wrangler.jsonc`; secrets stay
-in Cloudflare. Use `keep_vars: true` until dashboard-managed provider values
-have been migrated into a deliberate configuration-management workflow.
+request. The `preview` environment uses the separate `austin-trails-preview`
+D1 database; never upload a preview without `--env preview`. Runtime
+configuration is committed in `wrangler.jsonc`; secrets stay in Cloudflare.
+Use `keep_vars: true` until dashboard-managed provider values have been
+migrated into a deliberate configuration-management workflow.

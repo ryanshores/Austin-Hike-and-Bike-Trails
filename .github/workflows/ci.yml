@@ -30,9 +30,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate neutral hosting configuration
-        run: cp .openai/hosting.example.json .openai/hosting.json
-
       - name: Lint
         run: npm run lint
 
