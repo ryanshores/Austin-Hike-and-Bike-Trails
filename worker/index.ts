@@ -3,6 +3,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
+import { createRideHandler } from "./rides";
 
 interface Env {
   ASSETS: Fetcher;
@@ -45,6 +46,13 @@ const worker = {
         db: env.DB,
         jwtSecret: env.JWT_SECRET,
         passwordPepper: env.PASSWORD_PEPPER,
+      })(request);
+    }
+
+    if (url.pathname === "/api/rides" || url.pathname.startsWith("/api/rides/")) {
+      return createRideHandler({
+        db: env.DB,
+        jwtSecret: env.JWT_SECRET,
       })(request);
     }
 

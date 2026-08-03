@@ -1,0 +1,157 @@
+const DATABASE_NAME = "austin-atlas-ride-recorder";
+const DATABASE_VERSION = 1;
+const ACTIVE_KEY = "active";
+const MAX_BATCH_POINTS = 100;
+
+function requestResult(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed"));
+  });
+}
+
+function transactionDone(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB transaction failed"));
+    transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
+  });
+}
+
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      database.createObjectStore("state", { keyPath: "key" });
+      database.createObjectStore("points", { keyPath: "sequence" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Could not open ride storage"));
+  });
+}
+
+function batchId(rideId, sequence) {
+  return `batch_${rideId.replaceAll("-", "").slice(0, 20)}_${Math.floor(sequence / MAX_BATCH_POINTS) * MAX_BATCH_POINTS}`;
+}
+
+function uploadPoint(point) {
+  return {
+    sequence: point.sequence,
+    recordedAt: point.recordedAt,
+    latitude: point.latitude,
+    longitude: point.longitude,
+    accuracyMeters: point.accuracyMeters,
+    altitudeMeters: point.altitudeMeters,
+    speedMetersPerSecond: point.speedMetersPerSecond,
+    headingDegrees: point.headingDegrees,
+    quality: point.quality,
+  };
+}
+
+export class RideRecorder {
+  constructor({ fetcher = fetch } = {}) {
+    this.fetcher = fetcher;
+    this.databasePromise = openDatabase();
+    this.flushing = null;
+  }
+
+  async activeRide() {
+    const database = await this.databasePromise;
+    const transaction = database.transaction("state", "readonly");
+    const value = await requestResult(transaction.objectStore("state").get(ACTIVE_KEY));
+    await transactionDone(transaction);
+    return value ?? null;
+  }
+
+  async record(point) {
+    let active = await this.activeRide();
+    if (!active) active = await this.createRide(point.recordedAt);
+    const database = await this.databasePromise;
+    const transaction = database.transaction(["state", "points"], "readwrite");
+    const stored = { ...point, sequence: active.nextSequence, batchId: batchId(active.rideId, active.nextSequence) };
+    transaction.objectStore("points").put(stored);
+    transaction.objectStore("state").put({ ...active, nextSequence: active.nextSequence + 1 });
+    await transactionDone(transaction);
+    this.flush().catch(() => {});
+    return active.rideId;
+  }
+
+  async createRide(startedAt) {
+    await this.ensureAnonymousSession();
+    const rideId = crypto.randomUUID();
+    const response = await this.fetcher("/api/rides", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ id: rideId, startedAt }),
+    });
+    if (!response.ok) throw new Error("Could not start route history");
+    const active = { key: ACTIVE_KEY, rideId, nextSequence: 0, startedAt };
+    const database = await this.databasePromise;
+    const transaction = database.transaction("state", "readwrite");
+    transaction.objectStore("state").put(active);
+    await transactionDone(transaction);
+    return active;
+  }
+
+  async ensureAnonymousSession() {
+    const response = await this.fetcher("/api/auth/anonymous", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error("Could not establish route-history session");
+  }
+
+  async queuedPoints() {
+    const database = await this.databasePromise;
+    const transaction = database.transaction("points", "readonly");
+    const points = await requestResult(transaction.objectStore("points").getAll());
+    await transactionDone(transaction);
+    return points.sort((left, right) => left.sequence - right.sequence);
+  }
+
+  async flush() {
+    if (this.flushing) return this.flushing;
+    this.flushing = this.flushQueued().finally(() => { this.flushing = null; });
+    return this.flushing;
+  }
+
+  async flushQueued() {
+    const active = await this.activeRide();
+    if (!active) return;
+    const points = await this.queuedPoints();
+    while (points.length) {
+      const currentBatchId = points[0].batchId;
+      const batch = points.filter((point) => point.batchId === currentBatchId).slice(0, MAX_BATCH_POINTS);
+      const response = await this.fetcher(`/api/rides/${active.rideId}/batches`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ id: currentBatchId, points: batch.map(uploadPoint) }),
+      });
+      if (!response.ok) throw new Error("Could not upload saved route points");
+      const database = await this.databasePromise;
+      const transaction = database.transaction("points", "readwrite");
+      for (const point of batch) transaction.objectStore("points").delete(point.sequence);
+      await transactionDone(transaction);
+      points.splice(0, batch.length);
+    }
+  }
+
+  async finish() {
+    const active = await this.activeRide();
+    if (!active) return;
+    await this.flush();
+    const response = await this.fetcher(`/api/rides/${active.rideId}/complete`, {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error("Could not finish route history");
+    const database = await this.databasePromise;
+    const transaction = database.transaction(["state", "points"], "readwrite");
+    transaction.objectStore("state").delete(ACTIVE_KEY);
+    transaction.objectStore("points").clear();
+    await transactionDone(transaction);
+  }
+}

@@ -12,6 +12,7 @@ import {
   smoothingWeight,
 } from "./location-accuracy";
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
+import { RideRecorder } from "./ride-recorder";
 
 type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type Orientation = "north" | "forward";
@@ -113,6 +114,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const orientationRef = useRef<Orientation>("north");
   const diagnosticsRef = useRef<DiagnosticSample[]>([]);
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
+  const rideRecorderRef = useRef<RideRecorder | null>(null);
   const searchRecordsRef = useRef<Partial<Record<Category, SearchRecord[]>>>({});
   const [enabled, setEnabled] = useState<Record<Category, boolean>>({ offRoadBike: true, protectedBike: true, streetBike: true, offRoadHike: true });
   const [status, setStatus] = useState("Loading City of Austin trail data…");
@@ -122,6 +124,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const [gpsQuality, setGpsQuality] = useState("acquiring");
   const [diagnosticCount, setDiagnosticCount] = useState(0);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [hasInterruptedRide, setHasInterruptedRide] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [, setSearchVersion] = useState(0);
@@ -262,6 +265,14 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     };
   }, [isRide]);
 
+  useEffect(() => {
+    if (!isRide) return;
+    const recorder = new RideRecorder();
+    rideRecorderRef.current = recorder;
+    recorder.activeRide().then((ride) => setHasInterruptedRide(Boolean(ride))).catch(() => {});
+    return () => { rideRecorderRef.current = null; };
+  }, [isRide]);
+
   function toggle(category: Category) {
     const next = !enabled[category];
     setEnabled((current) => {
@@ -319,7 +330,10 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     map?.setBearing(0);
     setBearing(0);
     setGpsQuality("idle");
-    setStatus("Ride mode stopped");
+    setStatus("Saving route history…");
+    rideRecorderRef.current?.finish()
+      .then(() => { setHasInterruptedRide(false); setStatus("Ride mode stopped and saved"); })
+      .catch(() => setStatus("Ride stopped. Route points will retry when you resume."));
   }
 
   function startTracking() {
@@ -386,6 +400,16 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       lastAccuracyRef.current = position.coords.accuracy;
       lastTimestampRef.current = position.timestamp;
       appendDiagnostic({ ...baseSample, accepted: true, action: "use-fix" });
+      rideRecorderRef.current?.record({
+        recordedAt: position.timestamp,
+        latitude: latlng.lat,
+        longitude: latlng.lng,
+        accuracyMeters: position.coords.accuracy,
+        altitudeMeters: Number.isFinite(position.coords.altitude) ? position.coords.altitude : null,
+        speedMetersPerSecond: Number.isFinite(position.coords.speed) ? position.coords.speed : null,
+        headingDegrees: heading,
+        quality,
+      }).catch(() => setStatus("Ride mode · route history is queued on this device"));
       setGpsQuality(quality);
 
       if (!locationMarkerRef.current) {
@@ -535,8 +559,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
           <div className="ride-start-card">
             <p className="eyebrow">Full-screen navigation</p>
             <h1>Ready to ride?</h1>
-            <p>Keep the phone in view and allow precise location. Your GPS samples stay on this device.</p>
-            <button onClick={startTracking}>Start GPS</button>
+            <p>Keep the phone in view and allow precise location. Accepted route points are saved to your private route history.</p>
+            {hasInterruptedRide && <p>Your last interrupted ride is ready to resume; queued points will upload when you reconnect.</p>}
+            <button onClick={startTracking}>{hasInterruptedRide ? "Resume GPS" : "Start GPS"}</button>
             <Link href="/">Return to the atlas</Link>
           </div>
         )}
