@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local-only values. Do not commit .dev.vars.
+# Generate independent values with: openssl rand -hex 32
+JWT_SECRET=
+PASSWORD_PEPPER=
+
+# Set these only when local routing and geocoding providers are available.
+# GEOCODER_URL=
+# ROUTING_URL=

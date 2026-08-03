@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss/index.css";
 
 :root { --paper: #f3eddc; --paper-deep: #e7dcc3; --ink: #203b31; --muted: #6f6a56; --orange: #b95d30; --line: rgba(61, 70, 50, .2); }
 * { box-sizing: border-box; }

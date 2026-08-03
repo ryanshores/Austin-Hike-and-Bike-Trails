@@ -8,11 +8,17 @@
   "scripts": {
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
+    "build:preview": "CLOUDFLARE_ENV=preview WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "conflation:spike": "node scripts/run-conflation-spike.mjs",
-    "db:generate": "drizzle-kit generate"
+    "check:worker": "npm run build && WRANGLER_LOG_PATH=.wrangler/logs/wrangler.log wrangler deploy --dry-run",
+    "check:preview-worker": "npm run build:preview && WRANGLER_LOG_PATH=.wrangler/logs/wrangler.log wrangler deploy --env preview --dry-run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:preview": "wrangler d1 migrations apply DB --remote --env preview",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "node scripts/deploy-production.mjs"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
