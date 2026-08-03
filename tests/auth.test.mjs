@@ -310,6 +310,7 @@ test("registration upgrades the same anonymous owner and preserves rides", async
   assert.equal(registrationBody.user.id, anonymousBody.user.id);
   assert.equal(registrationBody.user.accountType, "registered");
   assert.equal(registrationBody.user.email, "rider@example.com");
+  assert.equal(registrationBody.retainedRideCount, 1);
   assert.equal(
     fixture.db.database
       .prepare("SELECT user_id FROM rides WHERE id = ?")

@@ -34,6 +34,8 @@ test("server-renders the Austin trail atlas", async () => {
   assert.match(html, /Open full-screen ride map/);
   assert.match(html, /Find a trail or bike route/);
   assert.match(html, /Trail safety legend/);
+  assert.match(html, /href="\/history"/);
+  assert.match(html, /href="\/account"/);
 });
 
 test("renders location status as an accessible live region", async () => {
@@ -54,4 +56,26 @@ test("server-renders the dedicated full-screen ride page", async () => {
   assert.match(html, /Start GPS/);
   assert.match(html, /GPS diagnostics/);
   assert.doesNotMatch(html, /Find a trail or bike route/);
+});
+
+test("server-renders the private account entry point", async () => {
+  const response = await render("/account");
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /<title>Account · Austin Hike &amp; Bike Atlas<\/title>/i);
+  assert.match(html, /Your account/);
+  assert.match(html, /Loading your private account/);
+  assert.match(html, /href="\/history"/);
+});
+
+test("server-renders the private ride-history entry point", async () => {
+  const response = await render("/history");
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /<title>Ride history · Austin Hike &amp; Bike Atlas<\/title>/i);
+  assert.match(html, /Your rides/);
+  assert.match(html, /Loading private ride history/);
+  assert.match(html, /href="\/account"/);
 });
