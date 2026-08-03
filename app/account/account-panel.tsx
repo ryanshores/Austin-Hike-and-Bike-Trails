@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { apiRequest, ensureUser, readJson } from "../account-history-api";
 import type { AtlasUser } from "../account-history-api";
+import { clearLocalRideRecorder } from "../ride-recorder";
 
 type AuthResult = { retainedRideCount?: number; user: AtlasUser };
 
@@ -27,20 +28,26 @@ export default function AccountPanel() {
 
   async function submitCredentials(event: FormEvent<HTMLFormElement>, action: "login" | "register") {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setBusy(true);
     setStatus(action === "register" ? "Creating your account…" : "Signing in…");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     try {
       const result = await readJson<AuthResult>(await apiRequest(`/api/auth/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
       }));
+      const recorderCleared = action !== "login" || result.user.id === user?.id
+        ? true
+        : await clearRecorderSafely();
       setUser(result.user);
-      setStatus(action === "register"
-        ? `${result.retainedRideCount ?? 0} existing ${result.retainedRideCount === 1 ? "ride was" : "rides were"} retained.`
-        : "Signed in. Your account history is available on this device.");
-      event.currentTarget.reset();
+      setStatus(!recorderCleared
+        ? "Signed in, but this browser could not clear an interrupted ride. Do not resume Ride Mode on this device."
+        : action === "register"
+          ? `${result.retainedRideCount ?? 0} existing ${result.retainedRideCount === 1 ? "ride was" : "rides were"} retained.`
+          : "Signed in. Your account history is available on this device.");
+      formElement.reset();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Account request failed");
     } finally {
@@ -54,9 +61,12 @@ export default function AccountPanel() {
     try {
       const response = await apiRequest("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error("Could not sign out");
+      const recorderCleared = await clearRecorderSafely();
       const next = await ensureUser();
       setUser(next.user);
-      setStatus("Signed out. A new browser-only history has started.");
+      setStatus(recorderCleared
+        ? "Signed out. A new browser-only history has started."
+        : "Signed out, but this browser could not clear an interrupted ride. Do not resume Ride Mode on this device.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not sign out");
     } finally {
@@ -70,10 +80,13 @@ export default function AccountPanel() {
     try {
       const response = await apiRequest("/api/auth/account", { method: "DELETE" });
       if (!response.ok) throw new Error("Could not delete the account");
+      const recorderCleared = await clearRecorderSafely();
       const next = await ensureUser();
       setUser(next.user);
       setDeleteStep(false);
-      setStatus("Account and saved route history were permanently deleted.");
+      setStatus(recorderCleared
+        ? "Account and saved route history were permanently deleted."
+        : "The server account was deleted, but this browser could not clear queued route points. Clear this site's browser data before using Ride Mode.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not delete the account");
     } finally {
@@ -112,6 +125,15 @@ export default function AccountPanel() {
       </section>
     </div>
   );
+}
+
+async function clearRecorderSafely() {
+  try {
+    await clearLocalRideRecorder();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function AuthForm({ action, busy, onSubmit, title }: {

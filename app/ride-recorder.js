@@ -31,6 +31,29 @@ function openDatabase() {
   });
 }
 
+export async function clearLocalRideRecorder(rideId = null) {
+  const database = await openDatabase();
+  try {
+    return await clearRideRecorderDatabase(database, rideId);
+  } finally {
+    database.close();
+  }
+}
+
+export async function clearRideRecorderDatabase(database, rideId = null) {
+  const transaction = database.transaction(["state", "points"], "readwrite");
+  const state = transaction.objectStore("state");
+  const active = await requestResult(state.get(ACTIVE_KEY));
+  if (rideId !== null && active?.rideId !== rideId) {
+    await transactionDone(transaction);
+    return false;
+  }
+  state.delete(ACTIVE_KEY);
+  transaction.objectStore("points").clear();
+  await transactionDone(transaction);
+  return true;
+}
+
 function uploadPoint(point) {
   return {
     sequence: point.sequence,

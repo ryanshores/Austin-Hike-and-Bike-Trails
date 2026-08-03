@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest, ensureUser, readJson } from "../account-history-api";
 import type { AtlasUser, RideSummary } from "../account-history-api";
+import { clearLocalRideRecorder } from "../ride-recorder";
 
 type HistoryPage = { nextCursor: string | null; rides: RideSummary[] };
 
@@ -55,9 +56,12 @@ export default function HistoryPanel() {
     try {
       const response = await apiRequest(`/api/rides/${id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Could not delete the ride");
+      const recorderCleared = await clearMatchingRecorderSafely(id);
       setRides((current) => current.filter((ride) => ride.id !== id));
       setConfirming(null);
-      setStatus("Ride and route points were permanently deleted.");
+      setStatus(recorderCleared
+        ? "Ride and route points were permanently deleted."
+        : "The server ride was deleted, but this browser could not clear its queued points. Clear this site's browser data before using Ride Mode.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not delete the ride");
     } finally {
@@ -87,6 +91,15 @@ export default function HistoryPanel() {
       {cursor && <button className="load-more" onClick={loadMore} disabled={busy}>Load older rides</button>}
     </section>
   );
+}
+
+async function clearMatchingRecorderSafely(id: string) {
+  try {
+    await clearLocalRideRecorder(id);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function loadHistory(cursor?: string) {
