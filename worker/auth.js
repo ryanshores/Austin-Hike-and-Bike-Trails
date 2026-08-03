@@ -12,7 +12,7 @@ const PASSWORD_ITERATIONS = 600_000;
 const PASSWORD_KEY_BYTES = 32;
 const encoder = new TextEncoder();
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(status, message) {
     super(message);
     this.status = status;

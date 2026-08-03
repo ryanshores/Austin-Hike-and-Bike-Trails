@@ -111,6 +111,8 @@ test("ride ingestion rejects foreign, out-of-order, and unacceptable GPS data", 
 
 test("private history reads and deletes only the authenticated owner's rides", async () => {
   const instance = fixture();
+  const unauthenticated = await instance.rides(request("/api/rides", { method: "GET" }));
+  assert.equal(unauthenticated.status, 401);
   const owner = await anonymous(instance);
   const stranger = await anonymous(instance);
   const rideId = "ride_test_0000000000000003";
@@ -135,6 +137,26 @@ test("private history reads and deletes only the authenticated owner's rides", a
   assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_points WHERE ride_id = ?").get(rideId).count, 0);
   const missing = await instance.rides(request(`/api/rides/${rideId}`, { method: "GET", cookies: owner }));
   assert.equal(missing.status, 404);
+  instance.db.close();
+});
+
+test("private history cursor reaches older rides in newest-first order", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const older = "ride_test_0000000000000005";
+  const newer = "ride_test_0000000000000006";
+  for (const [id, startedAt] of [[older, 1_799_999_998_000], [newer, 1_799_999_999_000]]) {
+    await instance.rides(request("/api/rides", { cookies: owner, body: { id, startedAt } }));
+    await instance.rides(request(`/api/rides/${id}/complete`, { cookies: owner }));
+  }
+  const first = await instance.rides(request("/api/rides?limit=1", { method: "GET", cookies: owner }));
+  const firstBody = await first.json();
+  assert.deepEqual(firstBody.rides.map((ride) => ride.id), [newer]);
+  assert.equal(typeof firstBody.nextCursor, "string");
+  const second = await instance.rides(request(`/api/rides?limit=1&cursor=${encodeURIComponent(firstBody.nextCursor)}`, { method: "GET", cookies: owner }));
+  const secondBody = await second.json();
+  assert.deepEqual(secondBody.rides.map((ride) => ride.id), [older]);
+  assert.equal(secondBody.nextCursor, null);
   instance.db.close();
 });
 

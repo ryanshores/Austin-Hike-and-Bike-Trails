@@ -1,4 +1,4 @@
-import { authenticateRequest } from "./auth.js";
+import { authenticateRequest, HttpError } from "./auth.js";
 
 const MAX_BATCH_POINTS = 100;
 const MAX_CREATE_BYTES = 4 * 1024;
@@ -6,13 +6,6 @@ const MAX_BATCH_BYTES = 64 * 1024;
 const MAX_POINT_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_MS = 5 * 60 * 1000;
 const MAX_CYCLING_SPEED_MPS = 35;
-
-class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
 
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -218,17 +211,54 @@ function listLimit(request) {
   return Math.min(Math.max(Number(value), 1), 100);
 }
 
+function encodeCursor(ride) {
+  return btoa(JSON.stringify({ id: ride.id, startedAt: ride.startedAt }))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
+}
+
+function decodeCursor(request) {
+  const value = new URL(request.url).searchParams.get("cursor");
+  if (value === null) return null;
+  if (value.length > 256) throw new HttpError(400, "Invalid history cursor");
+  try {
+    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const cursor = JSON.parse(atob(padded));
+    if (!Number.isInteger(cursor.startedAt) || !isId(cursor.id)) throw new Error("Invalid cursor");
+    return cursor;
+  } catch {
+    throw new HttpError(400, "Invalid history cursor");
+  }
+}
+
 async function listRides(request, dependencies) {
   const user = await authenticateRequest(request, dependencies);
+  const limit = listLimit(request);
+  const cursor = decodeCursor(request);
   const rides = await dependencies.db.prepare(
     `SELECT id, status, title, started_at AS startedAt, ended_at AS endedAt,
             distance_meters AS distanceMeters, accepted_point_count AS acceptedPointCount
      FROM rides
      WHERE user_id = ? AND deleted_at IS NULL
+       AND (? IS NULL OR started_at < ? OR (started_at = ? AND id < ?))
      ORDER BY started_at DESC, id DESC
      LIMIT ?`,
-  ).bind(user.id, listLimit(request)).all();
-  return response({ rides: rides.results ?? [] });
+  ).bind(
+    user.id,
+    cursor?.startedAt ?? null,
+    cursor?.startedAt ?? null,
+    cursor?.startedAt ?? null,
+    cursor?.id ?? null,
+    limit + 1,
+  ).all();
+  const records = rides.results ?? [];
+  const page = records.slice(0, limit);
+  return response({
+    rides: page,
+    nextCursor: records.length > limit ? encodeCursor(page.at(-1)) : null,
+  });
 }
 
 async function getRide(request, dependencies, rideId) {
