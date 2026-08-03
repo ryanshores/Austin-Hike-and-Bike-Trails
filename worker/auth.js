@@ -370,6 +370,14 @@ function publicUser(user) {
   };
 }
 
+async function countRetainedRides(dependencies, userId) {
+  const result = await dependencies.db
+    .prepare("SELECT count(*) AS count FROM rides WHERE user_id = ? AND deleted_at IS NULL")
+    .bind(userId)
+    .first();
+  return Number(result?.count ?? 0);
+}
+
 async function prepareSession({
   jwtSecret,
   now,
@@ -600,7 +608,10 @@ async function register(request, dependencies) {
     });
     const headers = new Headers();
     appendSessionCookies(headers, request, session);
-    return response({ user: publicUser(current) }, 200, headers);
+    return response({
+      retainedRideCount: await countRetainedRides(dependencies, current.id),
+      user: publicUser(current),
+    }, 200, headers);
   }
 
   const passwordRecord = await hashPassword(
@@ -722,7 +733,10 @@ async function register(request, dependencies) {
     "Set-Cookie",
     cookie(INSTALLATION_COOKIE, "", request, { maxAge: 0 }),
   );
-  return response({ user: publicUser(upgraded) }, 200, headers);
+  return response({
+    retainedRideCount: await countRetainedRides(dependencies, upgraded.id),
+    user: publicUser(upgraded),
+  }, 200, headers);
 }
 
 async function login(request, dependencies) {

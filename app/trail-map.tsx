@@ -509,10 +509,16 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             <p className="eyebrow">Field guide · Austin, Texas</p>
             <h1>Hike & Bike Atlas</h1>
           </div>
-          <Link className="location-button" href="/ride" aria-label="Open full-screen ride map">
-            <span className="location-button-icon" aria-hidden="true" />
-            <span className="location-button-label">Start ride</span>
-          </Link>
+          <div className="atlas-header-actions">
+            <nav className="atlas-account-nav" aria-label="Private account and history">
+              <Link href="/history">History</Link>
+              <Link href="/account">Account</Link>
+            </nav>
+            <Link className="location-button" href="/ride" aria-label="Open full-screen ride map">
+              <span className="location-button-icon" aria-hidden="true" />
+              <span className="location-button-label">Start ride</span>
+            </Link>
+          </div>
         </header>
       )}
 

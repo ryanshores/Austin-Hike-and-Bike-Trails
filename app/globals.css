@@ -14,6 +14,10 @@ h2 { font-size: 22px; }
 .location-button { border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 252, 241, .8); color: var(--ink); min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none; cursor: pointer; box-shadow: 0 4px 16px rgba(40, 46, 31, .08); }
 .location-button-icon { width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 10px solid currentColor; transform: translateX(1px); }
 .location-button.tracking { background: var(--ink); color: #fffaf0; }
+.atlas-header-actions { display: flex; align-items: center; gap: 12px; }
+.atlas-account-nav, .account-history-header nav { display: flex; align-items: center; gap: 6px; }
+.atlas-account-nav a, .account-history-header nav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 11px; border-radius: 999px; color: var(--ink); text-decoration: none; font: 700 12px Arial, sans-serif; }
+.atlas-account-nav a:hover, .atlas-account-nav a:focus-visible, .account-history-header nav a:hover, .account-history-header nav a:focus-visible { background: rgba(255, 252, 241, .72); outline: 2px solid rgba(185, 93, 48, .25); outline-offset: 1px; }
 .search-panel { position: relative; z-index: 700; display: grid; grid-template-columns: auto minmax(280px, 620px); align-items: center; gap: 14px; padding: 0 6px; }
 .search-panel > label { font: 700 12px Arial, sans-serif; letter-spacing: .02em; }
 .search-field { min-height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 252, 241, .9); box-shadow: 0 6px 20px rgba(40, 46, 31, .08); }
@@ -93,9 +97,48 @@ h2 { font-size: 22px; }
 .diagnostic-actions button { flex: 1; min-height: 38px; border: 1px solid var(--line); border-radius: 999px; background: #fffaf0; color: var(--ink); cursor: pointer; font: 700 11px Arial, sans-serif; }
 .diagnostic-actions button:disabled { cursor: default; opacity: .45; }
 
+.account-history-shell { width: min(1080px, calc(100% - 36px)); min-height: 100dvh; margin: 0 auto; padding: 28px 0 56px; }
+.account-history-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; padding: 0 4px 20px; border-bottom: 1px solid var(--line); }
+.account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.account-card, .history-panel, .empty-history { border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 250, 240, .82); box-shadow: 0 10px 30px rgba(49, 53, 33, .08); }
+.account-card { padding: 22px; }
+.account-card > p:not(.eyebrow), .form-note, .history-notice span, .empty-history p { color: var(--muted); font: 13px/1.5 Arial, sans-serif; }
+.account-state, .danger-card { min-height: 220px; }
+.account-state .secondary-action, .danger-card .danger-action, .danger-card .confirm-actions { margin-top: 10px; }
+.account-form { display: grid; gap: 14px; }
+.account-form label { display: grid; gap: 6px; color: var(--ink); font: 700 12px Arial, sans-serif; }
+.account-form input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: #fffdf6; color: var(--ink); padding: 0 12px; font: 15px Arial, sans-serif; }
+.account-form input:focus { outline: 3px solid rgba(185, 93, 48, .22); border-color: var(--orange); }
+.primary-action, .secondary-action, .danger-action, .load-more { min-height: 42px; border-radius: 999px; padding: 0 15px; cursor: pointer; font: 700 12px Arial, sans-serif; }
+.primary-action { border: 1px solid var(--ink); background: var(--ink); color: #fffaf0; }
+.secondary-action, .load-more { border: 1px solid var(--line); background: #fffaf0; color: var(--ink); }
+.danger-action { border: 1px solid #8f3e2b; background: #8f3e2b; color: #fffaf0; }
+.primary-action:disabled, .secondary-action:disabled, .danger-action:disabled, .load-more:disabled { cursor: default; opacity: .55; }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.form-status { padding: 10px 12px; border-left: 3px solid var(--orange); background: rgba(231, 220, 195, .52); color: var(--ink) !important; font: 12px/1.4 Arial, sans-serif !important; }
+.form-note { margin: 0; font-size: 11px; }
+.danger-card { border-color: rgba(143, 62, 43, .32); }
+
+.history-panel { padding: 18px; }
+.history-notice { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 15px; padding: 13px 15px; border-radius: 12px; background: var(--paper-deep); }
+.history-notice strong { font: 700 13px Arial, sans-serif; }
+.empty-history { padding: 36px 22px; text-align: center; box-shadow: none; }
+.ride-list { display: grid; gap: 10px; }
+.ride-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 253, 246, .86); }
+.ride-card h2 { margin-bottom: 12px; }
+.ride-card dl { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.ride-card dl div { min-width: 90px; padding-right: 14px; border-right: 1px solid var(--line); }
+.ride-card dl div:last-child { border-right: 0; }
+.ride-card dt { color: var(--muted); font: 10px Arial, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
+.ride-card dd { margin: 3px 0 0; font: 700 13px Arial, sans-serif; }
+.load-more { display: block; margin: 16px auto 0; }
+
 @media (max-width: 800px) {
   .atlas-shell { min-height: 100dvh; padding: 10px; grid-template-rows: auto auto minmax(420px, 62dvh) auto; gap: 8px; }
   .atlas-header { min-height: 56px; }
+  .atlas-header-actions { gap: 4px; }
+  .atlas-account-nav { gap: 0; }
+  .atlas-account-nav a { min-height: 40px; padding: 0 7px; font-size: 11px; }
   h1 { font-size: 28px; }
   .location-button-label { display: none; }
   .location-button { width: 44px; min-width: 44px; padding: 0; }
@@ -119,4 +162,15 @@ h2 { font-size: 22px; }
   .gps-badge { min-height: 42px; overflow: hidden; font-size: 10px; }
   .ride-layers .legend-item { flex-basis: 135px; }
   .ride-shell .orientation-control { bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px); }
+  .account-history-shell { width: min(100% - 20px, 680px); padding: 16px 0 36px; }
+  .account-history-header { align-items: flex-start; margin-bottom: 14px; padding-bottom: 14px; }
+  .account-history-header nav { gap: 0; }
+  .account-history-header nav a { min-height: 38px; padding: 0 8px; }
+  .account-grid { grid-template-columns: 1fr; gap: 10px; }
+  .account-card { padding: 18px; }
+  .account-state, .danger-card { min-height: 0; }
+  .history-panel { padding: 10px; }
+  .history-notice { display: grid; gap: 4px; }
+  .ride-card { align-items: stretch; flex-direction: column; gap: 14px; padding: 15px; }
+  .ride-card > .secondary-action { align-self: flex-start; }
 }
