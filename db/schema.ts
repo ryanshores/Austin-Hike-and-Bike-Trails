@@ -293,3 +293,28 @@ export const authSessions = sqliteTable(
     ),
   ],
 );
+
+export const authRefreshTokens = sqliteTable(
+  "auth_refresh_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => authSessions.id, { onDelete: "cascade" }),
+    issuedAt: integer("issued_at", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("auth_refresh_tokens_session_idx").on(table.sessionId),
+  ],
+);
+
+export const authRateLimits = sqliteTable(
+  "auth_rate_limits",
+  {
+    keyHash: text("key_hash").primaryKey(),
+    count: integer("count").notNull(),
+    resetAt: integer("reset_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("auth_rate_limits_reset_idx").on(table.resetAt)],
+);
