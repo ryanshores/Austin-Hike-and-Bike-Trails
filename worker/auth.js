@@ -1,3 +1,5 @@
+import { pbkdf2 } from "node:crypto";
+
 const ACCESS_COOKIE = "atlas_access";
 const REFRESH_COOKIE = "atlas_refresh";
 const INSTALLATION_COOKIE = "atlas_installation";
@@ -115,25 +117,17 @@ export async function verifyAccessToken(token, secret, nowSeconds) {
 }
 
 async function derivePassword(password, pepper, salt, iterations) {
-  const material = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(`${password}\u0000${pepper}`),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-  return new Uint8Array(
-    await crypto.subtle.deriveBits(
-      {
-        name: "PBKDF2",
-        hash: "SHA-256",
-        salt,
-        iterations,
-      },
-      material,
-      PASSWORD_KEY_BYTES * 8,
-    ),
-  );
+  const derived = await new Promise((resolve, reject) => {
+    pbkdf2(
+      `${password}\u0000${pepper}`,
+      salt,
+      iterations,
+      PASSWORD_KEY_BYTES,
+      "sha256",
+      (error, result) => (error ? reject(error) : resolve(result)),
+    );
+  });
+  return new Uint8Array(derived);
 }
 
 export async function hashPassword(password, pepper, randomBytes) {
