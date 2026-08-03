@@ -31,6 +31,19 @@ test("conflation marks contradictory nearby City labels as ambiguous", () => {
   assert.equal(result.coverageRatio, 0);
 });
 
+test("conflation treats differing City safety fields as ambiguous even when the facility name matches", () => {
+  const result = evaluateConflation({
+    route,
+    cityFeatures: [
+      feature("Bike Lane"),
+      { type: "Feature", properties: { BICYCLE_FACILITY: "Bike Lane", LINE_TYPE: "Off-Street" }, geometry: { type: "LineString", coordinates: route.coordinates } },
+    ],
+    toleranceMeters: 10,
+  });
+  assert.equal(result.matchedMiles, 0);
+  assert.equal(result.ambiguousMiles, result.routeMiles);
+});
+
 test("geometry helpers use meters and expand a route envelope", () => {
   assert.ok(pointToSegmentMeters([-97.743, 30.272], [-97.7431, 30.2672], [-97.7431, 30.2772]) > 5);
   assert.deepEqual(boundsForLine(route, 0.001), { west: -97.7441, south: 30.2662, east: -97.7421, north: 30.2782 });

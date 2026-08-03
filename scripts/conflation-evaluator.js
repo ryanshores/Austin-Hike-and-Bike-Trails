@@ -70,9 +70,27 @@ function closestFacility(point, features, toleranceMeters) {
   return matches;
 }
 
+function normalizedSafetyField(value) {
+  return String(value ?? "").trim().replaceAll(/\s+/g, " ").toLowerCase();
+}
+
+function facilitySafetyKey(feature) {
+  const properties = feature?.properties ?? {};
+  return JSON.stringify([
+    normalizedSafetyField(properties.BICYCLE_FACILITY),
+    normalizedSafetyField(properties.LINE_TYPE),
+    normalizedSafetyField(properties.BIKE_LEVEL_OF_COMFORT),
+  ]);
+}
+
 function facilityLabel(feature) {
   const properties = feature?.properties ?? {};
-  return String(properties.BICYCLE_FACILITY ?? properties.LINE_TYPE ?? properties.BIKE_LEVEL_OF_COMFORT ?? "unlabeled City facility").trim() || "unlabeled City facility";
+  const fields = [
+    properties.BICYCLE_FACILITY,
+    properties.LINE_TYPE,
+    properties.BIKE_LEVEL_OF_COMFORT,
+  ].map((value) => String(value ?? "").trim()).filter(Boolean);
+  return fields.join(" · ") || "unlabeled City facility";
 }
 
 function sampleSegment(start, end, maximumSpacingMeters) {
@@ -103,13 +121,13 @@ export function evaluateConflation({ route, cityFeatures, toleranceMeters = 25, 
         summary.unmatchedMiles += sample.miles;
         continue;
       }
-      const labels = new Set(matches.map(({ feature }) => facilityLabel(feature)));
-      if (labels.size > 1) {
+      const safetyKeys = new Set(matches.map(({ feature }) => facilitySafetyKey(feature)));
+      if (safetyKeys.size > 1) {
         summary.ambiguousSamples += 1;
         summary.ambiguousMiles += sample.miles;
         continue;
       }
-      const label = labels.values().next().value;
+      const label = facilityLabel(matches[0].feature);
       summary.matchedSamples += 1;
       summary.matchedMiles += sample.miles;
       summary.facilityMiles[label] = (summary.facilityMiles[label] ?? 0) + sample.miles;

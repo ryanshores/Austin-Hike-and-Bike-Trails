@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { fetchAllBikeFacilities } from "../worker/bike-facilities.js";
+import { BIKE_CACHE_DATASET_VERSION, fetchAllBikeFacilities } from "../worker/bike-facilities.js";
 import { providerEndpoint } from "../worker/api-utils.js";
 import { decodePolyline6 } from "../worker/routes.js";
 import { boundsForLine, evaluateConflation } from "./conflation-evaluator.js";
@@ -22,7 +22,7 @@ function routeGeometry(route) {
 }
 
 function markdownReport(report) {
-  const rows = report.results.map((result) => `| ${result.id} | ${result.category} | ${result.coverageRatio.toFixed(1)} | ${result.matchedMiles.toFixed(2)} | ${result.ambiguousMiles.toFixed(2)} | ${result.unmatchedMiles.toFixed(2)} |`).join("\n");
+  const rows = report.results.map((result) => `| ${result.id} | ${result.category} | ${(result.coverageRatio * 100).toFixed(2)}% | ${result.matchedMiles.toFixed(2)} | ${result.ambiguousMiles.toFixed(2)} | ${result.unmatchedMiles.toFixed(2)} |`).join("\n");
   return `# City/OSM conflation spike results\n\nGenerated: ${report.generatedAt}\n\n- City dataset: ${report.cityDataset}\n- Routing graph: ${report.routingGraph}\n- Tolerance: ${report.toleranceMeters} m\n- Sample spacing: ${report.sampleSpacingMeters} m\n\n| Connection | Category | City coverage | Matched mi | Ambiguous mi | Unmatched mi |\n| --- | --- | ---: | ---: | ---: | ---: |\n${rows}\n\nA zero or low coverage result is evidence to investigate, not a reason to promote a route section to a safe class.\n`;
 }
 
@@ -49,7 +49,7 @@ for (const connection of cases) {
   results.push({ id: connection.id, name: connection.name, category: connection.category, ...evaluateConflation({ route, cityFeatures: facilities.features, toleranceMeters, sampleSpacingMeters }) });
 }
 
-const report = { generatedAt: new Date().toISOString(), cityDataset: "austin-bike-facilities-v1", routingGraph: String(status.osm_changeset ?? status.tileset_last_modified ?? "unknown"), toleranceMeters, sampleSpacingMeters, results };
+const report = { generatedAt: new Date().toISOString(), cityDataset: BIKE_CACHE_DATASET_VERSION, routingGraph: String(status.osm_changeset ?? status.tileset_last_modified ?? "unknown"), toleranceMeters, sampleSpacingMeters, results };
 await writeFile(`${outputPrefix}.json`, `${JSON.stringify(report, null, 2)}\n`);
 await writeFile(`${outputPrefix}.md`, markdownReport(report));
 console.log(`Wrote ${outputPrefix}.json and ${outputPrefix}.md`);
