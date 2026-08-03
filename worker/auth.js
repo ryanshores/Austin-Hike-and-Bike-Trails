@@ -435,7 +435,7 @@ async function createSession(dependencies) {
   };
 }
 
-async function authenticate(request, dependencies) {
+export async function authenticateRequest(request, dependencies) {
   const accessToken = parseCookies(request)[ACCESS_COOKIE];
   if (!accessToken) throw new HttpError(401, "Authentication required");
   const claims = await verifyAccessToken(
@@ -467,7 +467,7 @@ async function anonymous(request, dependencies) {
   assertSameOrigin(request);
   await checkRateLimit(request, "anonymous", dependencies);
   try {
-    const existing = await authenticate(request, dependencies);
+    const existing = await authenticateRequest(request, dependencies);
     return response({ user: publicUser(existing) });
   } catch (error) {
     if (!(error instanceof HttpError) || error.status !== 401) throw error;
@@ -581,7 +581,7 @@ async function anonymous(request, dependencies) {
 async function register(request, dependencies) {
   assertSameOrigin(request);
   await checkRateLimit(request, "register", dependencies);
-  const current = await authenticate(request, dependencies);
+  const current = await authenticateRequest(request, dependencies);
   const body = await readJson(request);
   const email = normalizeEmail(body.email);
   const password = validatePassword(body.password);
@@ -979,7 +979,7 @@ export function createAuthHandler(options) {
       if (path === "/api/auth/me") {
         method(request, "GET");
         return response({
-          user: publicUser(await authenticate(request, dependencies)),
+          user: publicUser(await authenticateRequest(request, dependencies)),
         });
       }
       return response({ error: "Not found" }, 404);
