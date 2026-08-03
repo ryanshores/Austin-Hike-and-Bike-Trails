@@ -473,6 +473,49 @@ test("login, refresh rotation, logout, and origin checks protect sessions", asyn
   fixture.db.close();
 });
 
+test("refresh rotation does not extend cookies past the session expiry", async () => {
+  const start = 1_800_000_000_000;
+  const fixture = createFixture(start);
+  const { jar } = await bootstrap(fixture);
+  const registration = await fixture.handler(
+    request("/api/auth/register", {
+      cookies: jar,
+      body: {
+        email: "rider@example.com",
+        password: "correct horse battery staple",
+      },
+    }),
+  );
+  applyCookies(registration, jar);
+
+  const loginJar = {};
+  const login = await fixture.handler(
+    request("/api/auth/login", {
+      body: {
+        email: "rider@example.com",
+        password: "correct horse battery staple",
+      },
+    }),
+  );
+  applyCookies(login, loginJar);
+
+  fixture.setNow(start + 30 * 24 * 60 * 60 * 1000 - 5 * 60 * 1000);
+  const refreshed = await fixture.handler(
+    request("/api/auth/refresh", { cookies: loginJar }),
+  );
+  assert.equal(refreshed.status, 200);
+  const cookies = refreshed.headers.getSetCookie();
+  assert.match(
+    cookies.find((value) => value.startsWith("atlas_access=")),
+    /Max-Age=300/u,
+  );
+  assert.match(
+    cookies.find((value) => value.startsWith("atlas_refresh=")),
+    /Max-Age=300/u,
+  );
+  fixture.db.close();
+});
+
 test("logout revokes a session when given a rotated refresh token", async () => {
   const fixture = createFixture();
   const { jar } = await bootstrap(fixture);

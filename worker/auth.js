@@ -223,17 +223,24 @@ function cookie(name, value, request, options = {}) {
   return parts.join("; ");
 }
 
-function appendSessionCookies(headers, request, session, installation) {
+function appendSessionCookies(
+  headers,
+  request,
+  session,
+  installation,
+  sessionMaxAgeSeconds = Math.floor(REFRESH_TTL_MS / 1000),
+) {
+  const maxAge = Math.max(0, sessionMaxAgeSeconds);
   headers.append(
     "Set-Cookie",
     cookie(ACCESS_COOKIE, session.accessToken, request, {
-      maxAge: ACCESS_TTL_SECONDS,
+      maxAge: Math.min(ACCESS_TTL_SECONDS, maxAge),
     }),
   );
   headers.append(
     "Set-Cookie",
     cookie(REFRESH_COOKIE, session.refreshToken, request, {
-      maxAge: Math.floor(REFRESH_TTL_MS / 1000),
+      maxAge,
     }),
   );
   if (installation) {
@@ -875,7 +882,7 @@ async function refresh(request, dependencies) {
   appendSessionCookies(headers, request, {
     accessToken,
     refreshToken: newToken,
-  });
+  }, undefined, Math.floor((session.expires_at - now) / 1000));
   return response({ user: publicUser(session) }, 200, headers);
 }
 
