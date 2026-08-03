@@ -163,13 +163,12 @@ function elevationTotals(rangeHeight) {
 }
 
 async function fetchElevation(candidate, providerUrl, fetchImpl, signal) {
-  if (
-    Number.isFinite(Number(candidate.totalAscentFeet)) &&
-    Number.isFinite(Number(candidate.totalDescentFeet))
-  ) {
+  const totalAscentFeet = explicitElevation(candidate.totalAscentFeet);
+  const totalDescentFeet = explicitElevation(candidate.totalDescentFeet);
+  if (totalAscentFeet !== null && totalDescentFeet !== null) {
     return {
-      totalAscentFeet: finiteNonNegative(candidate.totalAscentFeet),
-      totalDescentFeet: finiteNonNegative(candidate.totalDescentFeet),
+      totalAscentFeet,
+      totalDescentFeet,
     };
   }
   const encodedPolyline =
@@ -203,7 +202,12 @@ async function fetchElevation(candidate, providerUrl, fetchImpl, signal) {
 
 function providerCandidates(value) {
   if (Array.isArray(value?.candidates)) return value.candidates;
-  if (value?.trip) return [value.trip];
+  if (value?.trip) {
+    const alternates = Array.isArray(value.alternates)
+      ? value.alternates.map((alternate) => alternate?.trip).filter(Boolean)
+      : [];
+    return [value.trip, ...alternates];
+  }
   throw new Error("Routing provider returned no route candidates.");
 }
 

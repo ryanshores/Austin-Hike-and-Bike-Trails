@@ -173,3 +173,36 @@ test("public Nominatim uses one application-wide limiter key", async () => {
   }));
   assert.deepEqual(privateKeys, ["203.0.113.3"]);
 });
+
+test("cached public Nominatim searches do not consume the shared limiter", async () => {
+  const cache = memoryCache();
+  const request = new Request("https://atlas.example/api/geocode?q=library");
+  const populateCache = createGeocodeHandler({
+    providerUrl: "https://nominatim.openstreetmap.org",
+    cache,
+    fetchImpl: async () => Response.json([]),
+  });
+  assert.equal((await populateCache(request)).headers.get("x-cache-status"), "MISS");
+
+  let limiterCalls = 0;
+  const limited = createGeocodeHandler({
+    providerUrl: "https://nominatim.openstreetmap.org",
+    cache,
+    rateLimiter: {
+      async limit() {
+        limiterCalls += 1;
+        return { success: false };
+      },
+    },
+  });
+  const cached = await limited(request);
+  assert.equal(cached.status, 200);
+  assert.equal(cached.headers.get("x-cache-status"), "HIT");
+  assert.equal(limiterCalls, 0);
+
+  const miss = await limited(
+    new Request("https://atlas.example/api/geocode?q=trail"),
+  );
+  assert.equal(miss.status, 429);
+  assert.equal(limiterCalls, 1);
+});

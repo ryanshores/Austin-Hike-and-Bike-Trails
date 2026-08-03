@@ -121,13 +121,6 @@ export function createGeocodeHandler({
 } = {}) {
   return async function handleGeocode(request) {
     if (request.method !== "GET") return jsonError("Method not allowed.", 405);
-    if (!(await requestAllowed(
-      rateLimiter,
-      request,
-      sharedGeocoderRateLimitKey(providerUrl),
-    ))) {
-      return jsonError("Too many geocoding requests. Try again shortly.", 429);
-    }
 
     let query;
     let limit;
@@ -145,6 +138,13 @@ export function createGeocodeHandler({
     );
     const cached = cache ? await cache.match(cacheRequest) : undefined;
     if (cached) return withHeaders(cached, { "X-Cache-Status": "HIT" });
+    if (!(await requestAllowed(
+      rateLimiter,
+      request,
+      sharedGeocoderRateLimitKey(providerUrl),
+    ))) {
+      return jsonError("Too many geocoding requests. Try again shortly.", 429);
+    }
 
     try {
       const response = await fetchImpl(providerSearchUrl(providerUrl, query, limit), {

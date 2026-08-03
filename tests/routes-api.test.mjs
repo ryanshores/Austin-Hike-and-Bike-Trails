@@ -143,6 +143,41 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
   assert.equal(recursivelyHasForbiddenKey(body), false);
 });
 
+test("stock Valhalla alternates participate in candidate ranking", async () => {
+  const primaryShape = encodePolyline6([
+    [30.2672, -97.7431],
+    [30.285, -97.735],
+  ]);
+  const alternateShape = encodePolyline6([
+    [30.2672, -97.7431],
+    [30.28, -97.74],
+  ]);
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    fetchImpl: async (url) => {
+      if (new URL(url).pathname === "/route") {
+        return Response.json({
+          routingGraphVersion: "osm-test",
+          trip: { summary: { length: 2 }, legs: [{ shape: primaryShape }] },
+          alternates: [{
+            trip: { summary: { length: 1 }, legs: [{ shape: alternateShape }] },
+          }],
+        });
+      }
+      return Response.json({ range_height: [[0, 100], [100, 100]] });
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.route.totalMiles, 1);
+  assert.deepEqual(body.route.geometry.coordinates, [
+    [-97.7431, 30.2672],
+    [-97.74, 30.28],
+  ]);
+});
+
 test("enriched candidates are ranked by safety before distance", async () => {
   const geometry = {
     type: "LineString",
@@ -239,6 +274,8 @@ test("enriched edges retain elevation sampled from the route profile", async () 
           routingGraphVersion: "osm-test",
           candidates: [{
             geometry,
+            totalAscentFeet: null,
+            totalDescentFeet: "",
             edges: [{
               geometry,
               miles: 1,
