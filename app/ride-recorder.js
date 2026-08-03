@@ -31,10 +31,6 @@ function openDatabase() {
   });
 }
 
-function batchId(rideId, sequence) {
-  return `batch_${rideId.replaceAll("-", "").slice(0, 20)}_${Math.floor(sequence / MAX_BATCH_POINTS) * MAX_BATCH_POINTS}`;
-}
-
 function uploadPoint(point) {
   return {
     sequence: point.sequence,
@@ -54,6 +50,7 @@ export class RideRecorder {
     this.fetcher = fetcher;
     this.databasePromise = openDatabase();
     this.flushing = null;
+    this.recording = Promise.resolve();
   }
 
   async activeRide() {
@@ -64,12 +61,18 @@ export class RideRecorder {
     return value ?? null;
   }
 
-  async record(point) {
+  record(point) {
+    const recording = this.recording.then(() => this.recordPoint(point));
+    this.recording = recording.catch(() => {});
+    return recording;
+  }
+
+  async recordPoint(point) {
     let active = await this.activeRide();
     if (!active) active = await this.createRide(point.recordedAt);
     const database = await this.databasePromise;
     const transaction = database.transaction(["state", "points"], "readwrite");
-    const stored = { ...point, sequence: active.nextSequence, batchId: batchId(active.rideId, active.nextSequence) };
+    const stored = { ...point, sequence: active.nextSequence };
     transaction.objectStore("points").put(stored);
     transaction.objectStore("state").put({ ...active, nextSequence: active.nextSequence + 1 });
     await transactionDone(transaction);
@@ -122,13 +125,12 @@ export class RideRecorder {
     if (!active) return;
     const points = await this.queuedPoints();
     while (points.length) {
-      const currentBatchId = points[0].batchId;
-      const batch = points.filter((point) => point.batchId === currentBatchId).slice(0, MAX_BATCH_POINTS);
-      const response = await this.fetcher(`/api/rides/${active.rideId}/batches`, {
+      const batch = await this.nextBatch(points);
+      const response = await this.requestWithRefresh(`/api/rides/${active.rideId}/batches`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ id: currentBatchId, points: batch.map(uploadPoint) }),
+        body: JSON.stringify({ id: batch[0].batchId, points: batch.map(uploadPoint) }),
       });
       if (!response.ok) throw new Error("Could not upload saved route points");
       const database = await this.databasePromise;
@@ -139,11 +141,40 @@ export class RideRecorder {
     }
   }
 
+  async nextBatch(points) {
+    if (points[0].batchId) {
+      return points.slice(0, MAX_BATCH_POINTS).filter((point) => point.batchId === points[0].batchId);
+    }
+    const batch = points.slice(0, MAX_BATCH_POINTS).filter((point) => !point.batchId);
+    const id = crypto.randomUUID();
+    const database = await this.databasePromise;
+    const transaction = database.transaction("points", "readwrite");
+    for (const point of batch) {
+      point.batchId = id;
+      transaction.objectStore("points").put(point);
+    }
+    await transactionDone(transaction);
+    return batch;
+  }
+
+  async requestWithRefresh(url, options) {
+    let response = await this.fetcher(url, options);
+    if (response.status !== 401) return response;
+    const refresh = await this.fetcher("/api/auth/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    if (!refresh.ok) return response;
+    response = await this.fetcher(url, options);
+    return response;
+  }
+
   async finish() {
+    await this.recording;
     const active = await this.activeRide();
     if (!active) return;
     await this.flush();
-    const response = await this.fetcher(`/api/rides/${active.rideId}/complete`, {
+    const response = await this.requestWithRefresh(`/api/rides/${active.rideId}/complete`, {
       method: "POST",
       credentials: "same-origin",
     });
