@@ -12,7 +12,10 @@
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "conflation:spike": "node scripts/run-conflation-spike.mjs",
-    "db:generate": "drizzle-kit generate"
+    "check:worker": "npm run build && WRANGLER_LOG_PATH=.wrangler/logs/wrangler.log wrangler deploy --dry-run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "vinext deploy"
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",

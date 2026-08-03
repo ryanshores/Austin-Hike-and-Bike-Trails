@@ -93,25 +93,40 @@ npm run dev
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+## Cloudflare Workers configuration
 
-## Release targets
+`wrangler.jsonc` is the source of truth for the `austin-trails` Worker and its
+D1 `DB` binding. It deliberately uses `keep_vars: true` while provider URLs
+and secrets are managed in the Cloudflare dashboard, so a deploy does not
+remove dashboard-managed values.
 
-This repository uses two branches and two independent Sites projects:
+Add production values in **Workers & Pages → austin-trails → Settings →
+Variables and Secrets**:
 
-- `main` targets the public production site.
-- `staging` targets the private staging site.
+- plaintext variables: `GEOCODER_URL`, `ROUTING_URL`
+- encrypted secrets: `JWT_SECRET`, `PASSWORD_PEPPER`
 
-Project IDs are stored only in the repository's local Git configuration. They
-are not committed. The configured checkout hook generates the ignored
-`.openai/hosting.json` file whenever branches change.
-
-Before publishing, commit the intended code and run:
+`DB` is a D1 binding, not an environment variable. The configured database is
+named `database`; apply its checked-in migrations before enabling auth:
 
 ```bash
-npm test
-sh scripts/prepare-site-deployment.sh
+npm run db:migrate:remote
 ```
+
+For local development, copy `.dev.vars.example` to `.dev.vars` and provide
+local-only secret values. Leave provider URLs unset until their services are
+available. Local D1 simulation is the default; do not point ordinary local
+development at the production database.
+
+Before a production release, run:
+
+```bash
+npm run lint
+npm test
+npm run check:worker
+```
+
+Use `npm run deploy` only for an explicit production release from `main`.
 
 ## Contributing
 
@@ -124,4 +139,6 @@ review, staging, and pull-request preview details.
 
 - `npm run dev`: start local development
 - `npm test`: build the app and run the route and GPS policy tests
+- `npm run check:worker`: build and validate the generated Worker configuration
 - `npm run db:generate`: generate Drizzle migrations after schema changes
+- `npm run db:migrate:remote`: apply checked-in migrations to the configured D1 database

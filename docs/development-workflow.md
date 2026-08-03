@@ -34,20 +34,17 @@ commit requires a fresh review of that commit.
 
 ## Pull-request previews
 
-ChatGPT Sites versions are releases for a selected Sites project; they are not
-GitHub pull-request preview environments. Keep the current private Sites
-staging project for stable integration tests.
-
-For isolated PR previews, connect this GitHub repository to a Cloudflare Worker
-and configure:
+Cloudflare Workers provides the deployment path for both isolated pull-request
+previews and production. Configure the GitHub integration with:
 
 - Production branch: `main`
 - Build command: `npm ci && npm run build`
-- Production deploy command: disabled until an explicit release workflow is
-  adopted
+- Production deploy command: disabled until an explicit release from `main`
+  is authorized
 - Non-production deploy command: `npx wrangler versions upload`
 - Preview URLs: enabled, with Cloudflare Access when previews must be private
 
-Cloudflare then posts a commit-specific and branch-stable preview URL on each
-pull request. This requires a Cloudflare account connection and cannot reuse
-the hidden infrastructure credentials owned by ChatGPT Sites.
+Cloudflare posts a commit-specific and branch-stable preview URL on each pull
+request. Runtime configuration is committed in `wrangler.jsonc`; secrets stay
+in Cloudflare. Use `keep_vars: true` until dashboard-managed provider values
+have been migrated into a deliberate configuration-management workflow.

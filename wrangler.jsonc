@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "austin-trails",
+  "account_id": "892c84fd94511f4a979bdedfe48ec9f6",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "worker/index.ts",
+
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+
+  "images": {
+    "binding": "IMAGES"
+  },
+
+  // Preserve dashboard-managed secrets and provider configuration until this
+  // repository has an intentional configuration-management workflow for them.
+  "keep_vars": true,
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "database",
+      "database_id": "25f61840-9506-4f2b-95f9-c6cd9f6c9d5e",
+      "migrations_dir": "drizzle"
+    }
+  ],
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    }
+  }
+}
