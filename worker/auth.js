@@ -10,7 +10,7 @@ const INSTALLATION_TTL_SECONDS = 90 * 24 * 60 * 60;
 const JWT_ISSUER = "austin-hike-bike-atlas";
 const JWT_AUDIENCE = "austin-hike-bike-atlas-web";
 const PASSWORD_ALGORITHM = "pbkdf2-sha256";
-const PASSWORD_ITERATIONS = 600_000;
+const PASSWORD_ITERATIONS = 100_000;
 const PASSWORD_KEY_BYTES = 32;
 const encoder = new TextEncoder();
 
