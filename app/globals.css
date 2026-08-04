@@ -104,7 +104,7 @@ h2 { font-size: 22px; }
 .account-card { padding: 22px; }
 .account-card > p:not(.eyebrow), .form-note, .history-notice span, .empty-history p { color: var(--muted); font: 13px/1.5 Arial, sans-serif; }
 .account-state, .danger-card { min-height: 220px; }
-.account-state .secondary-action, .danger-card .danger-action, .danger-card .confirm-actions { margin-top: 10px; }
+.account-state .secondary-action, .danger-card > .danger-action, .danger-card .confirm-actions { margin-top: 10px; }
 .account-form { display: grid; gap: 14px; }
 .account-form label { display: grid; gap: 6px; color: var(--ink); font: 700 12px Arial, sans-serif; }
 .account-form input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: #fffdf6; color: var(--ink); padding: 0 12px; font: 15px Arial, sans-serif; }
