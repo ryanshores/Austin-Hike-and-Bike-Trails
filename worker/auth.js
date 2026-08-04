@@ -949,7 +949,7 @@ async function deleteAccount(request, dependencies) {
     .prepare("DELETE FROM users WHERE id = ? AND deleted_at IS NULL")
     .bind(user.id)
     .run();
-  if (deleted.meta?.changes !== 1) throw new HttpError(404, "Account not found");
+  if (!deleted.meta?.changed_db) throw new HttpError(404, "Account not found");
   const headers = new Headers();
   appendClearedCookies(headers, request);
   headers.set("Cache-Control", "no-store");
