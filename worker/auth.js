@@ -1018,6 +1018,7 @@ export function createAuthHandler(options) {
       }
       console.error("Authentication request failed", {
         error: error instanceof Error ? error.name : "UnknownError",
+        message: error instanceof Error ? error.message : "",
         path: new URL(request.url).pathname,
       });
       return response({ error: "Authentication request failed" }, 500);
