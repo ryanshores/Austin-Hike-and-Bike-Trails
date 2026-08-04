@@ -98,6 +98,13 @@ export default function AccountPanel() {
 
   return (
     <div className="account-grid">
+      {user.accountType === "anonymous" && (
+        <>
+          <AuthForm title="Preserve this history" action="register" busy={busy} onSubmit={submitCredentials} />
+          <AuthForm title="Use an existing account" action="login" busy={busy} onSubmit={submitCredentials} />
+        </>
+      )}
+
       <section className="account-card account-state" aria-live="polite">
         <p className="eyebrow">Current state</p>
         <h2>{user.accountType === "registered" ? "Registered account" : "This browser"}</h2>
@@ -107,13 +114,6 @@ export default function AccountPanel() {
         {status && <p className="form-status">{status}</p>}
         {user.accountType === "registered" && <button className="secondary-action" onClick={logout} disabled={busy}>Sign out</button>}
       </section>
-
-      {user.accountType === "anonymous" && (
-        <>
-          <AuthForm title="Preserve this history" action="register" busy={busy} onSubmit={submitCredentials} />
-          <AuthForm title="Use an existing account" action="login" busy={busy} onSubmit={submitCredentials} />
-        </>
-      )}
 
       <section className="account-card danger-card">
         <p className="eyebrow">Permanent deletion</p>
