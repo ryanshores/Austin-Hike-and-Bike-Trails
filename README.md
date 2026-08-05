@@ -43,11 +43,14 @@ Route planning providers stay behind same-origin Worker endpoints:
 
 Set `GEOCODER_URL` to the base URL of a Nominatim-compatible geocoder and
 `ROUTING_URL` to the base URL of a Valhalla-compatible routing service. These
-values belong in deployment configuration, not source control. Production
+values belong in deployment configuration, not source control. When the routing
+provider is protected by Cloudflare Access, also configure the encrypted
+`ROUTING_ACCESS_CLIENT_ID` and `ROUTING_ACCESS_CLIENT_SECRET` secrets. Both
+must be present or the route and routing-health endpoints fail closed. Production
 should also bind Cloudflare rate limiters as `GEOCODE_RATE_LIMITER` and
-`ROUTE_RATE_LIMITER`. The handlers fail closed when a provider is absent,
-enforce an Austin-area service boundary, cap route distance and request sizes,
-and never expose an upstream URL to the browser.
+`ROUTE_RATE_LIMITER`. The handlers enforce an Austin-area service boundary,
+cap route distance and request sizes, and never expose an upstream URL or
+credentials to the browser.
 
 Geocoding is a submitted-search flow, not autocomplete. Successful bounded
 results are cached for 24 hours. If the public OpenStreetMap Nominatim service
@@ -104,7 +107,9 @@ Add production values in **Workers & Pages → austin-trails → Settings →
 Variables and Secrets**:
 
 - plaintext variables: `GEOCODER_URL`, `ROUTING_URL`
-- encrypted secrets: `JWT_SECRET`, `PASSWORD_PEPPER`
+- encrypted secrets: `JWT_SECRET`, `PASSWORD_PEPPER`,
+  `ROUTING_ACCESS_CLIENT_ID`, `ROUTING_ACCESS_CLIENT_SECRET` (only when the
+  routing provider uses Cloudflare Access)
 
 `DB` is a D1 binding, not an environment variable. The configured database is
 named `database`; apply its checked-in migrations before enabling auth:

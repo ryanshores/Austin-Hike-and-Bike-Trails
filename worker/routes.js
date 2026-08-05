@@ -162,7 +162,20 @@ function elevationTotals(rangeHeight) {
   };
 }
 
-async function fetchElevation(candidate, providerUrl, fetchImpl, signal) {
+function routingProviderAccessHeaders(accessClientId, accessClientSecret) {
+  if (!accessClientId && !accessClientSecret) return {};
+  if (!accessClientId || !accessClientSecret) return null;
+  return {
+    "CF-Access-Client-Id": accessClientId,
+    "CF-Access-Client-Secret": accessClientSecret,
+  };
+}
+
+function providerRequestHeaders(providerAccessHeaders, headers) {
+  return { ...headers, ...providerAccessHeaders };
+}
+
+async function fetchElevation(candidate, providerUrl, providerAccessHeaders, fetchImpl, signal) {
   const totalAscentFeet = explicitElevation(candidate.totalAscentFeet);
   const totalDescentFeet = explicitElevation(candidate.totalDescentFeet);
   if (totalAscentFeet !== null && totalDescentFeet !== null) {
@@ -187,7 +200,11 @@ async function fetchElevation(candidate, providerUrl, fetchImpl, signal) {
       };
   const response = await fetchImpl(providerEndpoint(providerUrl, "/height"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    redirect: "manual",
+    headers: providerRequestHeaders(providerAccessHeaders, {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    }),
     body: JSON.stringify({
       ...body,
       range: true,
@@ -283,9 +300,22 @@ function normalizedEdges(candidate, geometry, elevation) {
   );
 }
 
-async function normalizeCandidate(candidate, preference, providerUrl, fetchImpl, signal) {
+async function normalizeCandidate(
+  candidate,
+  preference,
+  providerUrl,
+  providerAccessHeaders,
+  fetchImpl,
+  signal,
+) {
   const geometry = candidateGeometry(candidate);
-  const elevation = await fetchElevation(candidate, providerUrl, fetchImpl, signal);
+  const elevation = await fetchElevation(
+    candidate,
+    providerUrl,
+    providerAccessHeaders,
+    fetchImpl,
+    signal,
+  );
   const edges = normalizedEdges(candidate, geometry, elevation);
   return {
     geometry,
@@ -315,7 +345,13 @@ function publicRoute(candidate, versions) {
   };
 }
 
-async function routingGraphVersion(providerValue, providerUrl, fetchImpl, signal) {
+async function routingGraphVersion(
+  providerValue,
+  providerUrl,
+  providerAccessHeaders,
+  fetchImpl,
+  signal,
+) {
   const embedded =
     providerValue.routingGraphVersion ??
     providerValue.trip?.routingGraphVersion;
@@ -323,7 +359,8 @@ async function routingGraphVersion(providerValue, providerUrl, fetchImpl, signal
     return String(embedded);
   }
   const response = await fetchImpl(providerEndpoint(providerUrl, "/status"), {
-    headers: { Accept: "application/json" },
+    redirect: "manual",
+    headers: providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
     signal,
   });
   if (!response.ok) {
@@ -339,9 +376,12 @@ async function routingGraphVersion(providerValue, providerUrl, fetchImpl, signal
 
 export function createRoutesHandler({
   providerUrl,
+  accessClientId,
+  accessClientSecret,
   rateLimiter,
   fetchImpl = fetch,
 } = {}) {
+  const providerAccessHeaders = routingProviderAccessHeaders(accessClientId, accessClientSecret);
   return async function handleRoutes(request) {
     if (request.method !== "POST") return jsonError("Method not allowed.", 405);
     if (!(await requestAllowed(rateLimiter, request))) {
@@ -358,11 +398,18 @@ export function createRoutesHandler({
       return jsonError(error instanceof Error ? error.message : "Invalid route request.", status);
     }
     if (!providerUrl) return jsonError("Routing provider is not configured.", 503);
+    if (!providerAccessHeaders) {
+      return jsonError("Routing provider access is not configured.", 503);
+    }
 
     try {
       const response = await fetchImpl(providerEndpoint(providerUrl, "/route"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        redirect: "manual",
+        headers: providerRequestHeaders(providerAccessHeaders, {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        }),
         body: JSON.stringify({
           locations: [
             { lat: routeRequest.start.latitude, lon: routeRequest.start.longitude, type: "break" },
@@ -397,6 +444,7 @@ export function createRoutesHandler({
             candidate,
             routeRequest.safetyPreference,
             providerUrl,
+            providerAccessHeaders,
             fetchImpl,
             request.signal,
           ),
@@ -404,6 +452,7 @@ export function createRoutesHandler({
         routingGraphVersion(
           providerValue,
           providerUrl,
+          providerAccessHeaders,
           fetchImpl,
           request.signal,
         ),
@@ -442,7 +491,13 @@ export function createRoutesHandler({
   };
 }
 
-export function createRoutingHealthHandler({ providerUrl, fetchImpl = fetch } = {}) {
+export function createRoutingHealthHandler({
+  providerUrl,
+  accessClientId,
+  accessClientSecret,
+  fetchImpl = fetch,
+} = {}) {
+  const providerAccessHeaders = routingProviderAccessHeaders(accessClientId, accessClientSecret);
   return async function handleRoutingHealth(request) {
     if (request.method !== "GET") return jsonError("Method not allowed.", 405);
     if (!providerUrl) {
@@ -450,9 +505,15 @@ export function createRoutingHealthHandler({ providerUrl, fetchImpl = fetch } = 
         status: "unavailable",
       });
     }
+    if (!providerAccessHeaders) {
+      return jsonError("Routing provider access is not configured.", 503, {
+        status: "unavailable",
+      });
+    }
     try {
       const response = await fetchImpl(providerEndpoint(providerUrl, "/status"), {
-        headers: { Accept: "application/json" },
+        redirect: "manual",
+        headers: providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
         signal: request.signal,
       });
       if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);
