@@ -9,10 +9,14 @@ Run the spike against a pinned, Austin-area Valhalla instance:
 ```bash
 node scripts/run-conflation-spike.mjs \
   --routing-url https://YOUR_VALHALLA_HOST \
-  --output /tmp/austin-conflation
+  --output /tmp/austin-conflation \
+  --valhalla-image IMAGE_NAME_AT_DIGEST \
+  --osm-extract-source EXTRACT_URL \
+  --osm-extract-date EXTRACT_TIMESTAMP \
+  --osm-extract-md5 EXTRACT_MD5
 ```
 
-The command writes JSON and Markdown artifacts with the City dataset version, routing graph version, tolerance (25 m by default), sampling density (20 m by default), and per-connection mileage. Do not commit provider URLs or generated reports containing infrastructure details.
+The command writes JSON and Markdown artifacts with the City dataset version, routing graph version, pinned image and extract metadata, tolerance (25 m by default), sampling density (20 m by default), and per-connection mileage. It verifies that the provider returns a usable elevation profile for every route, retains failures in the report instead of stopping at the first one, and exits unsuccessfully if any connection fails. Summary tables make category coverage and unambiguous matched mileage by City safety label inspectable. Do not commit provider URLs or generated reports containing infrastructure details.
 
 ## Decision rule
 
