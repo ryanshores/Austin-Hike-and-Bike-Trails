@@ -91,6 +91,9 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
       if (endpoint.pathname === "/route") {
         const requestBody = JSON.parse(options.body);
         assert.equal(requestBody.costing, "bicycle");
+        assert.deepEqual(requestBody.costing_options, {
+          bicycle: { bicycle_type: "hybrid", use_roads: 0.1 },
+        });
         assert.equal(requestBody.units, "miles");
         assert.equal(requestBody.alternates, 2);
         return Response.json({
@@ -226,6 +229,50 @@ test("stock Valhalla alternates participate in candidate ranking", async () => {
     [-97.7431, 30.2672],
     [-97.74, 30.28],
   ]);
+});
+
+test("safety preferences tune road use without prohibiting bicycle-legal streets", async () => {
+  const expectedRoadUse = new Map([
+    [SafetyPreference.ANY_BICYCLE_LEGAL, 0.5],
+    [SafetyPreference.BIKE_FACILITY_OR_SAFER, 0.25],
+    [SafetyPreference.PROTECTED_OR_SEPARATED, 0.1],
+    [SafetyPreference.FULLY_SEPARATED, 0],
+  ]);
+  const geometry = {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+  };
+
+  for (const [safetyPreference, useRoads] of expectedRoadUse) {
+    let providerBody;
+    const handle = createRoutesHandler({
+      providerUrl: "https://routing.internal",
+      fetchImpl: async (_url, options) => {
+        providerBody = JSON.parse(options.body);
+        return Response.json({
+          routingGraphVersion: "osm-test",
+          candidates: [{
+            geometry,
+            totalAscentFeet: 0,
+            totalDescentFeet: 0,
+            edges: [{
+              geometry,
+              miles: 1,
+              osm: { highway: "residential" },
+            }],
+          }],
+        });
+      },
+    });
+
+    const response = await handle(routeRequest({ safetyPreference }));
+    assert.equal(response.status, 200);
+    assert.deepEqual(providerBody.costing_options, {
+      bicycle: { bicycle_type: "hybrid", use_roads: useRoads },
+    });
+    const body = await response.json();
+    assert.equal(body.route.totalMiles, 1);
+  }
 });
 
 test("enriched candidates are ranked by safety before distance", async () => {

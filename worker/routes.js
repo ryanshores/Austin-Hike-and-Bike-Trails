@@ -13,6 +13,13 @@ import {
   summarizeRoute,
 } from "./route-safety.js";
 
+const BICYCLE_USE_ROADS = Object.freeze({
+  [SafetyPreference.ANY_BICYCLE_LEGAL]: 0.5,
+  [SafetyPreference.BIKE_FACILITY_OR_SAFER]: 0.25,
+  [SafetyPreference.PROTECTED_OR_SEPARATED]: 0.1,
+  [SafetyPreference.FULLY_SEPARATED]: 0,
+});
+
 export const ROUTE_DATASET_VERSION = "austin-route-safety-v1";
 export const ROUTE_MAX_BODY_BYTES = 65_536;
 export const ROUTE_MAX_DIRECT_DISTANCE_MILES = 75;
@@ -420,6 +427,12 @@ export function createRoutesHandler({
             },
           ],
           costing: "bicycle",
+          costing_options: {
+            bicycle: {
+              bicycle_type: "hybrid",
+              use_roads: BICYCLE_USE_ROADS[routeRequest.safetyPreference],
+            },
+          },
           units: "miles",
           alternates: 2,
           shape_format: "polyline6",
