@@ -83,6 +83,8 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
   const upstream = [];
   const handle = createRoutesHandler({
     providerUrl: "https://valhalla.internal",
+    accessClientId: "staging-access-client",
+    accessClientSecret: "staging-access-secret",
     fetchImpl: async (url, options) => {
       const endpoint = new URL(url);
       upstream.push({ endpoint, options });
@@ -132,6 +134,10 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
   assert.equal(response.headers.get("cache-control"), "no-store");
   const body = await response.json();
   assert.equal(upstream.length, 3);
+  for (const { options } of upstream) {
+    assert.equal(options.headers["CF-Access-Client-Id"], "staging-access-client");
+    assert.equal(options.headers["CF-Access-Client-Secret"], "staging-access-secret");
+  }
   assert.equal(body.route.totalMiles, 2.4);
   assert.ok(Math.abs(body.route.totalAscentFeet - 65.6168) < 0.0001);
   assert.ok(Math.abs(body.route.totalDescentFeet - 32.8084) < 0.0001);
@@ -141,6 +147,26 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
   assert.equal(body.route.maneuvers[0].instruction, "Ride north on Congress Avenue.");
   assert.equal(body.route.versions.routingGraph, "1784950400");
   assert.equal(recursivelyHasForbiddenKey(body), false);
+  assert.equal(JSON.stringify(body).includes("staging-access-secret"), false);
+});
+
+test("incomplete routing Access credentials fail closed without contacting the provider", async () => {
+  let fetches = 0;
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    accessClientId: "staging-access-client",
+    fetchImpl: async () => {
+      fetches += 1;
+      return Response.json({});
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "Routing provider access is not configured.",
+  });
+  assert.equal(fetches, 0);
 });
 
 test("stock Valhalla alternates participate in candidate ranking", async () => {
@@ -361,8 +387,12 @@ test("route validation enforces body size, safety preference, bounds, distance, 
 test("routing health exposes operational versions without provider internals", async () => {
   const healthy = createRoutingHealthHandler({
     providerUrl: "https://valhalla.internal",
-    fetchImpl: async (url) => {
+    accessClientId: "staging-access-client",
+    accessClientSecret: "staging-access-secret",
+    fetchImpl: async (url, options) => {
       assert.equal(new URL(url).pathname, "/status");
+      assert.equal(options.headers["CF-Access-Client-Id"], "staging-access-client");
+      assert.equal(options.headers["CF-Access-Client-Secret"], "staging-access-secret");
       return Response.json({
         version: "3.6.3",
         has_tiles: true,
@@ -381,6 +411,22 @@ test("routing health exposes operational versions without provider internals", a
     version: "3.6.3",
     routingGraphVersion: "1784950400",
   });
+
+  const incomplete = createRoutingHealthHandler({
+    providerUrl: "https://valhalla.internal",
+    accessClientId: "staging-access-client",
+    fetchImpl: async () => {
+      throw new Error("incomplete credentials must not contact the provider");
+    },
+  });
+  assert.equal(
+    (
+      await incomplete(
+        new Request("https://atlas.example/api/routing-health"),
+      )
+    ).status,
+    503,
+  );
 
   const unconfigured = createRoutingHealthHandler();
   assert.equal(

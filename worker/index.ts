@@ -16,6 +16,8 @@ interface Env {
   DB: D1Database;
   GEOCODER_URL?: string;
   ROUTING_URL?: string;
+  ROUTING_ACCESS_CLIENT_ID?: string;
+  ROUTING_ACCESS_CLIENT_SECRET?: string;
   GEOCODE_RATE_LIMITER?: RateLimitBinding;
   ROUTE_RATE_LIMITER?: RateLimitBinding;
   JWT_SECRET?: string;
@@ -65,12 +67,18 @@ const worker = {
     if (url.pathname === "/api/routes") {
       return createRoutesHandler({
         providerUrl: env.ROUTING_URL,
+        accessClientId: env.ROUTING_ACCESS_CLIENT_ID,
+        accessClientSecret: env.ROUTING_ACCESS_CLIENT_SECRET,
         rateLimiter: env.ROUTE_RATE_LIMITER,
       })(request);
     }
 
     if (url.pathname === "/api/routing-health") {
-      return createRoutingHealthHandler({ providerUrl: env.ROUTING_URL })(request);
+      return createRoutingHealthHandler({
+        providerUrl: env.ROUTING_URL,
+        accessClientId: env.ROUTING_ACCESS_CLIENT_ID,
+        accessClientSecret: env.ROUTING_ACCESS_CLIENT_SECRET,
+      })(request);
     }
 
     if (url.pathname.startsWith("/api/auth/")) {

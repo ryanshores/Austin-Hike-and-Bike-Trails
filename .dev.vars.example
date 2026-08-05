@@ -6,3 +6,5 @@ PASSWORD_PEPPER=
 # Set these only when local routing and geocoding providers are available.
 # GEOCODER_URL=
 # ROUTING_URL=
+# ROUTING_ACCESS_CLIENT_ID=
+# ROUTING_ACCESS_CLIENT_SECRET=
