@@ -68,7 +68,9 @@ In the staging Worker's Cloudflare dashboard variables, set:
 Never commit the service token, put it in a browser variable, or add it to a
 preview URL. The Worker adds the two Cloudflare Access headers to its server-
 side `/route`, `/height`, and `/status` requests. If only one secret is set,
-the API returns a 503 without sending a provider request.
+the API returns a 503 without sending a provider request. Provider redirects
+are rejected rather than followed, so service-token headers cannot be sent to
+an unexpected origin.
 
 ## Staging verification
 

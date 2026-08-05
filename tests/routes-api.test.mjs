@@ -135,6 +135,7 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
   const body = await response.json();
   assert.equal(upstream.length, 3);
   for (const { options } of upstream) {
+    assert.equal(options.redirect, "manual");
     assert.equal(options.headers["CF-Access-Client-Id"], "staging-access-client");
     assert.equal(options.headers["CF-Access-Client-Secret"], "staging-access-secret");
   }
@@ -167,6 +168,29 @@ test("incomplete routing Access credentials fail closed without contacting the p
     error: "Routing provider access is not configured.",
   });
   assert.equal(fetches, 0);
+});
+
+test("routing rejects provider redirects without following Access credentials", async () => {
+  const accessClientSecret = "staging-access-secret";
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    accessClientId: "staging-access-client",
+    accessClientSecret,
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.redirect, "manual");
+      assert.equal(options.headers["CF-Access-Client-Secret"], accessClientSecret);
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "https://redirect-target.example" },
+      });
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.match(body.error, /provider returned HTTP 302/);
+  assert.equal(JSON.stringify(body).includes(accessClientSecret), false);
 });
 
 test("stock Valhalla alternates participate in candidate ranking", async () => {
@@ -391,6 +415,7 @@ test("routing health exposes operational versions without provider internals", a
     accessClientSecret: "staging-access-secret",
     fetchImpl: async (url, options) => {
       assert.equal(new URL(url).pathname, "/status");
+      assert.equal(options.redirect, "manual");
       assert.equal(options.headers["CF-Access-Client-Id"], "staging-access-client");
       assert.equal(options.headers["CF-Access-Client-Secret"], "staging-access-secret");
       return Response.json({

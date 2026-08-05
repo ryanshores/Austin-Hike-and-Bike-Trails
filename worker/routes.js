@@ -200,6 +200,7 @@ async function fetchElevation(candidate, providerUrl, providerAccessHeaders, fet
       };
   const response = await fetchImpl(providerEndpoint(providerUrl, "/height"), {
     method: "POST",
+    redirect: "manual",
     headers: providerRequestHeaders(providerAccessHeaders, {
       "Content-Type": "application/json",
       Accept: "application/json",
@@ -358,6 +359,7 @@ async function routingGraphVersion(
     return String(embedded);
   }
   const response = await fetchImpl(providerEndpoint(providerUrl, "/status"), {
+    redirect: "manual",
     headers: providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
     signal,
   });
@@ -403,6 +405,7 @@ export function createRoutesHandler({
     try {
       const response = await fetchImpl(providerEndpoint(providerUrl, "/route"), {
         method: "POST",
+        redirect: "manual",
         headers: providerRequestHeaders(providerAccessHeaders, {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -509,6 +512,7 @@ export function createRoutingHealthHandler({
     }
     try {
       const response = await fetchImpl(providerEndpoint(providerUrl, "/status"), {
+        redirect: "manual",
         headers: providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
         signal: request.signal,
       });
