@@ -203,11 +203,13 @@ function classifyEdge(feature, cityIndex, options) {
   } else if (matchedFields.size === 1 && coverageRatio >= options.minimumCoverage) {
     matchStatus = "matched";
     city = [...matchedFields.values()][0];
-    classification = classifyRouteEdge({
-      city,
-      osm: properties.osm,
-      travelDirection: properties.travelDirection,
-    });
+    classification = osmClassification.finding === SafetyFinding.BICYCLE_PROHIBITED
+      ? osmClassification
+      : classifyRouteEdge({
+          city,
+          osm: properties.osm,
+          travelDirection: properties.travelDirection,
+        });
   } else if (matchedFields.size === 1) {
     matchStatus = "partial";
     classification = conservativeCityConflict(

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   SafetyClass,
+  SafetyFinding,
   SafetyPreference,
 } from "../worker/route-safety.js";
 import {
@@ -316,6 +317,109 @@ test("enriched candidates are ranked by safety before distance", async () => {
   assert.equal(body.route.divergenceCount, 0);
   assert.equal(body.route.mileageBySafetyClass[SafetyClass.PROTECTED], 1.4);
   assert.equal(body.route.versions.dataset, "city-2026-07-25");
+});
+
+test("offline conservative classifications are preserved by the Worker", async () => {
+  const geometry = {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+  };
+  const handle = createRoutesHandler({
+    providerUrl: "https://routing.internal",
+    fetchImpl: async () => Response.json({
+      routingGraphVersion: "osm-test",
+      candidates: [{
+        geometry,
+        totalAscentFeet: 0,
+        totalDescentFeet: 0,
+        edges: [{
+          geometry,
+          miles: 1,
+          osm: { highway: "residential", cycleway: "lane" },
+          classification: {
+            safetyClass: SafetyClass.ANY_BICYCLE_LEGAL,
+            finding: SafetyFinding.UNKNOWN,
+            source: "city-osm",
+            reason: "conflicting City safety data; bicycle-legal fallback",
+          },
+        }],
+      }],
+    }),
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.route.mileageBySafetyClass[SafetyClass.ANY_BICYCLE_LEGAL], 1);
+  assert.equal(body.route.mileageBySafetyClass[SafetyClass.BIKE_FACILITY], 0);
+  assert.equal(body.route.divergenceCount, 1);
+  assert.equal(body.route.divergenceMiles, 1);
+});
+
+test("explicit OSM bicycle prohibitions override provider classifications", async () => {
+  const geometry = {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+  };
+  const handle = createRoutesHandler({
+    providerUrl: "https://routing.internal",
+    fetchImpl: async () => Response.json({
+      routingGraphVersion: "osm-test",
+      candidates: [{
+        geometry,
+        totalAscentFeet: 0,
+        totalDescentFeet: 0,
+        edges: [{
+          geometry,
+          miles: 1,
+          city: { BICYCLE_FACILITY: "Urban Trail" },
+          osm: { highway: "path", bicycle: "no" },
+          classification: {
+            safetyClass: SafetyClass.FULLY_SEPARATED,
+            finding: SafetyFinding.ATLAS,
+            source: "city",
+            reason: "fully separated path",
+          },
+        }],
+      }],
+    }),
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 422);
+  assert.equal((await response.json()).code, "no-reasonable-route");
+});
+
+test("invalid provider classifications fail closed", async () => {
+  const geometry = {
+    type: "LineString",
+    coordinates: [[-97.7431, 30.2672], [-97.735, 30.285]],
+  };
+  const handle = createRoutesHandler({
+    providerUrl: "https://routing.internal",
+    fetchImpl: async () => Response.json({
+      routingGraphVersion: "osm-test",
+      candidates: [{
+        geometry,
+        totalAscentFeet: 0,
+        totalDescentFeet: 0,
+        edges: [{
+          geometry,
+          miles: 1,
+          classification: {
+            safetyClass: 99,
+            finding: SafetyFinding.UNKNOWN,
+            source: "city-osm",
+            reason: "invalid class",
+          },
+        }],
+      }],
+    }),
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error, /invalid edge classification/);
 });
 
 test("enriched edges retain route elevation and geometry is allowlisted", async () => {

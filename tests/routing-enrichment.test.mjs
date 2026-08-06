@@ -44,6 +44,7 @@ test("offline enrichment keeps City authority and bicycle-legal OSM fallback", (
         city("Urban Trail", -97.74),
         city("Urban Trail", -97.76),
         city("Bike Lane", -97.76),
+        city("Urban Trail", -97.78),
       ],
     },
     routingEdgeCollection: {
@@ -53,6 +54,7 @@ test("offline enrichment keeps City authority and bicycle-legal OSM fallback", (
         edge("ordinary-street", -97.75, { highway: "residential", maxspeed: "35 mph" }),
         edge("city-conflict", -97.76, { highway: "residential", cycleway: "lane" }),
         edge("prohibited", -97.77, { highway: "path", bicycle: "no" }),
+        edge("city-prohibited", -97.78, { highway: "path", bicycle: "no" }),
       ],
     },
     manifest,
@@ -87,14 +89,20 @@ test("offline enrichment keeps City authority and bicycle-legal OSM fallback", (
 
   assert.equal(byId.prohibited.classification.safetyClass, null);
   assert.equal(byId.prohibited.classification.finding, SafetyFinding.BICYCLE_PROHIBITED);
+  assert.equal(byId["city-prohibited"].cityMatch.status, "matched");
+  assert.equal(byId["city-prohibited"].classification.safetyClass, null);
+  assert.equal(
+    byId["city-prohibited"].classification.finding,
+    SafetyFinding.BICYCLE_PROHIBITED,
+  );
   assert.deepEqual(result.summary.cityMatches, {
-    matched: 1,
+    matched: 2,
     partial: 0,
     ambiguous: 1,
     unmatched: 2,
   });
   assert.equal(result.summary.bicycleLegalFallbackEdges, 2);
-  assert.equal(result.summary.bicycleProhibitedEdges, 1);
+  assert.equal(result.summary.bicycleProhibitedEdges, 2);
   assert.deepEqual(buildRoutingEnrichment(input), result);
 });
 
