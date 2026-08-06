@@ -7,17 +7,29 @@ import {
   requestAllowed,
 } from "./api-utils.js";
 import {
+  SafetyClass,
+  SafetyFinding,
   SafetyPreference,
   classifyRouteEdge,
   rankRouteCandidates,
   summarizeRoute,
 } from "./route-safety.js";
 
+const BICYCLE_USE_ROADS = Object.freeze({
+  [SafetyPreference.ANY_BICYCLE_LEGAL]: 0.5,
+  [SafetyPreference.BIKE_FACILITY_OR_SAFER]: 0.25,
+  [SafetyPreference.PROTECTED_OR_SEPARATED]: 0.1,
+  [SafetyPreference.FULLY_SEPARATED]: 0,
+});
+
 export const ROUTE_DATASET_VERSION = "austin-route-safety-v1";
 export const ROUTE_MAX_BODY_BYTES = 65_536;
 export const ROUTE_MAX_DIRECT_DISTANCE_MILES = 75;
 
 const PREFERENCES = new Set(Object.values(SafetyPreference));
+const SAFETY_CLASSES = new Set(Object.values(SafetyClass));
+const SAFETY_FINDINGS = new Set(Object.values(SafetyFinding));
+const CLASSIFICATION_SOURCES = new Set(["city", "osm", "city-osm", "atlas-trail"]);
 
 function normalizedPoint(value, label) {
   const point = {
@@ -271,6 +283,51 @@ function distributeRouteElevation(edges, property, total) {
   });
 }
 
+function normalizedEdgeClassification(edge) {
+  const osmClassification = classifyRouteEdge({
+    osm: edge.osm,
+    travelDirection: edge.travelDirection,
+  });
+  if (osmClassification.finding === SafetyFinding.BICYCLE_PROHIBITED) {
+    return osmClassification;
+  }
+
+  if (edge.classification === undefined) {
+    return classifyRouteEdge({
+      city: edge.city,
+      osm: edge.osm,
+      source: edge.source,
+      travelDirection: edge.travelDirection,
+    });
+  }
+
+  const classification = edge.classification;
+  const reason = typeof classification?.reason === "string"
+    ? classification.reason.trim()
+    : "";
+  const prohibited = classification?.finding === SafetyFinding.BICYCLE_PROHIBITED;
+  const validSafetyClass = classification?.safetyClass === null
+    ? prohibited
+    : SAFETY_CLASSES.has(classification?.safetyClass) && !prohibited;
+  if (
+    !classification ||
+    Array.isArray(classification) ||
+    !validSafetyClass ||
+    !SAFETY_FINDINGS.has(classification.finding) ||
+    !CLASSIFICATION_SOURCES.has(classification.source) ||
+    !reason
+  ) {
+    throw new Error("Routing provider returned an invalid edge classification");
+  }
+
+  return {
+    safetyClass: classification.safetyClass,
+    finding: classification.finding,
+    source: classification.source,
+    reason,
+  };
+}
+
 function normalizedEdges(candidate, geometry, elevation) {
   const providerEdges = Array.isArray(candidate.edges) ? candidate.edges : [];
   if (providerEdges.length === 0) {
@@ -285,12 +342,7 @@ function normalizedEdges(candidate, geometry, elevation) {
   }
   const classified = providerEdges.map((edge) => ({
     ...edge,
-    ...classifyRouteEdge({
-      city: edge.city,
-      osm: edge.osm,
-      source: edge.source,
-      travelDirection: edge.travelDirection,
-    }),
+    ...normalizedEdgeClassification(edge),
     miles: finiteNonNegative(edge.miles),
   }));
   return distributeRouteElevation(
@@ -420,6 +472,12 @@ export function createRoutesHandler({
             },
           ],
           costing: "bicycle",
+          costing_options: {
+            bicycle: {
+              bicycle_type: "hybrid",
+              use_roads: BICYCLE_USE_ROADS[routeRequest.safetyPreference],
+            },
+          },
           units: "miles",
           alternates: 2,
           shape_format: "polyline6",

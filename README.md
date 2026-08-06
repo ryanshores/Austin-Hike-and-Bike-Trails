@@ -67,6 +67,16 @@ shows the route as a divergence. A routing provider may return enriched
 through the standalone route-safety classifier before ranking candidates.
 Client-visible responses are allowlisted and omit ETA, duration, arrival time,
 and speed-derived wording.
+
+The deterministic offline edge-manifest workflow is documented in
+[`docs/routing-enrichment.md`](docs/routing-enrichment.md). It preserves
+ordinary bicycle-legal streets as fallback routes while treating City matches
+as authoritative only when coverage is unambiguous.
+
+The selected safety preference also tunes Valhalla bicycle `use_roads` from a
+balanced value down to zero for the strictest preference. Valhalla treats that
+as avoidance rather than a prohibition, so regular bicycle-legal streets can
+still complete a route when facility coverage is incomplete.
 ## Route history authentication
 
 The Worker exposes same-origin endpoints under `/api/auth/` for anonymous
