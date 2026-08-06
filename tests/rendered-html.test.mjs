@@ -33,7 +33,13 @@ test("server-renders the Austin trail atlas", async () => {
   assert.match(html, /Interactive map of Austin hike and bike paths/);
   assert.match(html, /Open full-screen ride map/);
   assert.match(html, /Find a trail or bike route/);
+  assert.match(html, /Plan a bicycle route/);
+  assert.match(html, /Use my location/);
+  assert.match(html, /Choose on map/);
+  assert.match(html, /Bike facilities or safer/);
+  assert.match(html, /Bicycle-legal streets may still be used/);
   assert.match(html, /Trail safety legend/);
+  assert.doesNotMatch(html, /\bETA\b|arrival time|trip duration/i);
   assert.match(html, /href="\/history"/);
   assert.match(html, /href="\/account"/);
 });
