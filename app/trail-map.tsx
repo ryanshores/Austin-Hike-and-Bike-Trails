@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import type { Circle, CircleMarker, GeoJSON as LeafletGeoJSON, LatLng, Map as LeafletMap } from "leaflet";
+import type { Circle, CircleMarker, GeoJSON as LeafletGeoJSON, LatLng, Map as LeafletMap, Marker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   isPlausibleLocationChange,
@@ -13,6 +13,12 @@ import {
 } from "./location-accuracy";
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 import { RideRecorder } from "./ride-recorder";
+import RoutePlanner, {
+  type PlannedRoute,
+  type PlanningEndpointKey,
+  type PlanningEndpoints,
+  type PlanningPoint,
+} from "./route-planner";
 
 type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type Orientation = "north" | "forward";
@@ -116,6 +122,11 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
   const rideRecorderRef = useRef<RideRecorder | null>(null);
   const searchRecordsRef = useRef<Partial<Record<Category, SearchRecord[]>>>({});
+  const planningEndpointMarkersRef = useRef<Partial<Record<PlanningEndpointKey, Marker>>>({});
+  const plannedRouteLayerRef = useRef<LeafletGeoJSON | null>(null);
+  const divergenceLayerRef = useRef<LeafletGeoJSON | null>(null);
+  const activeMapTargetRef = useRef<PlanningEndpointKey | null>(null);
+  const planningEndpointsRef = useRef<PlanningEndpoints>({ start: null, destination: null });
   const [enabled, setEnabled] = useState<Record<Category, boolean>>({ offRoadBike: true, protectedBike: true, streetBike: true, offRoadHike: true });
   const [status, setStatus] = useState("Loading City of Austin trail data…");
   const [tracking, setTracking] = useState(false);
@@ -128,6 +139,10 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [, setSearchVersion] = useState(0);
+  const [mapVersion, setMapVersion] = useState(0);
+  const [activeMapTarget, setActiveMapTarget] = useState<PlanningEndpointKey | null>(null);
+  const [planningEndpoints, setPlanningEndpoints] = useState<PlanningEndpoints>({ start: null, destination: null });
+  const [plannedRoute, setPlannedRoute] = useState<PlannedRoute | null>(null);
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
@@ -143,6 +158,13 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       leafletRef.current = L;
       const map = L.map(mapNode.current, mapOptionsForMode(isRide)).setView([30.2672, -97.7431], 12);
       mapRef.current = map;
+      if (!isRide) {
+        const routePane = map.createPane("planned-route");
+        routePane.style.zIndex = "460";
+        routePane.style.pointerEvents = "none";
+        const markerPane = map.createPane("planned-route-markers");
+        markerPane.style.zIndex = "610";
+      }
       const mapSizeSync = installMapSizeSync({ map, mapNode: mapNode.current });
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
@@ -245,10 +267,21 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         setStatus("Bike routes could not update. Try refreshing when you have a connection.");
       }); };
       map.on("moveend", refreshBikes);
+      map.on("click", (event) => {
+        const target = activeMapTargetRef.current;
+        if (!target || isRide) return;
+        setPlanningEndpoint(target, {
+          label: "Dropped pin",
+          latitude: event.latlng.lat,
+          longitude: event.latlng.lng,
+        }, false);
+        setActiveMapTarget(null);
+      });
       loadHikes().catch(() => setStatus("Urban trails could not load. Try refreshing when you have a connection."));
       refreshBikes();
       map.once("load", mapSizeSync.syncMapSize);
       map.on("unload", mapSizeSync.disconnect);
+      setMapVersion((version) => version + 1);
     }
 
     start();
@@ -262,6 +295,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       mapRef.current?.remove();
       mapRef.current = null;
       leafletRef.current = null;
+      planningEndpointMarkersRef.current = {};
+      plannedRouteLayerRef.current = null;
+      divergenceLayerRef.current = null;
     };
   }, [isRide]);
 
@@ -272,6 +308,137 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     recorder.activeRide().then((ride) => setHasInterruptedRide(Boolean(ride))).catch(() => {});
     return () => { rideRecorderRef.current = null; };
   }, [isRide]);
+
+  useEffect(() => {
+    activeMapTargetRef.current = activeMapTarget;
+  }, [activeMapTarget]);
+
+  useEffect(() => {
+    planningEndpointsRef.current = planningEndpoints;
+  }, [planningEndpoints]);
+
+  useEffect(() => {
+    if (isRide) return;
+    const map = mapRef.current;
+    const L = leafletRef.current;
+    if (!map || !L) return;
+    (["start", "destination"] as PlanningEndpointKey[]).forEach((target) => {
+      planningEndpointMarkersRef.current[target]?.remove();
+      delete planningEndpointMarkersRef.current[target];
+      const endpoint = planningEndpoints[target];
+      if (!endpoint) return;
+      const icon = L.divIcon({
+        className: "planner-marker-wrapper",
+        html: `<span class="planner-marker ${target}" aria-hidden="true"><b>${target === "start" ? "A" : "B"}</b></span>`,
+        iconSize: [34, 42],
+        iconAnchor: [17, 39],
+      });
+      const marker = L.marker([endpoint.latitude, endpoint.longitude], {
+        draggable: true,
+        icon,
+        keyboard: true,
+        pane: "planned-route-markers",
+        title: `${target === "start" ? "Start" : "Destination"}: ${endpoint.label}. Drag to adjust.`,
+      }).addTo(map);
+      marker.on("dragend", () => {
+        const point = marker.getLatLng();
+        setPlanningEndpoint(target, {
+          label: "Dropped pin",
+          latitude: point.lat,
+          longitude: point.lng,
+        }, false);
+      });
+      planningEndpointMarkersRef.current[target] = marker;
+    });
+  }, [isRide, mapVersion, planningEndpoints]);
+
+  useEffect(() => {
+    if (isRide) return;
+    const map = mapRef.current;
+    const L = leafletRef.current;
+    if (!map || !L) return;
+    plannedRouteLayerRef.current?.remove();
+    divergenceLayerRef.current?.remove();
+    plannedRouteLayerRef.current = null;
+    divergenceLayerRef.current = null;
+    if (!plannedRoute) return;
+
+    plannedRouteLayerRef.current = L.geoJSON(plannedRoute.geometry, {
+      style: {
+        pane: "planned-route",
+        color: "#203b31",
+        opacity: 0.94,
+        weight: 6,
+        lineCap: "round",
+        lineJoin: "round",
+      },
+    }).addTo(map);
+    divergenceLayerRef.current = L.geoJSON({
+      type: "FeatureCollection",
+      features: plannedRoute.divergences.map((divergence) => ({
+        type: "Feature",
+        properties: {},
+        geometry: divergence.geometry,
+      })),
+    }, {
+      style: {
+        pane: "planned-route",
+        color: "#d4512d",
+        opacity: 1,
+        weight: 7,
+        dashArray: "9 7",
+        lineCap: "round",
+      },
+    }).addTo(map);
+    const bounds = plannedRouteLayerRef.current.getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 16 });
+  }, [isRide, mapVersion, plannedRoute]);
+
+  function setPlanningEndpoint(
+    target: PlanningEndpointKey,
+    point: PlanningPoint | null,
+    moveMap = true,
+  ) {
+    const next = { ...planningEndpointsRef.current, [target]: point };
+    planningEndpointsRef.current = next;
+    setPlanningEndpoints(next);
+    setPlannedRoute(null);
+    if (!point || !moveMap) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const other = next[target === "start" ? "destination" : "start"];
+    if (other) {
+      map.fitBounds([
+        [point.latitude, point.longitude],
+        [other.latitude, other.longitude],
+      ], { padding: [44, 44], maxZoom: 16 });
+    } else {
+      map.setView([point.latitude, point.longitude], Math.max(map.getZoom(), 15), { animate: true });
+    }
+  }
+
+  function swapPlanningEndpoints() {
+    const next = {
+      start: planningEndpointsRef.current.destination,
+      destination: planningEndpointsRef.current.start,
+    };
+    planningEndpointsRef.current = next;
+    setPlanningEndpoints(next);
+    setPlannedRoute(null);
+    setActiveMapTarget(null);
+  }
+
+  function choosePlanningPointAtMapCenter() {
+    const map = mapRef.current;
+    if (!map || !activeMapTarget) return;
+    const center = map.getCenter();
+    setPlanningEndpoint(activeMapTarget, {
+      label: "Dropped pin",
+      latitude: center.lat,
+      longitude: center.lng,
+    }, false);
+    setActiveMapTarget(null);
+  }
 
   function toggle(category: Category) {
     const next = !enabled[category];
@@ -549,8 +716,20 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         </section>
       )}
 
-      <section className={isRide ? "ride-map-frame" : "map-frame"} aria-label={isRide ? "Full-screen moving ride map" : "Interactive map of Austin hike and bike paths"}>
-        <div ref={mapNode} className="map" />
+      <div className={isRide ? "ride-map-layout" : "atlas-planning-layout"}>
+        {!isRide && (
+          <RoutePlanner
+            activeMapTarget={activeMapTarget}
+            endpoints={planningEndpoints}
+            plannedRoute={plannedRoute}
+            onEndpointChange={setPlanningEndpoint}
+            onMapTargetChange={setActiveMapTarget}
+            onRouteChange={setPlannedRoute}
+            onSwapEndpoints={swapPlanningEndpoints}
+          />
+        )}
+        <section className={isRide ? "ride-map-frame" : "map-frame"} aria-label={isRide ? "Full-screen moving ride map" : "Interactive map of Austin hike and bike paths"}>
+        <div ref={mapNode} className={activeMapTarget ? "map map-picking" : "map"} />
         {isRide && (
           <div className="ride-topbar">
             <Link href="/" className="ride-exit" aria-label="Exit ride mode">← <span>Atlas</span></Link>
@@ -561,6 +740,13 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
           </div>
         )}
         {!isRide && <div className="map-stamp" aria-live="polite"><span className="stamp-dot" />{status}</div>}
+        {!isRide && activeMapTarget && (
+          <div className="map-pick-prompt" role="status">
+            <span>Choose the {activeMapTarget === "start" ? "start" : "destination"} on the map</span>
+            <button type="button" onClick={choosePlanningPointAtMapCenter}>Use map center</button>
+            <button type="button" onClick={() => setActiveMapTarget(null)}>Cancel</button>
+          </div>
+        )}
         {isRide && !tracking && (
           <div className="ride-start-card">
             <p className="eyebrow">Full-screen navigation</p>
@@ -597,7 +783,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
           </aside>
         )}
         <div className="north-mark" style={{ transform: `rotate(${-bearing}deg)` }} aria-hidden="true">N<span>↑</span></div>
-      </section>
+        </section>
+      </div>
 
       <aside className={isRide ? "ride-layers" : "legend"} aria-label="Trail type and safety legend">
         <div className="legend-heading">
