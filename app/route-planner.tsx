@@ -7,8 +7,10 @@ import {
   formatMiles,
   normalizePlannedRoute,
   routeErrorMessage,
+  routeRequestIsCurrent,
   SAFETY_CLASS_LABELS,
   SAFETY_OPTIONS,
+  swapEndpointQueries,
 } from "./route-planner-utils.js";
 
 export type PlanningEndpointKey = "start" | "destination";
@@ -88,6 +90,26 @@ export default function RoutePlanner({
     if (locationTimeoutRef.current !== null) clearTimeout(locationTimeoutRef.current);
   }, []);
 
+  useEffect(() => {
+    const controller = routeRequestRef.current;
+    if (!controller) return;
+    routeRequestRef.current = null;
+    controller.abort();
+    setBusy((current) => current === "route" ? null : current);
+  }, [
+    endpoints.start?.latitude,
+    endpoints.start?.longitude,
+    endpoints.destination?.latitude,
+    endpoints.destination?.longitude,
+  ]);
+
+  function invalidateRouteRequest() {
+    const controller = routeRequestRef.current;
+    routeRequestRef.current = null;
+    controller?.abort();
+    setBusy((current) => current === "route" ? null : current);
+  }
+
   async function searchAddress(event: FormEvent, target: PlanningEndpointKey) {
     event.preventDefault();
     const query = queries[target].trim();
@@ -123,6 +145,7 @@ export default function RoutePlanner({
   }
 
   function chooseResult(target: PlanningEndpointKey, result: GeocodeResult) {
+    invalidateRouteRequest();
     onEndpointChange(target, result);
     setQueries((current) => ({ ...current, [target]: result.label }));
     setSearch(null);
@@ -131,6 +154,7 @@ export default function RoutePlanner({
   }
 
   function clearEndpoint(target: PlanningEndpointKey) {
+    invalidateRouteRequest();
     onEndpointChange(target, null);
     setQueries((current) => ({ ...current, [target]: "" }));
     if (search?.target === target) setSearch(null);
@@ -159,6 +183,7 @@ export default function RoutePlanner({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
       };
+      invalidateRouteRequest();
       onEndpointChange(target, point);
       setQueries((current) => ({ ...current, [target]: point.label }));
       setBusy(null);
@@ -213,13 +238,14 @@ export default function RoutePlanner({
         signal: controller.signal,
       });
       const value: unknown = await response.json().catch(() => ({}));
+      if (!routeRequestIsCurrent(routeRequestRef.current, controller)) return;
       if (!response.ok) {
         setMessage(routeErrorMessage(response.status, value));
         return;
       }
       onRouteChange(normalizePlannedRoute(value));
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (!routeRequestIsCurrent(routeRequestRef.current, controller)) return;
       setMessage(error instanceof Error && error.message.startsWith("Route response")
         ? "The routing service returned an unusable route. Try again shortly."
         : "Route planning is temporarily unavailable. Try again shortly.");
@@ -229,6 +255,14 @@ export default function RoutePlanner({
         setBusy(null);
       }
     }
+  }
+
+  function swapEndpoints() {
+    invalidateRouteRequest();
+    setQueries(swapEndpointQueries);
+    setSearch(null);
+    setMessage("");
+    onSwapEndpoints();
   }
 
   function endpointEditor(target: PlanningEndpointKey, label: string) {
@@ -282,7 +316,7 @@ export default function RoutePlanner({
     <aside className="route-planner" aria-label="Plan a bicycle route">
       <div className="planner-heading">
         <div><p className="eyebrow">Safety-aware routing</p><h2>Plan a bicycle route</h2></div>
-        <button type="button" className="planner-swap" onClick={onSwapEndpoints} disabled={!endpoints.start && !endpoints.destination} aria-label="Swap start and destination">⇅ Swap</button>
+        <button type="button" className="planner-swap" onClick={swapEndpoints} disabled={!endpoints.start && !endpoints.destination} aria-label="Swap start and destination">⇅ Swap</button>
       </div>
 
       {endpointEditor("start", "Start")}
@@ -300,6 +334,7 @@ export default function RoutePlanner({
                   value={option.value}
                   checked={safetyPreference === option.value}
                   onChange={() => {
+                    invalidateRouteRequest();
                     setSafetyPreference(option.value);
                     onRouteChange(null);
                   }}

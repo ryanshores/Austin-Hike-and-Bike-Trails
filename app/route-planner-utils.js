@@ -28,6 +28,17 @@ export const SAFETY_CLASS_LABELS = Object.freeze([
   "Fully separated paths",
 ]);
 
+export function swapEndpointQueries(queries) {
+  return {
+    start: String(queries?.destination ?? ""),
+    destination: String(queries?.start ?? ""),
+  };
+}
+
+export function routeRequestIsCurrent(activeRequest, request) {
+  return activeRequest === request && !request.signal.aborted;
+}
+
 function finiteNonNegative(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {

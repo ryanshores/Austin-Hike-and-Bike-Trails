@@ -6,7 +6,9 @@ import {
   formatMiles,
   normalizePlannedRoute,
   routeErrorMessage,
+  routeRequestIsCurrent,
   SAFETY_OPTIONS,
+  swapEndpointQueries,
 } from "../app/route-planner-utils.js";
 
 const geometry = {
@@ -22,6 +24,26 @@ test("planner exposes the four ordered safety preferences with bicycle-legal fal
     "fully-separated",
   ]);
   assert.match(SAFETY_OPTIONS[0].note, /Regular streets/);
+});
+
+test("planner swaps endpoint query text with the selected points", () => {
+  assert.deepEqual(swapEndpointQueries({
+    start: "Mueller Lake Park",
+    destination: "Republic Square",
+  }), {
+    start: "Republic Square",
+    destination: "Mueller Lake Park",
+  });
+});
+
+test("planner accepts responses only from the current route request", () => {
+  const first = new AbortController();
+  const second = new AbortController();
+
+  assert.equal(routeRequestIsCurrent(first, first), true);
+  assert.equal(routeRequestIsCurrent(second, first), false);
+  second.abort();
+  assert.equal(routeRequestIsCurrent(second, second), false);
 });
 
 test("planner normalizes only route fields needed by the UI", () => {
