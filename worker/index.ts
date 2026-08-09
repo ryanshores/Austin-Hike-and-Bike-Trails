@@ -82,7 +82,7 @@ const worker = {
         accessClientId: env.ROUTING_ACCESS_CLIENT_ID,
         accessClientSecret: env.ROUTING_ACCESS_CLIENT_SECRET,
         rateLimiter: env.ROUTE_RATE_LIMITER,
-        reportMetric: (metric: RouteMetric) => console.log(JSON.stringify(metric)),
+        reportMetric: (metric: RouteMetric) => console.log(metric),
       })(request);
     }
 
