@@ -48,11 +48,13 @@ npm run routing:enrich -- \
   --valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
-Defaults are a 25 m City match tolerance, 20 m edge sampling, and 80% minimum
-unambiguous coverage for City authority. Override them only with recorded
-validation evidence. The output embeds SHA-256 hashes of both input files plus
-the pinned Valhalla image, City dataset, OSM extract, and routing graph
-versions. It is deterministic for identical inputs and options.
+The reviewed installation policy is a 25 m City match tolerance, 20 m edge
+sampling, and 80% minimum unambiguous coverage for City authority. The builder
+can accept other values for offline analysis, but `routing:verify-enrichment`
+will reject those artifacts: an artifact must not choose the thresholds that
+authorize its own City classifications. The output embeds SHA-256 hashes of
+both input files plus the pinned Valhalla image, City dataset, OSM extract, and
+routing graph versions. It is deterministic for identical inputs and options.
 
 Generated full-dataset artifacts belong outside source control. The provider
 can load the result as a sidecar keyed by directed edge ID and return the

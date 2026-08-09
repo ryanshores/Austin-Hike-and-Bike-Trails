@@ -190,6 +190,33 @@ test("verification rejects artifacts that do not exactly rebuild from pinned inp
   }), /does not match the expected value/);
 });
 
+test("verification rejects artifacts built with unapproved City-classification thresholds", () => {
+  const cityCollection = {
+    type: "FeatureCollection",
+    features: [city("Urban Trail", -97.74)],
+  };
+  const routingEdgeCollection = {
+    type: "FeatureCollection",
+    features: [edge("city-trail", -97.74, { highway: "residential" })],
+  };
+  const enrichment = buildRoutingEnrichment({
+    cityCollection,
+    routingEdgeCollection,
+    manifest,
+    toleranceMeters: 25,
+    sampleSpacingMeters: 20,
+    minimumCoverage: 0.01,
+  });
+
+  assert.throws(() => verifyRoutingEnrichment({
+    enrichment,
+    cityCollection,
+    routingEdgeCollection,
+    cityDatasetSha256: manifest.cityDatasetSha256,
+    routingEdgesSha256: manifest.routingEdgesSha256,
+  }), /minimumCoverage does not match the approved verification policy/);
+});
+
 test("builder atomically writes an artifact the verifier accepts from file inputs", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "atlas-enrichment-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

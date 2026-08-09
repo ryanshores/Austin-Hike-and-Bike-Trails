@@ -10,6 +10,15 @@ const METERS_PER_MILE = 1_609.344;
 const METERS_PER_DEGREE_LATITUDE = 111_320;
 const AUSTIN_LONGITUDE_SCALE = Math.cos((30.2672 * Math.PI) / 180);
 
+// Only artifacts built with this reviewed policy may be installed. The builder
+// accepts overrides for offline analysis, but verification must not let an
+// artifact choose the thresholds that authorize its own City classifications.
+export const VERIFIED_ROUTING_ENRICHMENT_POLICY = Object.freeze({
+  toleranceMeters: 25,
+  sampleSpacingMeters: 20,
+  minimumCoverage: 0.8,
+});
+
 function rounded(value, digits = 6) {
   return Number(value.toFixed(digits));
 }
@@ -263,9 +272,9 @@ export function buildRoutingEnrichment({
   cityCollection,
   routingEdgeCollection,
   manifest,
-  toleranceMeters = 25,
-  sampleSpacingMeters = 20,
-  minimumCoverage = 0.8,
+  toleranceMeters = VERIFIED_ROUTING_ENRICHMENT_POLICY.toleranceMeters,
+  sampleSpacingMeters = VERIFIED_ROUTING_ENRICHMENT_POLICY.sampleSpacingMeters,
+  minimumCoverage = VERIFIED_ROUTING_ENRICHMENT_POLICY.minimumCoverage,
 } = {}) {
   const cityFeatures = validatedCollection(cityCollection, "City facilities");
   const routingEdges = validatedCollection(routingEdgeCollection, "Routing edges");
@@ -348,6 +357,14 @@ export function verifyRoutingEnrichment({
     throw new Error("Routing enrichment routing-edge SHA-256 does not match the supplied input.");
   }
 
+  for (const [field, expectedValue] of Object.entries(VERIFIED_ROUTING_ENRICHMENT_POLICY)) {
+    if (manifest[field] !== expectedValue) {
+      throw new Error(
+        `Routing enrichment manifest ${field} does not match the approved verification policy.`,
+      );
+    }
+  }
+
   const expectedPins = validExpectedManifest(expectedManifest);
   for (const [field, value] of Object.entries(expectedPins)) {
     if (manifest[field] !== value) {
@@ -359,9 +376,7 @@ export function verifyRoutingEnrichment({
     cityCollection,
     routingEdgeCollection,
     manifest,
-    toleranceMeters: manifest.toleranceMeters,
-    sampleSpacingMeters: manifest.sampleSpacingMeters,
-    minimumCoverage: manifest.minimumCoverage,
+    ...VERIFIED_ROUTING_ENRICHMENT_POLICY,
   });
   if (!isDeepStrictEqual(rebuilt, enrichment)) {
     throw new Error("Routing enrichment does not exactly match a rebuild from its pinned inputs.");
