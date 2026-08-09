@@ -14,6 +14,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "conflation:spike": "node scripts/run-conflation-spike.mjs",
     "routing:enrich": "node scripts/build-routing-enrichment.mjs",
+    "staging:route-check": "node scripts/verify-staging-route-planner.mjs",
     "check:worker": "npm run build && WRANGLER_LOG_PATH=.wrangler/logs/wrangler.log wrangler deploy --dry-run",
     "check:preview-worker": "npm run build:preview && WRANGLER_LOG_PATH=.wrangler/logs/wrangler.log wrangler deploy --env preview --dry-run",
     "db:generate": "drizzle-kit generate",
