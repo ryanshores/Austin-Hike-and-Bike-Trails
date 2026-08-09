@@ -30,6 +30,7 @@ type PlannerProps = {
   onEndpointChange: (target: PlanningEndpointKey, point: PlanningPoint | null) => void;
   onMapTargetChange: (target: PlanningEndpointKey | null) => void;
   onRouteChange: (route: PlannedRoute | null) => void;
+  onStartGuidance: (safetyPreference: string) => void;
   onSwapEndpoints: () => void;
 };
 
@@ -66,6 +67,7 @@ export default function RoutePlanner({
   onEndpointChange,
   onMapTargetChange,
   onRouteChange,
+  onStartGuidance,
   onSwapEndpoints,
 }: PlannerProps) {
   const [queries, setQueries] = useState<Record<PlanningEndpointKey, string>>({
@@ -265,6 +267,14 @@ export default function RoutePlanner({
     onSwapEndpoints();
   }
 
+  function startGuidance() {
+    try {
+      onStartGuidance(safetyPreference);
+    } catch {
+      setMessage("Guidance could not be started in this browser. Try planning the route again.");
+    }
+  }
+
   function endpointEditor(target: PlanningEndpointKey, label: string) {
     const endpoint = endpoints[target];
     const choosingOnMap = activeMapTarget === target;
@@ -381,6 +391,7 @@ export default function RoutePlanner({
               </ol>
             </div>
           )}
+          <button type="button" className="planner-guidance" onClick={startGuidance}>Start guidance</button>
         </section>
       )}
     </aside>

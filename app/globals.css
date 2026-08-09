@@ -95,6 +95,8 @@ h2 { font-size: 22px; }
 .planner-divergences ol { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .planner-divergences li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 8px 9px; border-radius: 9px; background: rgba(212, 81, 45, .09); color: var(--muted); font: 10px/1.3 Arial, sans-serif; }
 .planner-divergences li strong { color: #a54125; }
+.planner-guidance { width: 100%; min-height: 46px; margin-top: 15px; border: 1px solid var(--orange); border-radius: 999px; background: var(--orange); color: #fffaf0; cursor: pointer; font: 700 12px Arial, sans-serif; }
+.planner-guidance:focus-visible { outline: 3px solid rgba(185, 93, 48, .3); outline-offset: 2px; }
 .map-frame { position: relative; overflow: hidden; border: 1px solid rgba(55, 72, 52, .3); border-radius: 22px; box-shadow: 0 16px 45px rgba(48, 54, 35, .16); background: #dce1c6; }
 .atlas-planning-layout .map-frame { min-height: 620px; }
 .map { position: absolute; inset: 0; }
@@ -142,11 +144,19 @@ h2 { font-size: 22px; }
 .gps-badge.good .stamp-dot { background: #33734c; }
 .gps-badge.fair .stamp-dot { background: #c28b25; }
 .gps-badge.poor .stamp-dot, .gps-badge.unusable .stamp-dot, .gps-badge.blocked .stamp-dot { background: #c75b3a; }
-.ride-start-card { position: absolute; z-index: 620; left: 50%; top: 50%; width: min(360px, calc(100% - 32px)); transform: translate(-50%, -50%); padding: 24px; border: 1px solid rgba(45, 59, 42, .25); border-radius: 20px; background: rgba(255, 250, 240, .96); box-shadow: 0 18px 55px rgba(35, 43, 28, .23); text-align: center; backdrop-filter: blur(12px); }
+.ride-start-card { position: absolute; z-index: 620; left: 50%; top: 50%; width: min(380px, calc(100% - 32px)); max-height: calc(100dvh - 142px); overflow-y: auto; transform: translate(-50%, -50%); padding: 24px; border: 1px solid rgba(45, 59, 42, .25); border-radius: 20px; background: rgba(255, 250, 240, .96); box-shadow: 0 18px 55px rgba(35, 43, 28, .23); text-align: center; backdrop-filter: blur(12px); }
 .ride-start-card h1 { font-size: 32px; }
 .ride-start-card > p:not(.eyebrow) { margin: 10px 0 18px; color: var(--muted); font: 13px/1.45 Arial, sans-serif; }
 .ride-start-card button { width: 100%; min-height: 48px; border: 0; border-radius: 999px; background: var(--ink); color: #fffaf0; cursor: pointer; font: 700 14px Arial, sans-serif; }
 .ride-start-card > a { display: inline-block; margin-top: 13px; color: var(--muted); font: 12px Arial, sans-serif; }
+.ride-first-maneuver { display: grid; gap: 5px; margin: 13px 0; padding: 13px; border-radius: 12px; background: var(--paper-deep); text-align: left; }
+.ride-first-maneuver span, .ride-first-maneuver small { color: var(--muted); font: 10px Arial, sans-serif; }
+.ride-first-maneuver strong { font: 700 14px/1.35 Arial, sans-serif; }
+.ride-guidance-card { position: fixed; z-index: 640; top: calc(max(12px, env(safe-area-inset-top)) + 58px); left: 50%; width: min(460px, calc(100% - 104px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 13px; transform: translateX(-50%); padding: 12px 14px; border: 1px solid rgba(45, 59, 42, .25); border-radius: 14px; background: rgba(255, 250, 240, .96); box-shadow: 0 8px 26px rgba(35, 43, 28, .2); backdrop-filter: blur(10px); }
+.ride-guidance-card h2 { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.ride-guidance-card > p { display: grid; gap: 3px; margin: 0; text-align: right; }
+.ride-guidance-card > p strong { color: var(--orange); font: 700 13px Arial, sans-serif; }
+.ride-guidance-card > p span { max-width: 150px; color: var(--muted); font: 10px/1.3 Arial, sans-serif; }
 .ride-layers { position: fixed; z-index: 610; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); overflow: hidden; border: 1px solid rgba(45, 59, 42, .22); border-radius: 14px; background: rgba(255, 250, 240, .93); box-shadow: 0 5px 20px rgba(43, 49, 33, .16); backdrop-filter: blur(9px); }
 .ride-layers .legend-heading, .ride-layers .legend-note { display: none; }
 .ride-layers .legend-grid { display: flex; width: 100%; gap: 4px; overflow-x: auto; padding: 5px; scrollbar-width: none; }
