@@ -73,6 +73,13 @@ The deterministic offline edge-manifest workflow is documented in
 ordinary bicycle-legal streets as fallback routes while treating City matches
 as authoritative only when coverage is unambiguous.
 
+Each `/api/routes` request also emits one structured Workers Log event with
+`event: "route_request"`, an outcome, HTTP status, rounded handler duration,
+and (after validation) the selected safety preference. These metrics
+intentionally exclude endpoints, route geometry, provider URLs, and credentials.
+Use Workers Logs or a Logpush destination to monitor success, no-route,
+rate-limited, and provider-unavailable outcomes.
+
 The selected safety preference also tunes Valhalla bicycle `use_roads` from a
 balanced value down to zero for the strictest preference. Valhalla treats that
 as avoidance rather than a prohibition, so regular bicycle-legal streets can

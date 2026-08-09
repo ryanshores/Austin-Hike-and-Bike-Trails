@@ -11,6 +11,14 @@ interface RateLimitBinding {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
 
+interface RouteMetric {
+  event: string;
+  outcome: string;
+  status: number;
+  durationMs: number;
+  safetyPreference?: string;
+}
+
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
@@ -74,6 +82,7 @@ const worker = {
         accessClientId: env.ROUTING_ACCESS_CLIENT_ID,
         accessClientSecret: env.ROUTING_ACCESS_CLIENT_SECRET,
         rateLimiter: env.ROUTE_RATE_LIMITER,
+        reportMetric: (metric: RouteMetric) => console.log(JSON.stringify(metric)),
       })(request);
     }
 
