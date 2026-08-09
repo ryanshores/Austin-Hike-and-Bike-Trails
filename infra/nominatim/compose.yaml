@@ -1,0 +1,47 @@
+name: atlas-nominatim
+
+services:
+  nominatim:
+    # The Austin extract is intentionally small enough for the home host. Pin
+    # the exact amd64 image rather than relying on a moving tag.
+    image: mediagis/nominatim:5.3@sha256:e7d294abffe1ddf0242a322fe176a6f5a3fc0bcaf2a5d0b698a6d2f6a8ff9551
+    platform: "${NOMINATIM_PLATFORM:-linux/amd64}"
+    container_name: atlas-nominatim
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NOMINATIM_PORT:-8082}:8080"
+    volumes:
+      - "${NOMINATIM_DB_DIR:?set NOMINATIM_DB_DIR}:/var/lib/postgresql/16/main"
+      # Nominatim takes ownership of its mounted import directory. The
+      # preflight script copies and checks the verified Valhalla extract here,
+      # so the routing source is never mounted into this container.
+      - "${NOMINATIM_OSM_DIR:?set NOMINATIM_OSM_DIR}:/nominatim/data"
+    environment:
+      PBF_PATH: /nominatim/data/Austin.osm.pbf
+      UPDATE_MODE: none
+      FREEZE: "true"
+      IMPORT_WIKIPEDIA: "false"
+      IMPORT_SECONDARY_WIKIPEDIA: "false"
+      IMPORT_US_POSTCODES: "false"
+      IMPORT_GB_POSTCODES: "false"
+      IMPORT_TIGER_ADDRESSES: "false"
+      THREADS: "${NOMINATIM_THREADS:-2}"
+      GUNICORN_WORKERS: "${NOMINATIM_GUNICORN_WORKERS:-2}"
+      NOMINATIM_PASSWORD: "${NOMINATIM_PASSWORD:?set NOMINATIM_PASSWORD outside the repository}"
+      POSTGRES_SHARED_BUFFERS: "${NOMINATIM_POSTGRES_SHARED_BUFFERS:-1GB}"
+      POSTGRES_MAINTENANCE_WORK_MEM: "${NOMINATIM_POSTGRES_MAINTENANCE_WORK_MEM:-1GB}"
+      POSTGRES_AUTOVACUUM_WORK_MEM: "${NOMINATIM_POSTGRES_AUTOVACUUM_WORK_MEM:-256MB}"
+      POSTGRES_WORK_MEM: "${NOMINATIM_POSTGRES_WORK_MEM:-16MB}"
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "${NOMINATIM_POSTGRES_EFFECTIVE_CACHE_SIZE:-3GB}"
+      POSTGRES_MAX_WAL_SIZE: "${NOMINATIM_POSTGRES_MAX_WAL_SIZE:-1GB}"
+      POSTGRES_MAX_CONNECTIONS: "${NOMINATIM_POSTGRES_MAX_CONNECTIONS:-20}"
+    shm_size: 1gb
+    mem_limit: 5g
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/status >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # The first import is intentionally allowed several hours on the small
+      # host; later starts reuse the persisted database.
+      start_period: 6h

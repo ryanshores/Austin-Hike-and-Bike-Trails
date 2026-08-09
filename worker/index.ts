@@ -15,6 +15,8 @@ interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   GEOCODER_URL?: string;
+  GEOCODER_ACCESS_CLIENT_ID?: string;
+  GEOCODER_ACCESS_CLIENT_SECRET?: string;
   ROUTING_URL?: string;
   ROUTING_ACCESS_CLIENT_ID?: string;
   ROUTING_ACCESS_CLIENT_SECRET?: string;
@@ -59,6 +61,8 @@ const worker = {
         : (caches as CacheStorage & { default: Cache }).default;
       return createGeocodeHandler({
         providerUrl: env.GEOCODER_URL,
+        accessClientId: env.GEOCODER_ACCESS_CLIENT_ID,
+        accessClientSecret: env.GEOCODER_ACCESS_CLIENT_SECRET,
         cache,
         rateLimiter: env.GEOCODE_RATE_LIMITER,
       })(request);

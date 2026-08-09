@@ -118,8 +118,9 @@ Variables and Secrets**:
 
 - plaintext variables: `GEOCODER_URL`, `ROUTING_URL`
 - encrypted secrets: `JWT_SECRET`, `PASSWORD_PEPPER`,
-  `ROUTING_ACCESS_CLIENT_ID`, `ROUTING_ACCESS_CLIENT_SECRET` (only when the
-  routing provider uses Cloudflare Access)
+  `ROUTING_ACCESS_CLIENT_ID`, `ROUTING_ACCESS_CLIENT_SECRET`,
+  `GEOCODER_ACCESS_CLIENT_ID`, `GEOCODER_ACCESS_CLIENT_SECRET` (when the
+  corresponding provider uses Cloudflare Access)
 
 `DB` is a D1 binding, not an environment variable. The configured database is
 named `database`; apply its checked-in migrations before enabling auth:
