@@ -84,6 +84,23 @@ test("maneuvers advance only after their route threshold is passed", () => {
   assert.ok(passed.maneuverDistanceMiles < route.maneuvers[1].distanceMiles);
 });
 
+test("the final maneuver clears when guidance reaches the route endpoint", () => {
+  const initial = initialGuidanceProgress(route);
+  const nearDestination = {
+    ...initial,
+    progressMiles: 1.1,
+    remainingMiles: 0.1,
+    maneuverIndex: 1,
+    maneuverDistanceMiles: 0.1,
+  };
+  const destination = updateGuidanceProgress(route, nearDestination, { latitude: 30.26, longitude: -97.73 });
+
+  assert.equal(destination.progressMiles, route.totalMiles);
+  assert.equal(destination.remainingMiles, 0);
+  assert.equal(destination.maneuverIndex, null);
+  assert.equal(destination.maneuverDistanceMiles, null);
+});
+
 test("maneuvers without shape indices advance from cumulative maneuver miles", () => {
   const indexFreeRoute = {
     ...route,
@@ -212,4 +229,29 @@ test("overlapping divergence geometry matches the correct route traversal", () =
   assert.equal(firstVisit.safetyWarning, null);
   assert.equal(laterVisit.safetyWarning?.reason, "lower-safety later leg");
   assert.equal(laterVisit.safetyWarning?.active, true);
+});
+
+test("long routes prepare safety ranges without Cartesian endpoint matching", () => {
+  const coordinates = Array.from({ length: 1_001 }, (_, index) => [
+    -97.75 + index * 0.00001,
+    30.26,
+  ]);
+  const longRoute = {
+    geometry: { type: "LineString", coordinates },
+    totalMiles: 0.6,
+    maneuvers: [],
+    divergences: [{
+      miles: 0.06,
+      reason: "brief lower-safety connection",
+      geometry: {
+        type: "LineString",
+        coordinates: [coordinates[500], coordinates[600]],
+      },
+    }],
+  };
+
+  const analysis = prepareGuidanceRoute(longRoute);
+
+  assert.equal(analysis.divergenceRanges.length, 1);
+  assert.ok(analysis.divergenceRanges[0].endMiles > analysis.divergenceRanges[0].startMiles);
 });

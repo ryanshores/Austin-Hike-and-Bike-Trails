@@ -147,11 +147,17 @@ function divergenceRanges(route, cumulativeMeters, scale) {
     );
     const expectedMeters = scale > 0 ? divergence.miles / scale * METERS_PER_MILE : 0;
     let bestRange = null;
+    let endIndex = 0;
     for (const start of starts) {
-      for (const end of ends) {
-        if (end.alongMeters < start.alongMeters) continue;
+      const expectedEndAlongMeters = start.alongMeters + expectedMeters;
+      while (endIndex < ends.length && ends[endIndex].alongMeters < expectedEndAlongMeters) {
+        endIndex += 1;
+      }
+      for (const candidateIndex of [endIndex - 1, endIndex]) {
+        const end = ends[candidateIndex];
+        if (!end || end.alongMeters < start.alongMeters) continue;
         const score = start.distanceMeters + end.distanceMeters
-          + Math.abs(end.alongMeters - start.alongMeters - expectedMeters);
+          + Math.abs(end.alongMeters - expectedEndAlongMeters);
         if (!bestRange || score < bestRange.score) bestRange = { start, end, score };
       }
     }
@@ -246,7 +252,8 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
   let maneuverIndex = previous.maneuverIndex;
   while (maneuverIndex !== null && maneuverIndex < route.maneuvers.length) {
     const maneuverEnd = maneuverEndMiles(route, maneuverIndex, cumulativeMeters, scale);
-    if (progressMiles < maneuverEnd + MANEUVER_PASS_TOLERANCE_MILES) break;
+    const reachedRouteEnd = maneuverEnd >= route.totalMiles && progressMiles >= route.totalMiles;
+    if (!reachedRouteEnd && progressMiles < maneuverEnd + MANEUVER_PASS_TOLERANCE_MILES) break;
     maneuverIndex += 1;
     if (maneuverIndex >= route.maneuvers.length) maneuverIndex = null;
   }
