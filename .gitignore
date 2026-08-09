@@ -45,3 +45,7 @@ next-env.d.ts
 /work/
 .idea
 .openai
+
+# self-hosted Valhalla runtime data
+/infra/valhalla/host.env
+/infra/valhalla/custom_files/

@@ -9,32 +9,41 @@ only browser-facing routing API.
 This is not production hosting. The routing host must remain online, and no
 provider hostname should be added to production configuration.
 
-## Build and run the Austin graph
+## Build and run the Austin graph on Linux
 
-The following commands use Apple Container on macOS. Docker or a native
-Valhalla install is also acceptable if it keeps the same properties: a pinned
-image/version, persistent graph files, and localhost-only service binding.
+The checked-in Compose service uses the pinned multi-architecture Valhalla
+image and explicitly selects AMD64 for the Linux host. It persists graph files
+outside the repository and publishes port 8002 only on localhost. The default
+two build threads are intentionally conservative for an 8 GiB host.
+Do not increase the count until the initial graph build succeeds while memory
+pressure is monitored.
 
 ```bash
-mkdir -p /private/tmp/atlas-valhalla/custom_files
-curl -fL \
-  --output /private/tmp/atlas-valhalla/custom_files/Austin.osm.pbf \
-  https://download.bbbike.org/osm/bbbike/Austin/Austin.osm.pbf
+sudo install -d -o "$USER" -g "$USER" /srv/atlas-valhalla/custom_files
+cp infra/valhalla/host.env.example infra/valhalla/host.env
 
-container system start
-container run -d --name atlas-valhalla --cpus 6 --memory 12g \
-  -p 127.0.0.1:8002:8002 \
-  -v /private/tmp/atlas-valhalla/custom_files:/custom_files \
-  -e build_elevation=True -e build_admins=True -e build_time_zones=True \
-  -e build_tar=True -e server_threads=6 \
-  ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
+# Copy the current Austin.osm.pbf MD5 from BBBike's CHECKSUM.txt. The script
+# refuses a changed extract instead of silently building a different graph.
+scripts/prepare-valhalla-extract.sh \
+  /srv/atlas-valhalla/custom_files \
+  EXPECTED_32_CHARACTER_MD5
 
-curl --fail http://127.0.0.1:8002/status
+docker compose \
+  --env-file infra/valhalla/host.env \
+  --file infra/valhalla/compose.yaml \
+  up --detach
+docker compose \
+  --env-file infra/valhalla/host.env \
+  --file infra/valhalla/compose.yaml \
+  logs --follow valhalla
+scripts/verify-valhalla-host.sh
 ```
 
-The first start builds graph artifacts in `custom_files`; later starts reuse
-them. Record the OSM extract checksum and the `/status` graph version whenever
-the extract or image changes. The feasibility artifact format is documented in
+The source checksum is deliberately supplied at deployment time because
+BBBike's stable URL is updated in place. Keep the generated provenance file
+beside the graph. The first start builds graph and elevation artifacts; later
+starts reuse them. Record the `/status` graph version whenever the extract or
+image changes. The feasibility artifact format is documented in
 [`city-osm-conflation-spike.md`](city-osm-conflation-spike.md).
 
 The `127.0.0.1` binding is intentional. Do not bind Valhalla directly to a LAN
@@ -43,16 +52,20 @@ or public interface.
 ## Publish only through Tunnel and Access
 
 1. In Cloudflare Zero Trust, create a remotely managed Tunnel on the routing
-   host. Run the dashboard-provided `cloudflared` connector command as a
-   persistent service; keep its token outside this repository.
+   host. Put its token in the ignored `infra/valhalla/host.env` file. The
+   Compose service runs the digest-pinned connector with host networking so its
+   `127.0.0.1:8002` origin is the host's localhost. Keep the token outside this
+   repository. If the host already has a `cloudflared` service, add this route
+   to that Tunnel instead of starting a second connector.
 2. Add an ingress public hostname such as
    `routing-staging.<your-zone>` whose origin service is
    `http://127.0.0.1:8002`. This hostname must be a Tunnel hostname, not a
    Worker route or custom domain; otherwise the Worker can call itself in a
    loop.
 3. Create a Cloudflare Access self-hosted application for that exact hostname.
-   The default policy must deny requests. Add a service-token policy for the
-   Atlas Worker and create a dedicated service token.
+   Add a `Service Auth` policy that includes only the dedicated Atlas Worker
+   service token. Requests not matching an allow or service-auth policy are
+   denied by default.
 4. Before configuring the Worker, confirm a request to
    `https://routing-staging.<your-zone>/status` without the service-token
    headers is rejected by Access.
