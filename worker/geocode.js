@@ -22,6 +22,15 @@ function sharedGeocoderRateLimitKey(providerUrl) {
   }
 }
 
+function geocoderProviderAccessHeaders(accessClientId, accessClientSecret) {
+  if (!accessClientId && !accessClientSecret) return {};
+  if (!accessClientId || !accessClientSecret) return null;
+  return {
+    "CF-Access-Client-Id": accessClientId,
+    "CF-Access-Client-Secret": accessClientSecret,
+  };
+}
+
 function normalizedQuery(value) {
   const query = String(value ?? "").trim().replace(/\s+/g, " ");
   if (query.length < 2) throw new Error("Search query must contain at least two characters.");
@@ -115,10 +124,13 @@ function withHeaders(response, headers) {
 
 export function createGeocodeHandler({
   providerUrl,
+  accessClientId,
+  accessClientSecret,
   cache,
   rateLimiter,
   fetchImpl = fetch,
 } = {}) {
+  const providerAccessHeaders = geocoderProviderAccessHeaders(accessClientId, accessClientSecret);
   return async function handleGeocode(request) {
     if (request.method !== "GET") return jsonError("Method not allowed.", 405);
 
@@ -133,6 +145,9 @@ export function createGeocodeHandler({
     }
 
     if (!providerUrl) return jsonError("Geocoding provider is not configured.", 503);
+    if (!providerAccessHeaders) {
+      return jsonError("Geocoding provider access is not configured.", 503);
+    }
     const cacheRequest = new Request(
       await geocodeCacheKey(request.url, query, limit),
     );
@@ -152,7 +167,9 @@ export function createGeocodeHandler({
           Accept: "application/json",
           "User-Agent":
             "Austin-Hike-Bike-Atlas/1.0 (+https://github.com/ryanshores/Austin-Hike-and-Bike-Trails)",
+          ...providerAccessHeaders,
         },
+        redirect: "manual",
         signal: request.signal,
       });
       if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);
