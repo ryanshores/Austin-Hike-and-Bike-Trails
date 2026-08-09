@@ -4,6 +4,7 @@ import test from "node:test";
 
 const composePath = new URL("../infra/valhalla/compose.yaml", import.meta.url);
 const preparePath = new URL("../scripts/prepare-valhalla-extract.sh", import.meta.url);
+const wranglerPath = new URL("../wrangler.jsonc", import.meta.url);
 
 test("Valhalla compose configuration pins the image and exposes only localhost", async () => {
   const compose = await readFile(composePath, "utf8");
@@ -26,4 +27,15 @@ test("Austin extract preparation requires and verifies a pinned checksum", async
   assert.match(prepare, /md5sum/);
   assert.match(prepare, /checksum mismatch/);
   assert.match(prepare, /Austin\.osm\.pbf\.provenance/);
+});
+
+test("production and preview Workers use distinct non-secret provider URLs", async () => {
+  const wrangler = await readFile(wranglerPath, "utf8");
+
+  assert.match(wrangler, /ROUTING_URL"\s*:\s*"https:\/\/routing\.ryanshores\.us"/);
+  assert.match(
+    wrangler,
+    /ROUTING_URL"\s*:\s*"https:\/\/routing-staging\.ryanshores\.us"/,
+  );
+  assert.doesNotMatch(wrangler, /ROUTING_ACCESS_CLIENT_(ID|SECRET)"\s*:/);
 });

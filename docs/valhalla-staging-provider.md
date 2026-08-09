@@ -1,13 +1,16 @@
-# Private staging Valhalla provider
+# Private Valhalla provider
 
 Issue #26 keeps the initial routing provider within Cloudflare's free offerings
 without using Cloudflare Containers. Native Valhalla runs on a persistent
-macOS or Linux host; Cloudflare Tunnel and Cloudflare Access provide the
-staging-only ingress and service authentication. The Atlas Worker remains the
-only browser-facing routing API.
+macOS or Linux host; Cloudflare Tunnel and Cloudflare Access provide separate
+staging and production ingress with service authentication. The Atlas Worker
+remains the only browser-facing routing API.
 
-This is not production hosting. The routing host must remain online, and no
-provider hostname should be added to production configuration.
+Both environments currently depend on the same self-hosted graph and physical
+host. This is suitable for the initial production rollout but is not highly
+available: routing becomes unavailable whenever the host, home connection, or
+Tunnel is offline. The Atlas application must continue to fail closed without
+falling back to a public provider endpoint.
 
 ## Build and run the Austin graph on Linux
 
@@ -57,24 +60,28 @@ or public interface.
    `127.0.0.1:8002` origin is the host's localhost. Keep the token outside this
    repository. If the host already has a `cloudflared` service, add this route
    to that Tunnel instead of starting a second connector.
-2. Add an ingress public hostname such as
-   `routing-staging.<your-zone>` whose origin service is
-   `http://127.0.0.1:8002`. This hostname must be a Tunnel hostname, not a
-   Worker route or custom domain; otherwise the Worker can call itself in a
-   loop.
-3. Create a Cloudflare Access self-hosted application for that exact hostname.
-   Add a `Service Auth` policy that includes only the dedicated Atlas Worker
-   service token. Requests not matching an allow or service-auth policy are
-   denied by default.
-4. Before configuring the Worker, confirm a request to
-   `https://routing-staging.<your-zone>/status` without the service-token
-   headers is rejected by Access.
+2. Add two published application routes to `http://127.0.0.1:8002`:
+   `routing-staging.<your-zone>` for previews and `routing.<your-zone>` for
+   production. These must be Tunnel hostnames, not Worker routes or custom
+   domains; otherwise a Worker can call itself in a loop.
+3. Create a separate Cloudflare Access self-hosted application and dedicated
+   service token for each hostname. Each application must have a `Service Auth`
+   policy that includes only its environment's token. Requests not matching a
+   service-auth policy are denied by default. Never reuse the preview token in
+   production.
+4. Before configuring either Worker, confirm requests to both provider
+   hostnames without their service-token headers are rejected by Access.
 
 ## Configure the Worker
 
-In the staging Worker's Cloudflare dashboard variables, set:
+The non-secret provider URLs are committed in `wrangler.jsonc`:
 
-- `ROUTING_URL=https://routing-staging.<your-zone>` as plaintext.
+- production: `ROUTING_URL=https://routing.ryanshores.us`
+- preview: `ROUTING_URL=https://routing-staging.ryanshores.us`
+
+Set the following as encrypted secrets on each Worker, using its dedicated
+Access token:
+
 - `ROUTING_ACCESS_CLIENT_ID` as an encrypted secret.
 - `ROUTING_ACCESS_CLIENT_SECRET` as an encrypted secret.
 
@@ -85,17 +92,19 @@ the API returns a 503 without sending a provider request. Provider redirects
 are rejected rather than followed, so service-token headers cannot be sent to
 an unexpected origin.
 
-## Staging verification
+## Environment verification
 
-With all configuration present, verify from the Atlas preview hostname:
+With all configuration present, verify both Atlas environments:
 
 ```bash
 curl --fail https://<atlas-preview-host>/api/routing-health
+curl --fail https://<atlas-production-host>/api/routing-health
 ```
 
 Then submit an Austin-area route to `POST /api/routes` and verify that its
-elevation profile is returned. Confirm in browser developer tools that clients
-only call Atlas `/api/routes`; they must not call `routing-staging` directly.
+elevation profile is returned in each environment. Confirm in browser developer
+tools that clients only call Atlas `/api/routes`; they must not call either
+provider hostname directly.
 
 If the Tunnel, Access policy, or local host is unavailable, leave routing
 disabled rather than bypassing Access or exposing the local Valhalla port.
