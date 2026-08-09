@@ -53,6 +53,27 @@ test("route measurements and divergence ranges are prepared once per route", () 
   assert.equal(second.divergenceRanges, first.divergenceRanges);
 });
 
+test("initial guidance warns about a lower-safety section at the route start", () => {
+  const routeWithInitialDivergence = {
+    ...route,
+    divergences: [{
+      miles: 0.3,
+      reason: "unknown connection",
+      minimumSafetyClass: 0,
+      geometry: {
+        type: "LineString",
+        coordinates: [[-97.75, 30.26], [-97.745, 30.26]],
+      },
+    }],
+  };
+
+  const initial = initialGuidanceProgress(routeWithInitialDivergence);
+
+  assert.equal(initial.safetyWarning?.reason, "unknown connection");
+  assert.equal(initial.safetyWarning?.active, true);
+  assert.equal(initial.safetyWarning?.distanceMiles, 0);
+});
+
 test("maneuvers advance only after their route threshold is passed", () => {
   const initial = initialGuidanceProgress(route);
   const atThreshold = updateGuidanceProgress(route, initial, { latitude: 30.26, longitude: -97.74 });

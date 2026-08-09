@@ -187,14 +187,25 @@ export function prepareGuidanceRoute(route) {
   return analysis;
 }
 
+function safetyWarningAtProgress(divergenceRanges, progressMiles) {
+  const nextDivergence = divergenceRanges
+    .find((divergence) => divergence.endMiles > progressMiles
+      && divergence.startMiles - progressMiles <= DIVERGENCE_WARNING_MILES);
+  return nextDivergence ? {
+    reason: nextDivergence.reason,
+    distanceMiles: Math.max(0, nextDivergence.startMiles - progressMiles),
+    active: progressMiles >= nextDivergence.startMiles,
+  } : null;
+}
+
 export function initialGuidanceProgress(route) {
-  prepareGuidanceRoute(route);
+  const analysis = prepareGuidanceRoute(route);
   return {
     progressMiles: 0,
     remainingMiles: route.totalMiles,
     maneuverIndex: route.maneuvers.length > 0 ? 0 : null,
     maneuverDistanceMiles: route.maneuvers[0]?.distanceMiles ?? null,
-    safetyWarning: null,
+    safetyWarning: safetyWarningAtProgress(analysis.divergenceRanges, 0),
   };
 }
 
@@ -246,14 +257,7 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
     ? null
     : Math.max(0, maneuverEnd - progressMiles);
 
-  const nextDivergence = preparedDivergenceRanges
-    .find((divergence) => divergence.endMiles > progressMiles
-      && divergence.startMiles - progressMiles <= DIVERGENCE_WARNING_MILES);
-  const safetyWarning = nextDivergence ? {
-    reason: nextDivergence.reason,
-    distanceMiles: Math.max(0, nextDivergence.startMiles - progressMiles),
-    active: progressMiles >= nextDivergence.startMiles,
-  } : null;
+  const safetyWarning = safetyWarningAtProgress(preparedDivergenceRanges, progressMiles);
 
   return {
     progressMiles,
