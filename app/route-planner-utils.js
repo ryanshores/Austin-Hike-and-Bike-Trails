@@ -51,6 +51,10 @@ export function nextComboboxOptionIndex(optionCount, activeIndex, key) {
   return null;
 }
 
+export function searchResultsMatchQuery(searchQuery, currentQuery) {
+  return typeof searchQuery === "string" && searchQuery === currentQuery;
+}
+
 function finiteNonNegative(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {

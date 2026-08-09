@@ -11,6 +11,7 @@ import {
   routeRequestIsCurrent,
   SAFETY_CLASS_LABELS,
   SAFETY_OPTIONS,
+  searchResultsMatchQuery,
   swapEndpointQueries,
 } from "./route-planner-utils.js";
 
@@ -78,6 +79,7 @@ export default function RoutePlanner({
   const [safetyPreference, setSafetyPreference] = useState("bike-facility-or-safer");
   const [search, setSearch] = useState<{
     target: PlanningEndpointKey;
+    query: string;
     results: GeocodeResult[];
     attribution: string;
     activeResultIndex: number;
@@ -139,6 +141,7 @@ export default function RoutePlanner({
       const normalized = geocodeResults(value);
       setSearch({
         target,
+        query,
         ...normalized,
         activeResultIndex: normalized.results.length > 0 ? 0 : -1,
       });
@@ -162,7 +165,7 @@ export default function RoutePlanner({
   }
 
   function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>, target: PlanningEndpointKey) {
-    if (search?.target !== target) return;
+    if (search?.target !== target || !searchResultsMatchQuery(search.query, queries[target])) return;
     if (event.key === "Escape") {
       event.preventDefault();
       setSearch(null);
@@ -324,7 +327,11 @@ export default function RoutePlanner({
             id={`planner-${target}`}
             type="search"
             value={queries[target]}
-            onChange={(event) => setQueries((current) => ({ ...current, [target]: event.target.value }))}
+            onChange={(event) => {
+              const value = event.target.value;
+              setQueries((current) => ({ ...current, [target]: value }));
+              setSearch((current) => current?.target === target ? null : current);
+            }}
             placeholder={`Search ${label.toLowerCase()} address or place`}
             autoComplete="off"
             role="combobox"

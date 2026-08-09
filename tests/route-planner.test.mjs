@@ -9,6 +9,7 @@ import {
   routeErrorMessage,
   routeRequestIsCurrent,
   SAFETY_OPTIONS,
+  searchResultsMatchQuery,
   swapEndpointQueries,
 } from "../app/route-planner-utils.js";
 
@@ -55,6 +56,11 @@ test("planner keyboard navigation keeps a bounded active address match", () => {
   assert.equal(nextComboboxOptionIndex(3, 1, "End"), 2);
   assert.equal(nextComboboxOptionIndex(3, 1, "Enter"), null);
   assert.equal(nextComboboxOptionIndex(0, 0, "ArrowDown"), null);
+});
+
+test("planner never selects address matches from an earlier query", () => {
+  assert.equal(searchResultsMatchQuery("zilker park", "zilker park"), true);
+  assert.equal(searchResultsMatchQuery("zilker park", "auditorium shores"), false);
 });
 
 test("planner normalizes only route fields needed by the UI", () => {
