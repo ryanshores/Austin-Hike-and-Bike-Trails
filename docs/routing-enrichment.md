@@ -55,7 +55,11 @@ the pinned Valhalla image, City dataset, OSM extract, and routing graph
 versions. It is deterministic for identical inputs and options.
 
 Generated full-dataset artifacts belong outside source control. The provider
-can load the result as a sidecar keyed by directed edge ID and return the
-allowlisted `city`, `osm`, and classification fields already understood by the
-Worker. Direct binary-tile customization can replace the sidecar later without
-changing the normalized route response or planner UI.
+can load the result into the graph-versioned D1 sidecar. At request time, the
+Worker asks Valhalla's `trace_attributes` endpoint for the exact graph IDs of a
+returned route, then joins only those IDs against the sidecar. A record is
+valid only for the provider's reported routing-graph version. Missing,
+malformed, or unavailable sidecar data stays unknown instead of promoting a
+route section; an artifact record with no City match still retains its OSM
+fallback classification. Direct binary-tile customization can replace this
+sidecar later without changing the normalized route response or planner UI.

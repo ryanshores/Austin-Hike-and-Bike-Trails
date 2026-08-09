@@ -232,6 +232,177 @@ test("stock Valhalla alternates participate in candidate ranking", async () => {
   ]);
 });
 
+test("attributed Valhalla graph edges use the matching D1 sidecar classification", async () => {
+  const shape = encodePolyline6([
+    [30.2672, -97.7431],
+    [30.275, -97.74],
+    [30.285, -97.735],
+  ]);
+  const lookupCalls = [];
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    enrichmentStore: {
+      async lookup(request) {
+        lookupCalls.push(request);
+        return new Map([
+          ["1/2/3", {
+            osm: { highway: "cycleway" },
+            city: { BICYCLE_FACILITY: "Urban Trail" },
+            travelDirection: "forward",
+            classification: {
+              safetyClass: SafetyClass.FULLY_SEPARATED,
+              finding: SafetyFinding.ATLAS,
+              source: "city",
+              reason: "fully separated path",
+            },
+          }],
+          ["1/2/4", {
+            osm: { highway: "residential", cycleway: "lane" },
+            city: null,
+            travelDirection: "forward",
+            classification: {
+              safetyClass: SafetyClass.BIKE_FACILITY,
+              finding: SafetyFinding.NOT_IN_TRAILS_LIST,
+              source: "osm",
+              reason: "not in the Atlas trails list",
+            },
+          }],
+        ]);
+      },
+    },
+    fetchImpl: async (url, options) => {
+      const endpoint = new URL(url);
+      if (endpoint.pathname === "/route") {
+        return Response.json({
+          routingGraphVersion: "graph-v1",
+          trip: { summary: { length: 2 }, legs: [{ shape }] },
+        });
+      }
+      if (endpoint.pathname === "/height") {
+        return Response.json({ range_height: [[0, 100], [1_000, 100]] });
+      }
+      if (endpoint.pathname === "/trace_attributes") {
+        const body = JSON.parse(options.body);
+        assert.equal(body.shape_match, "edge_walk");
+        assert.equal(body.costing, "bicycle");
+        assert.deepEqual(body.filters, {
+          attributes: [
+            "edge.id",
+            "edge.length",
+            "edge.begin_shape_index",
+            "edge.end_shape_index",
+          ],
+          action: "include",
+        });
+        return Response.json({
+          edges: [
+            { id: "1/2/3", length: 1, begin_shape_index: 0, end_shape_index: 1 },
+            { id: "1/2/4", length: 1, begin_shape_index: 1, end_shape_index: 2 },
+          ],
+        });
+      }
+      throw new Error(`unexpected endpoint ${endpoint.pathname}`);
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(lookupCalls, [{
+    routingGraphVersion: "graph-v1",
+    edgeIds: ["1/2/3", "1/2/4"],
+  }]);
+  assert.equal(body.route.mileageBySafetyClass[SafetyClass.FULLY_SEPARATED], 1);
+  assert.equal(body.route.mileageBySafetyClass[SafetyClass.BIKE_FACILITY], 1);
+  assert.equal(body.route.divergenceCount, 1);
+  assert.equal(body.route.divergenceMiles, 1);
+  assert.equal(recursivelyHasForbiddenKey(body), false);
+});
+
+test("attribution or sidecar failure remains a conservative unknown route", async () => {
+  const shape = encodePolyline6([
+    [30.2672, -97.7431],
+    [30.285, -97.735],
+  ]);
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    enrichmentStore: { async lookup() { throw new Error("D1 temporarily unavailable"); } },
+    fetchImpl: async (url) => {
+      const endpoint = new URL(url);
+      if (endpoint.pathname === "/route") {
+        return Response.json({
+          routingGraphVersion: "graph-v1",
+          trip: { summary: { length: 2 }, legs: [{ shape }] },
+        });
+      }
+      if (endpoint.pathname === "/height") {
+        return Response.json({ range_height: [[0, 100], [1_000, 100]] });
+      }
+      if (endpoint.pathname === "/trace_attributes") {
+        return Response.json({
+          edges: [{ id: "1/2/3", length: 2, begin_shape_index: 0, end_shape_index: 1 }],
+        });
+      }
+      throw new Error(`unexpected endpoint ${endpoint.pathname}`);
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.route.mileageBySafetyClass[SafetyClass.ANY_BICYCLE_LEGAL], 2);
+  assert.match(body.route.divergences[0].reason, /unknown/);
+});
+
+test("an invalid sidecar classification remains an unknown route edge", async () => {
+  const shape = encodePolyline6([
+    [30.2672, -97.7431],
+    [30.285, -97.735],
+  ]);
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    enrichmentStore: {
+      async lookup() {
+        return new Map([["1/2/3", {
+          osm: { highway: "cycleway" },
+          city: { BICYCLE_FACILITY: "Urban Trail" },
+          travelDirection: "forward",
+          classification: {
+            safetyClass: 99,
+            finding: SafetyFinding.ATLAS,
+            source: "city",
+            reason: "invalid sidecar value",
+          },
+        }]]);
+      },
+    },
+    fetchImpl: async (url) => {
+      const endpoint = new URL(url);
+      if (endpoint.pathname === "/route") {
+        return Response.json({
+          routingGraphVersion: "graph-v1",
+          trip: { summary: { length: 2 }, legs: [{ shape }] },
+        });
+      }
+      if (endpoint.pathname === "/height") {
+        return Response.json({ range_height: [[0, 100], [1_000, 100]] });
+      }
+      if (endpoint.pathname === "/trace_attributes") {
+        return Response.json({
+          edges: [{ id: "1/2/3", length: 2, begin_shape_index: 0, end_shape_index: 1 }],
+        });
+      }
+      throw new Error(`unexpected endpoint ${endpoint.pathname}`);
+    },
+  });
+
+  const response = await handle(routeRequest());
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.route.mileageBySafetyClass[SafetyClass.ANY_BICYCLE_LEGAL], 2);
+  assert.match(body.route.divergences[0].reason, /unknown/);
+});
+
 test("safety preferences tune road use without prohibiting bicycle-legal streets", async () => {
   const expectedRoadUse = new Map([
     [SafetyPreference.ANY_BICYCLE_LEGAL, 0.5],

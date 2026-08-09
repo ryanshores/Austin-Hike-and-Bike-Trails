@@ -1,0 +1,986 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "6cf2b21b-50c5-4a6b-b134-a48f25b0ca52",
+  "prevId": "f6eee170-987d-4813-90e4-82b480d21697",
+  "tables": {
+    "anonymous_installations": {
+      "name": "anonymous_installations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "installation_secret_hash": {
+          "name": "installation_secret_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_agent_family": {
+          "name": "user_agent_family",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "anonymous_installations_secret_hash_unique": {
+          "name": "anonymous_installations_secret_hash_unique",
+          "columns": [
+            "installation_secret_hash"
+          ],
+          "isUnique": true
+        },
+        "anonymous_installations_user_idx": {
+          "name": "anonymous_installations_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "anonymous_installations_last_seen_idx": {
+          "name": "anonymous_installations_last_seen_idx",
+          "columns": [
+            "last_seen_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "anonymous_installations_user_id_users_id_fk": {
+          "name": "anonymous_installations_user_id_users_id_fk",
+          "tableFrom": "anonymous_installations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "auth_rate_limits": {
+      "name": "auth_rate_limits",
+      "columns": {
+        "key_hash": {
+          "name": "key_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reset_at": {
+          "name": "reset_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "auth_rate_limits_reset_idx": {
+          "name": "auth_rate_limits_reset_idx",
+          "columns": [
+            "reset_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "auth_refresh_tokens": {
+      "name": "auth_refresh_tokens",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "issued_at": {
+          "name": "issued_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "auth_refresh_tokens_session_idx": {
+          "name": "auth_refresh_tokens_session_idx",
+          "columns": [
+            "session_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "auth_refresh_tokens_session_id_auth_sessions_id_fk": {
+          "name": "auth_refresh_tokens_session_id_auth_sessions_id_fk",
+          "tableFrom": "auth_refresh_tokens",
+          "tableTo": "auth_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "auth_sessions": {
+      "name": "auth_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "refresh_token_hash": {
+          "name": "refresh_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rotated_at": {
+          "name": "rotated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "auth_sessions_refresh_token_hash_unique": {
+          "name": "auth_sessions_refresh_token_hash_unique",
+          "columns": [
+            "refresh_token_hash"
+          ],
+          "isUnique": true
+        },
+        "auth_sessions_user_idx": {
+          "name": "auth_sessions_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "auth_sessions_expires_idx": {
+          "name": "auth_sessions_expires_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "auth_sessions_user_id_users_id_fk": {
+          "name": "auth_sessions_user_id_users_id_fk",
+          "tableFrom": "auth_sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "auth_sessions_expiry_check": {
+          "name": "auth_sessions_expiry_check",
+          "value": "\"auth_sessions\".\"expires_at\" > \"auth_sessions\".\"created_at\""
+        }
+      }
+    },
+    "ride_points": {
+      "name": "ride_points",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ride_id": {
+          "name": "ride_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upload_batch_id": {
+          "name": "upload_batch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "accuracy_meters": {
+          "name": "accuracy_meters",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "altitude_meters": {
+          "name": "altitude_meters",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "speed_meters_per_second": {
+          "name": "speed_meters_per_second",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "heading_degrees": {
+          "name": "heading_degrees",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "quality": {
+          "name": "quality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ride_points_ride_sequence_unique": {
+          "name": "ride_points_ride_sequence_unique",
+          "columns": [
+            "ride_id",
+            "sequence"
+          ],
+          "isUnique": true
+        },
+        "ride_points_batch_idx": {
+          "name": "ride_points_batch_idx",
+          "columns": [
+            "upload_batch_id"
+          ],
+          "isUnique": false
+        },
+        "ride_points_ride_recorded_idx": {
+          "name": "ride_points_ride_recorded_idx",
+          "columns": [
+            "ride_id",
+            "recorded_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ride_points_batch_ride_fk": {
+          "name": "ride_points_batch_ride_fk",
+          "tableFrom": "ride_points",
+          "tableTo": "ride_upload_batches",
+          "columnsFrom": [
+            "upload_batch_id",
+            "ride_id"
+          ],
+          "columnsTo": [
+            "id",
+            "ride_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ride_points_sequence_check": {
+          "name": "ride_points_sequence_check",
+          "value": "\"ride_points\".\"sequence\" >= 0"
+        },
+        "ride_points_latitude_check": {
+          "name": "ride_points_latitude_check",
+          "value": "\"ride_points\".\"latitude\" between -90 and 90"
+        },
+        "ride_points_longitude_check": {
+          "name": "ride_points_longitude_check",
+          "value": "\"ride_points\".\"longitude\" between -180 and 180"
+        },
+        "ride_points_accuracy_check": {
+          "name": "ride_points_accuracy_check",
+          "value": "\"ride_points\".\"accuracy_meters\" >= 0 and \"ride_points\".\"accuracy_meters\" <= 100"
+        },
+        "ride_points_speed_check": {
+          "name": "ride_points_speed_check",
+          "value": "\"ride_points\".\"speed_meters_per_second\" is null or \"ride_points\".\"speed_meters_per_second\" >= 0"
+        },
+        "ride_points_heading_check": {
+          "name": "ride_points_heading_check",
+          "value": "\"ride_points\".\"heading_degrees\" is null\n        or (\"ride_points\".\"heading_degrees\" >= 0 and \"ride_points\".\"heading_degrees\" < 360)"
+        },
+        "ride_points_quality_accuracy_check": {
+          "name": "ride_points_quality_accuracy_check",
+          "value": "(\n        (\"ride_points\".\"quality\" = 'good' and \"ride_points\".\"accuracy_meters\" <= 25)\n        or\n        (\"ride_points\".\"quality\" = 'fair'\n          and \"ride_points\".\"accuracy_meters\" > 25\n          and \"ride_points\".\"accuracy_meters\" <= 75)\n        or\n        (\"ride_points\".\"quality\" = 'poor'\n          and \"ride_points\".\"accuracy_meters\" > 75\n          and \"ride_points\".\"accuracy_meters\" <= 100)\n      )"
+        }
+      }
+    },
+    "ride_upload_batches": {
+      "name": "ride_upload_batches",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ride_id": {
+          "name": "ride_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "first_sequence": {
+          "name": "first_sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "point_count": {
+          "name": "point_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "ride_upload_batches_id_ride_unique": {
+          "name": "ride_upload_batches_id_ride_unique",
+          "columns": [
+            "id",
+            "ride_id"
+          ],
+          "isUnique": true
+        },
+        "ride_upload_batches_ride_sequence_unique": {
+          "name": "ride_upload_batches_ride_sequence_unique",
+          "columns": [
+            "ride_id",
+            "first_sequence"
+          ],
+          "isUnique": true
+        },
+        "ride_upload_batches_ride_idx": {
+          "name": "ride_upload_batches_ride_idx",
+          "columns": [
+            "ride_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ride_upload_batches_ride_id_rides_id_fk": {
+          "name": "ride_upload_batches_ride_id_rides_id_fk",
+          "tableFrom": "ride_upload_batches",
+          "tableTo": "rides",
+          "columnsFrom": [
+            "ride_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "ride_upload_batches_first_sequence_check": {
+          "name": "ride_upload_batches_first_sequence_check",
+          "value": "\"ride_upload_batches\".\"first_sequence\" >= 0"
+        },
+        "ride_upload_batches_point_count_check": {
+          "name": "ride_upload_batches_point_count_check",
+          "value": "\"ride_upload_batches\".\"point_count\" > 0"
+        }
+      }
+    },
+    "rides": {
+      "name": "rides",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'recording'"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "distance_meters": {
+          "name": "distance_meters",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "accepted_point_count": {
+          "name": "accepted_point_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "rides_user_started_idx": {
+          "name": "rides_user_started_idx",
+          "columns": [
+            "user_id",
+            "started_at"
+          ],
+          "isUnique": false
+        },
+        "rides_user_status_idx": {
+          "name": "rides_user_status_idx",
+          "columns": [
+            "user_id",
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "rides_user_id_users_id_fk": {
+          "name": "rides_user_id_users_id_fk",
+          "tableFrom": "rides",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "rides_status_check": {
+          "name": "rides_status_check",
+          "value": "\"rides\".\"status\" in ('recording', 'completed', 'abandoned')"
+        },
+        "rides_status_timestamps_check": {
+          "name": "rides_status_timestamps_check",
+          "value": "(\n        (\"rides\".\"status\" = 'recording' and \"rides\".\"ended_at\" is null)\n        or\n        (\"rides\".\"status\" in ('completed', 'abandoned')\n          and \"rides\".\"ended_at\" is not null)\n      )"
+        },
+        "rides_chronology_check": {
+          "name": "rides_chronology_check",
+          "value": "\"rides\".\"ended_at\" is null or \"rides\".\"ended_at\" >= \"rides\".\"started_at\""
+        },
+        "rides_distance_check": {
+          "name": "rides_distance_check",
+          "value": "\"rides\".\"distance_meters\" >= 0"
+        },
+        "rides_point_count_check": {
+          "name": "rides_point_count_check",
+          "value": "\"rides\".\"accepted_point_count\" >= 0"
+        }
+      }
+    },
+    "routing_edge_enrichments": {
+      "name": "routing_edge_enrichments",
+      "columns": {
+        "routing_graph_version": {
+          "name": "routing_graph_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "edge_id": {
+          "name": "edge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "osm_way_id": {
+          "name": "osm_way_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "travel_direction": {
+          "name": "travel_direction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "city_match_json": {
+          "name": "city_match_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "city_json": {
+          "name": "city_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "osm_json": {
+          "name": "osm_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "classification_json": {
+          "name": "classification_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "routing_edge_enrichments_routing_graph_version_routing_enrichment_manifests_routing_graph_version_fk": {
+          "name": "routing_edge_enrichments_routing_graph_version_routing_enrichment_manifests_routing_graph_version_fk",
+          "tableFrom": "routing_edge_enrichments",
+          "tableTo": "routing_enrichment_manifests",
+          "columnsFrom": [
+            "routing_graph_version"
+          ],
+          "columnsTo": [
+            "routing_graph_version"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "routing_edge_enrichments_routing_graph_version_edge_id_pk": {
+          "columns": [
+            "routing_graph_version",
+            "edge_id"
+          ],
+          "name": "routing_edge_enrichments_routing_graph_version_edge_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "routing_edge_enrichments_direction_check": {
+          "name": "routing_edge_enrichments_direction_check",
+          "value": "\"routing_edge_enrichments\".\"travel_direction\" is null or \"routing_edge_enrichments\".\"travel_direction\" in ('forward', 'backward')"
+        }
+      }
+    },
+    "routing_enrichment_manifests": {
+      "name": "routing_enrichment_manifests",
+      "columns": {
+        "routing_graph_version": {
+          "name": "routing_graph_version",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "manifest_json": {
+          "name": "manifest_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "artifact_sha256": {
+          "name": "artifact_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "loaded_at": {
+          "name": "loaded_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_type": {
+          "name": "account_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'anonymous'"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password_algorithm": {
+          "name": "password_algorithm",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password_parameters": {
+          "name": "password_parameters",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "token_version": {
+          "name": "token_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "registered_at": {
+          "name": "registered_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "columns": [
+            "email"
+          ],
+          "isUnique": true
+        },
+        "users_account_type_last_seen_idx": {
+          "name": "users_account_type_last_seen_idx",
+          "columns": [
+            "account_type",
+            "last_seen_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "users_account_type_check": {
+          "name": "users_account_type_check",
+          "value": "\"users\".\"account_type\" in ('anonymous', 'registered')"
+        },
+        "users_registered_credentials_check": {
+          "name": "users_registered_credentials_check",
+          "value": "(\n        (\"users\".\"account_type\" = 'anonymous'\n          and \"users\".\"email\" is null\n          and \"users\".\"password_hash\" is null\n          and \"users\".\"password_algorithm\" is null\n          and \"users\".\"password_parameters\" is null\n          and \"users\".\"registered_at\" is null)\n        or\n        (\"users\".\"account_type\" = 'registered'\n          and \"users\".\"email\" is not null\n          and length(\"users\".\"email\") > 0\n          and \"users\".\"password_hash\" is not null\n          and length(\"users\".\"password_hash\") > 0\n          and \"users\".\"password_algorithm\" is not null\n          and length(\"users\".\"password_algorithm\") > 0\n          and \"users\".\"password_parameters\" is not null\n          and \"users\".\"registered_at\" is not null)\n      )"
+        },
+        "users_email_normalized_check": {
+          "name": "users_email_normalized_check",
+          "value": "\"users\".\"email\" is null\n        or \"users\".\"email\" = lower(trim(\"users\".\"email\"))"
+        },
+        "users_token_version_check": {
+          "name": "users_token_version_check",
+          "value": "\"users\".\"token_version\" >= 0"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

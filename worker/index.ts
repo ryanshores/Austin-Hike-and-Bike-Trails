@@ -5,6 +5,7 @@ import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
 import { createRideHandler } from "./rides";
 import { createGeocodeHandler } from "./geocode";
+import { createD1RoutingEnrichmentStore } from "./routing-enrichment";
 import { createRoutesHandler, createRoutingHealthHandler } from "./routes";
 
 interface RateLimitBinding {
@@ -74,6 +75,7 @@ const worker = {
         accessClientId: env.ROUTING_ACCESS_CLIENT_ID,
         accessClientSecret: env.ROUTING_ACCESS_CLIENT_SECRET,
         rateLimiter: env.ROUTE_RATE_LIMITER,
+        enrichmentStore: createD1RoutingEnrichmentStore(env.DB),
       })(request);
     }
 
