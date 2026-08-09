@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   initialGuidanceProgress,
+  MAX_PROGRESS_ADVANCE_MILES,
   updateGuidanceProgress,
 } from "../app/route-guidance-progress.js";
 
@@ -91,4 +92,35 @@ test("guidance changes only when the caller supplies an accepted point", () => {
   );
 
   assert.equal(rejected, initial);
+});
+
+test("nearby later route legs cannot skip guidance at a self-crossing", () => {
+  const crossingRoute = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [-97.75, 30.26],
+        [-97.74, 30.26],
+        [-97.74, 30.27],
+        [-97.7501, 30.2601],
+        [-97.73, 30.26],
+      ],
+    },
+    totalMiles: 3,
+    maneuvers: [
+      { instruction: "Ride east.", distanceMiles: 0.8 },
+      { instruction: "Turn north.", distanceMiles: 0.8 },
+      { instruction: "Turn toward the crossing.", distanceMiles: 0.8 },
+      { instruction: "Continue east.", distanceMiles: 0.6 },
+    ],
+    divergences: [],
+  };
+  const initial = initialGuidanceProgress(crossingRoute);
+  const ambiguousFix = updateGuidanceProgress(crossingRoute, initial, {
+    latitude: 30.2601,
+    longitude: -97.7501,
+  });
+
+  assert.ok(ambiguousFix.progressMiles <= MAX_PROGRESS_ADVANCE_MILES + Number.EPSILON);
+  assert.equal(ambiguousFix.maneuverIndex, 0);
 });

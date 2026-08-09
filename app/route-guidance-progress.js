@@ -2,6 +2,8 @@ const EARTH_RADIUS_METERS = 6_371_008.8;
 const METERS_PER_MILE = 1609.344;
 export const DIVERGENCE_WARNING_MILES = 0.25;
 export const MANEUVER_PASS_TOLERANCE_MILES = 0.015;
+export const MAX_PROGRESS_ADVANCE_MILES = 0.2;
+export const ROUTE_MATCH_AMBIGUITY_METERS = 100;
 
 function radians(value) {
   return value * Math.PI / 180;
@@ -25,12 +27,13 @@ function routeMeasure(coordinates) {
   return cumulativeMeters;
 }
 
-function projectPoint(coordinates, cumulativeMeters, point) {
+function projectPoint(coordinates, cumulativeMeters, point, maxAlongMeters = Number.POSITIVE_INFINITY) {
   const latitudeScale = 111_320;
   const longitudeScale = latitudeScale * Math.cos(radians(point.latitude));
   let best = null;
 
   for (let index = 0; index < coordinates.length - 1; index += 1) {
+    if (cumulativeMeters[index] > maxAlongMeters) break;
     const start = coordinates[index];
     const end = coordinates[index + 1];
     const startX = (start[0] - point.longitude) * longitudeScale;
@@ -40,18 +43,31 @@ function projectPoint(coordinates, cumulativeMeters, point) {
     const deltaX = endX - startX;
     const deltaY = endY - startY;
     const squaredLength = deltaX ** 2 + deltaY ** 2;
-    const fraction = squaredLength === 0
+    const nearestFraction = squaredLength === 0
       ? 0
       : Math.max(0, Math.min(1, -(startX * deltaX + startY * deltaY) / squaredLength));
+    const segmentMeters = cumulativeMeters[index + 1] - cumulativeMeters[index];
+    const maximumFraction = segmentMeters === 0
+      ? 1
+      : Math.max(0, Math.min(1, (maxAlongMeters - cumulativeMeters[index]) / segmentMeters));
+    const fraction = Math.min(nearestFraction, maximumFraction);
     const projectedX = startX + deltaX * fraction;
     const projectedY = startY + deltaY * fraction;
     const distance = Math.hypot(projectedX, projectedY);
-    const alongMeters = cumulativeMeters[index]
-      + (cumulativeMeters[index + 1] - cumulativeMeters[index]) * fraction;
-    if (!best || distance < best.distanceMeters) best = { alongMeters, distanceMeters: distance };
+    const alongMeters = cumulativeMeters[index] + segmentMeters * fraction;
+    if (!best || distance < best.distanceMeters) {
+      best = { alongMeters, distanceMeters: distance, segmentIndex: index };
+    }
   }
 
-  return best ?? { alongMeters: 0, distanceMeters: Number.POSITIVE_INFINITY };
+  return best ?? { alongMeters: 0, distanceMeters: Number.POSITIVE_INFINITY, segmentIndex: 0 };
+}
+
+function segmentIndexAtAlong(cumulativeMeters, alongMeters) {
+  for (let index = 1; index < cumulativeMeters.length; index += 1) {
+    if (cumulativeMeters[index] > alongMeters) return index - 1;
+  }
+  return Math.max(0, cumulativeMeters.length - 2);
 }
 
 function routeMilesAtIndex(cumulativeMeters, index, scale) {
@@ -105,7 +121,24 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
   const cumulativeMeters = routeMeasure(coordinates);
   const measuredMiles = cumulativeMeters[cumulativeMeters.length - 1] / METERS_PER_MILE;
   const scale = measuredMiles > 0 ? route.totalMiles / measuredMiles : 1;
-  const projected = projectPoint(coordinates, cumulativeMeters, point);
+  const maxProgressMiles = Math.min(
+    route.totalMiles,
+    previous.progressMiles + MAX_PROGRESS_ADVANCE_MILES,
+  );
+  const maxAlongMeters = scale > 0
+    ? maxProgressMiles / scale * METERS_PER_MILE
+    : cumulativeMeters[cumulativeMeters.length - 1];
+  const previousAlongMeters = scale > 0
+    ? previous.progressMiles / scale * METERS_PER_MILE
+    : 0;
+  const previousSegmentIndex = segmentIndexAtAlong(cumulativeMeters, previousAlongMeters);
+  const nearestProjection = projectPoint(coordinates, cumulativeMeters, point);
+  const boundedProjection = projectPoint(coordinates, cumulativeMeters, point, maxAlongMeters);
+  const projected = nearestProjection.segmentIndex > previousSegmentIndex + 1
+    && nearestProjection.alongMeters > maxAlongMeters
+    && boundedProjection.distanceMeters <= nearestProjection.distanceMeters + ROUTE_MATCH_AMBIGUITY_METERS
+    ? boundedProjection
+    : nearestProjection;
   const projectedMiles = projected.alongMeters / METERS_PER_MILE * scale;
   const progressMiles = Math.min(route.totalMiles, Math.max(previous.progressMiles, projectedMiles));
 
