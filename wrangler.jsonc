@@ -19,6 +19,7 @@
 	// repository has an intentional configuration-management workflow for them.
 	"keep_vars": true,
 	"vars": {
+		"GEOCODER_URL": "https://geocoding.ryanshores.us",
 		"ROUTING_URL": "https://routing.ryanshores.us"
 	},
 	"d1_databases": [
@@ -33,6 +34,7 @@
 		"preview": {
 			"name": "austin-trails-preview",
 			"vars": {
+				"GEOCODER_URL": "https://geocoding-staging.ryanshores.us",
 				"ROUTING_URL": "https://routing-staging.ryanshores.us"
 			},
 			"images": {

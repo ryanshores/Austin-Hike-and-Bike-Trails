@@ -135,6 +135,39 @@ test("geocoding fails closed when unconfigured and honors the request limiter", 
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
+test("geocoding sends Access service credentials server-side and rejects partial credentials", async () => {
+  let requestOptions;
+  const protectedGeocoder = createGeocodeHandler({
+    providerUrl: "https://geocoding.internal",
+    accessClientId: "client-id",
+    accessClientSecret: "client-secret",
+    fetchImpl: async (_url, options) => {
+      requestOptions = options;
+      return Response.json([]);
+    },
+  });
+
+  assert.equal(
+    (await protectedGeocoder(new Request("https://atlas.example/api/geocode?q=library"))).status,
+    200,
+  );
+  assert.equal(requestOptions.headers["CF-Access-Client-Id"], "client-id");
+  assert.equal(requestOptions.headers["CF-Access-Client-Secret"], "client-secret");
+  assert.equal(requestOptions.redirect, "manual");
+
+  const partialCredentials = createGeocodeHandler({
+    providerUrl: "https://geocoding.internal",
+    accessClientId: "client-id",
+    fetchImpl: async () => {
+      throw new Error("must not contact provider");
+    },
+  });
+  assert.equal(
+    (await partialCredentials(new Request("https://atlas.example/api/geocode?q=library"))).status,
+    503,
+  );
+});
+
 test("public Nominatim uses one application-wide limiter key", async () => {
   const publicKeys = [];
   const publicNominatim = createGeocodeHandler({
