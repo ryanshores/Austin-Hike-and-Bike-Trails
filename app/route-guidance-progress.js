@@ -6,6 +6,8 @@ export const MAX_PROGRESS_ADVANCE_MILES = 0.2;
 export const ROUTE_MATCH_AMBIGUITY_METERS = 100;
 export const ROUTE_MATCH_CORRIDOR_METERS = 35;
 
+const routeAnalysisCache = new WeakMap();
+
 function radians(value) {
   return value * Math.PI / 180;
 }
@@ -168,7 +170,25 @@ export function guidanceQualityCanAdvance(quality) {
   return quality === "good" || quality === "fair";
 }
 
+export function prepareGuidanceRoute(route) {
+  const cached = routeAnalysisCache.get(route);
+  if (cached) return cached;
+  const coordinates = route.geometry.coordinates;
+  const cumulativeMeters = routeMeasure(coordinates);
+  const measuredMiles = cumulativeMeters[cumulativeMeters.length - 1] / METERS_PER_MILE;
+  const scale = measuredMiles > 0 ? route.totalMiles / measuredMiles : 1;
+  const analysis = {
+    coordinates,
+    cumulativeMeters,
+    divergenceRanges: divergenceRanges(route, cumulativeMeters, scale),
+    scale,
+  };
+  routeAnalysisCache.set(route, analysis);
+  return analysis;
+}
+
 export function initialGuidanceProgress(route) {
+  prepareGuidanceRoute(route);
   return {
     progressMiles: 0,
     remainingMiles: route.totalMiles,
@@ -180,10 +200,12 @@ export function initialGuidanceProgress(route) {
 
 export function updateGuidanceProgress(route, previous, point, accepted = true) {
   if (!accepted) return previous;
-  const coordinates = route.geometry.coordinates;
-  const cumulativeMeters = routeMeasure(coordinates);
-  const measuredMiles = cumulativeMeters[cumulativeMeters.length - 1] / METERS_PER_MILE;
-  const scale = measuredMiles > 0 ? route.totalMiles / measuredMiles : 1;
+  const {
+    coordinates,
+    cumulativeMeters,
+    divergenceRanges: preparedDivergenceRanges,
+    scale,
+  } = prepareGuidanceRoute(route);
   const maxProgressMiles = Math.min(
     route.totalMiles,
     previous.progressMiles + MAX_PROGRESS_ADVANCE_MILES,
@@ -224,7 +246,7 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
     ? null
     : Math.max(0, maneuverEnd - progressMiles);
 
-  const nextDivergence = divergenceRanges(route, cumulativeMeters, scale)
+  const nextDivergence = preparedDivergenceRanges
     .find((divergence) => divergence.endMiles > progressMiles
       && divergence.startMiles - progressMiles <= DIVERGENCE_WARNING_MILES);
   const safetyWarning = nextDivergence ? {

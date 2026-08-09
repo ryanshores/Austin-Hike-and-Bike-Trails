@@ -5,6 +5,7 @@ import {
   guidanceQualityCanAdvance,
   initialGuidanceProgress,
   MAX_PROGRESS_ADVANCE_MILES,
+  prepareGuidanceRoute,
   updateGuidanceProgress,
 } from "../app/route-guidance-progress.js";
 
@@ -41,6 +42,15 @@ test("accepted route points update remaining distance without moving progress ba
   assert.ok(Math.abs(halfway.remainingMiles - 0.6) < 0.01);
   assert.equal(noisyBackward.progressMiles, halfway.progressMiles);
   assert.equal(noisyBackward.remainingMiles, halfway.remainingMiles);
+});
+
+test("route measurements and divergence ranges are prepared once per route", () => {
+  const first = prepareGuidanceRoute(route);
+  const second = prepareGuidanceRoute(route);
+
+  assert.equal(second, first);
+  assert.equal(second.cumulativeMeters, first.cumulativeMeters);
+  assert.equal(second.divergenceRanges, first.divergenceRanges);
 });
 
 test("maneuvers advance only after their route threshold is passed", () => {
