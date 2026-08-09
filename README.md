@@ -47,10 +47,14 @@ values belong in deployment configuration, not source control. When the routing
 provider is protected by Cloudflare Access, also configure the encrypted
 `ROUTING_ACCESS_CLIENT_ID` and `ROUTING_ACCESS_CLIENT_SECRET` secrets. Both
 must be present or the route and routing-health endpoints fail closed. Production
-should also bind Cloudflare rate limiters as `GEOCODE_RATE_LIMITER` and
-`ROUTE_RATE_LIMITER`. The handlers enforce an Austin-area service boundary,
-cap route distance and request sizes, and never expose an upstream URL or
-credentials to the browser.
+binds Cloudflare rate limiters as `GEOCODE_RATE_LIMITER` (30 requests/minute)
+and `ROUTE_RATE_LIMITER` (15 requests/minute). Preview uses separate
+namespaces so it cannot consume production capacity. The handlers enforce an
+Austin-area service boundary, cap route distance and request sizes, and never
+expose an upstream URL or credentials to the browser. These limits are a
+protective backstop rather than precise quota accounting: Cloudflare applies
+them locally and eventually consistently, and normal route or geocoder error
+responses remain recoverable.
 
 Geocoding is a submitted-search flow, not autocomplete. Successful bounded
 results are cached for 24 hours. If the public OpenStreetMap Nominatim service
