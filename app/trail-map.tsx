@@ -13,6 +13,7 @@ import {
 } from "./location-accuracy";
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
+import { initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
 import { formatMiles } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
 import RoutePlanner, {
@@ -51,6 +52,7 @@ type RouteGuidance = {
   endpoints: { start: PlanningPoint; destination: PlanningPoint };
   route: PlannedRoute;
 };
+type GuidanceProgress = ReturnType<typeof initialGuidanceProgress>;
 
 const categories: Record<Category, { label: string; note: string; color: string; dash?: string }> = {
   offRoadBike: { label: "Separated path, off road", note: "Lowest traffic exposure", color: "#1f6b4f" },
@@ -154,6 +156,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const [planningEndpoints, setPlanningEndpoints] = useState<PlanningEndpoints>({ start: null, destination: null });
   const [plannedRoute, setPlannedRoute] = useState<PlannedRoute | null>(null);
   const [activeGuidance, setActiveGuidance] = useState<RouteGuidance | null>(null);
+  const [guidanceProgress, setGuidanceProgress] = useState<GuidanceProgress | null>(null);
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
@@ -314,7 +317,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   useEffect(() => {
     if (!isRide) return;
     const guidanceTimer = window.setTimeout(() => {
-      setActiveGuidance(loadRouteGuidance(sessionStorage) as RouteGuidance | null);
+      const guidance = loadRouteGuidance(sessionStorage) as RouteGuidance | null;
+      setActiveGuidance(guidance);
+      setGuidanceProgress(guidance ? initialGuidanceProgress(guidance.route) : null);
     }, 0);
     const recorder = new RideRecorder();
     rideRecorderRef.current = recorder;
@@ -538,6 +543,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     setTracking(false);
     clearRouteGuidance(sessionStorage);
     setActiveGuidance(null);
+    setGuidanceProgress(null);
     setOrientation("north");
     const map = mapRef.current;
     locationMarkerRef.current?.remove();
@@ -624,6 +630,13 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       lastAccuracyRef.current = position.coords.accuracy;
       lastTimestampRef.current = position.timestamp;
       appendDiagnostic({ ...baseSample, accepted: true, action: "use-fix" });
+      if (activeGuidance) {
+        setGuidanceProgress((current) => updateGuidanceProgress(
+          activeGuidance.route,
+          current ?? initialGuidanceProgress(activeGuidance.route),
+          { latitude: latlng.lat, longitude: latlng.lng },
+        ));
+      }
       rideRecorderRef.current?.record({
         recordedAt: position.timestamp,
         latitude: latlng.lat,
@@ -724,7 +737,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       .filter((record) => `${record.label} ${record.detail}`.toLowerCase().includes(normalizedSearch))
       .filter((record, index, records) => records.findIndex((candidate) => candidate.label === record.label && candidate.category === record.category) === index)
       .slice(0, 6);
-  const firstGuidanceManeuver = activeGuidance?.route.maneuvers[0] ?? null;
+  const activeManeuver = activeGuidance && guidanceProgress && guidanceProgress.maneuverIndex !== null
+    ? activeGuidance.route.maneuvers[guidanceProgress.maneuverIndex] ?? null
+    : null;
   const startGpsLabel = `${hasInterruptedRide ? "Resume" : "Start"} GPS${activeGuidance ? " guidance" : ""}`;
 
   return (
@@ -817,8 +832,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             {activeGuidance && (
               <div className="ride-first-maneuver">
                 <span>First direction</span>
-                <strong>{firstGuidanceManeuver?.instruction ?? "Follow the highlighted route."}</strong>
-                {firstGuidanceManeuver && <small>{formatMiles(firstGuidanceManeuver.distanceMiles)}</small>}
+                <strong>{activeManeuver?.instruction ?? "Follow the highlighted route."}</strong>
+                {activeManeuver && <small>{formatMiles(activeManeuver.distanceMiles)}</small>}
               </div>
             )}
             {activeGuidance && <p>Allow precise location when you start. Only accepted GPS fixes will move the map or be saved to your private route history.</p>}
@@ -830,10 +845,19 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         {isRide && tracking && activeGuidance && (
           <aside className="ride-guidance-card" aria-label="Active route guidance" aria-live="polite">
             <div>
-              <p className="eyebrow">Next direction</p>
-              <h2>{firstGuidanceManeuver?.instruction ?? "Follow the highlighted route."}</h2>
+              <p className="eyebrow">{guidanceProgress?.safetyWarning ? "Lower-safety section" : "Next direction"}</p>
+              <h2>{guidanceProgress?.safetyWarning
+                ? `${guidanceProgress.safetyWarning.active ? "Use care" : "Ahead"}: ${guidanceProgress.safetyWarning.reason}`
+                : activeManeuver?.instruction ?? "Follow the highlighted route."}</h2>
             </div>
-            <p><strong>{firstGuidanceManeuver ? formatMiles(firstGuidanceManeuver.distanceMiles) : "Route"}</strong><span>{formatMiles(activeGuidance.route.totalMiles)} remaining to {activeGuidance.endpoints.destination.label}</span></p>
+            <p>
+              <strong>{guidanceProgress?.safetyWarning
+                ? guidanceProgress.safetyWarning.active ? "Now" : formatMiles(guidanceProgress.safetyWarning.distanceMiles)
+                : activeManeuver && guidanceProgress?.maneuverDistanceMiles !== null
+                  ? formatMiles(guidanceProgress?.maneuverDistanceMiles ?? activeManeuver.distanceMiles)
+                  : "Route"}</strong>
+              <span>{formatMiles(guidanceProgress?.remainingMiles ?? activeGuidance.route.totalMiles)} remaining to {activeGuidance.endpoints.destination.label}</span>
+            </p>
           </aside>
         )}
         {tracking && (
