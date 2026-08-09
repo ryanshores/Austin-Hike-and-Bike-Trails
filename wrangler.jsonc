@@ -18,6 +18,9 @@
 	// Preserve dashboard-managed secrets and provider configuration until this
 	// repository has an intentional configuration-management workflow for them.
 	"keep_vars": true,
+	"vars": {
+		"ROUTING_URL": "https://routing.ryanshores.us"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -29,6 +32,9 @@
 	"env": {
 		"preview": {
 			"name": "austin-trails-preview",
+			"vars": {
+				"ROUTING_URL": "https://routing-staging.ryanshores.us"
+			},
 			"images": {
 				"binding": "IMAGES"
 			},

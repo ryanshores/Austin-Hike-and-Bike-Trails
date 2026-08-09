@@ -1,40 +1,52 @@
-# Private staging Valhalla provider
+# Private Valhalla provider
 
 Issue #26 keeps the initial routing provider within Cloudflare's free offerings
 without using Cloudflare Containers. Native Valhalla runs on a persistent
-macOS or Linux host; Cloudflare Tunnel and Cloudflare Access provide the
-staging-only ingress and service authentication. The Atlas Worker remains the
-only browser-facing routing API.
+macOS or Linux host; Cloudflare Tunnel and Cloudflare Access provide separate
+staging and production ingress with service authentication. The Atlas Worker
+remains the only browser-facing routing API.
 
-This is not production hosting. The routing host must remain online, and no
-provider hostname should be added to production configuration.
+Both environments currently depend on the same self-hosted graph and physical
+host. This is suitable for the initial production rollout but is not highly
+available: routing becomes unavailable whenever the host, home connection, or
+Tunnel is offline. The Atlas application must continue to fail closed without
+falling back to a public provider endpoint.
 
-## Build and run the Austin graph
+## Build and run the Austin graph on Linux
 
-The following commands use Apple Container on macOS. Docker or a native
-Valhalla install is also acceptable if it keeps the same properties: a pinned
-image/version, persistent graph files, and localhost-only service binding.
+The checked-in Compose service uses the pinned multi-architecture Valhalla
+image and explicitly selects AMD64 for the Linux host. It persists graph files
+outside the repository and publishes port 8002 only on localhost. The default
+two build threads are intentionally conservative for an 8 GiB host.
+Do not increase the count until the initial graph build succeeds while memory
+pressure is monitored.
 
 ```bash
-mkdir -p /private/tmp/atlas-valhalla/custom_files
-curl -fL \
-  --output /private/tmp/atlas-valhalla/custom_files/Austin.osm.pbf \
-  https://download.bbbike.org/osm/bbbike/Austin/Austin.osm.pbf
+sudo install -d -o "$USER" -g "$USER" /srv/atlas-valhalla/custom_files
+cp infra/valhalla/host.env.example infra/valhalla/host.env
 
-container system start
-container run -d --name atlas-valhalla --cpus 6 --memory 12g \
-  -p 127.0.0.1:8002:8002 \
-  -v /private/tmp/atlas-valhalla/custom_files:/custom_files \
-  -e build_elevation=True -e build_admins=True -e build_time_zones=True \
-  -e build_tar=True -e server_threads=6 \
-  ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
+# Copy the current Austin.osm.pbf MD5 from BBBike's CHECKSUM.txt. The script
+# refuses a changed extract instead of silently building a different graph.
+scripts/prepare-valhalla-extract.sh \
+  /srv/atlas-valhalla/custom_files \
+  EXPECTED_32_CHARACTER_MD5
 
-curl --fail http://127.0.0.1:8002/status
+docker compose \
+  --env-file infra/valhalla/host.env \
+  --file infra/valhalla/compose.yaml \
+  up --detach
+docker compose \
+  --env-file infra/valhalla/host.env \
+  --file infra/valhalla/compose.yaml \
+  logs --follow valhalla
+scripts/verify-valhalla-host.sh
 ```
 
-The first start builds graph artifacts in `custom_files`; later starts reuse
-them. Record the OSM extract checksum and the `/status` graph version whenever
-the extract or image changes. The feasibility artifact format is documented in
+The source checksum is deliberately supplied at deployment time because
+BBBike's stable URL is updated in place. Keep the generated provenance file
+beside the graph. The first start builds graph and elevation artifacts; later
+starts reuse them. Record the `/status` graph version whenever the extract or
+image changes. The feasibility artifact format is documented in
 [`city-osm-conflation-spike.md`](city-osm-conflation-spike.md).
 
 The `127.0.0.1` binding is intentional. Do not bind Valhalla directly to a LAN
@@ -43,25 +55,33 @@ or public interface.
 ## Publish only through Tunnel and Access
 
 1. In Cloudflare Zero Trust, create a remotely managed Tunnel on the routing
-   host. Run the dashboard-provided `cloudflared` connector command as a
-   persistent service; keep its token outside this repository.
-2. Add an ingress public hostname such as
-   `routing-staging.<your-zone>` whose origin service is
-   `http://127.0.0.1:8002`. This hostname must be a Tunnel hostname, not a
-   Worker route or custom domain; otherwise the Worker can call itself in a
-   loop.
-3. Create a Cloudflare Access self-hosted application for that exact hostname.
-   The default policy must deny requests. Add a service-token policy for the
-   Atlas Worker and create a dedicated service token.
-4. Before configuring the Worker, confirm a request to
-   `https://routing-staging.<your-zone>/status` without the service-token
-   headers is rejected by Access.
+   host. Put its token in the ignored `infra/valhalla/host.env` file. The
+   Compose service runs the digest-pinned connector with host networking so its
+   `127.0.0.1:8002` origin is the host's localhost. Keep the token outside this
+   repository. If the host already has a `cloudflared` service, add this route
+   to that Tunnel instead of starting a second connector.
+2. Add two published application routes to `http://127.0.0.1:8002`:
+   `routing-staging.<your-zone>` for previews and `routing.<your-zone>` for
+   production. These must be Tunnel hostnames, not Worker routes or custom
+   domains; otherwise a Worker can call itself in a loop.
+3. Create a separate Cloudflare Access self-hosted application and dedicated
+   service token for each hostname. Each application must have a `Service Auth`
+   policy that includes only its environment's token. Requests not matching a
+   service-auth policy are denied by default. Never reuse the preview token in
+   production.
+4. Before configuring either Worker, confirm requests to both provider
+   hostnames without their service-token headers are rejected by Access.
 
 ## Configure the Worker
 
-In the staging Worker's Cloudflare dashboard variables, set:
+The non-secret provider URLs are committed in `wrangler.jsonc`:
 
-- `ROUTING_URL=https://routing-staging.<your-zone>` as plaintext.
+- production: `ROUTING_URL=https://routing.ryanshores.us`
+- preview: `ROUTING_URL=https://routing-staging.ryanshores.us`
+
+Set the following as encrypted secrets on each Worker, using its dedicated
+Access token:
+
 - `ROUTING_ACCESS_CLIENT_ID` as an encrypted secret.
 - `ROUTING_ACCESS_CLIENT_SECRET` as an encrypted secret.
 
@@ -72,17 +92,19 @@ the API returns a 503 without sending a provider request. Provider redirects
 are rejected rather than followed, so service-token headers cannot be sent to
 an unexpected origin.
 
-## Staging verification
+## Environment verification
 
-With all configuration present, verify from the Atlas preview hostname:
+With all configuration present, verify both Atlas environments:
 
 ```bash
 curl --fail https://<atlas-preview-host>/api/routing-health
+curl --fail https://<atlas-production-host>/api/routing-health
 ```
 
 Then submit an Austin-area route to `POST /api/routes` and verify that its
-elevation profile is returned. Confirm in browser developer tools that clients
-only call Atlas `/api/routes`; they must not call `routing-staging` directly.
+elevation profile is returned in each environment. Confirm in browser developer
+tools that clients only call Atlas `/api/routes`; they must not call either
+provider hostname directly.
 
 If the Tunnel, Access policy, or local host is unavailable, leave routing
 disabled rather than bypassing Access or exposing the local Valhalla port.

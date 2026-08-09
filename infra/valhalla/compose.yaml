@@ -1,0 +1,41 @@
+name: atlas-valhalla
+
+services:
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:2bafe8a908da3f538caabf867350d4e7c3dfb6e9a7e286bcf7a4cfa0f90b5e57
+    platform: "${VALHALLA_PLATFORM:-linux/amd64}"
+    container_name: atlas-valhalla
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8002:8002"
+    volumes:
+      - "${VALHALLA_DATA_DIR:?set VALHALLA_DATA_DIR}:/custom_files"
+    environment:
+      build_elevation: "True"
+      build_admins: "True"
+      build_time_zones: "True"
+      build_tar: "True"
+      server_threads: "${VALHALLA_SERVER_THREADS:-2}"
+      serve_tiles: "True"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8002/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10m
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest@sha256:e39ee8da81ad5e05d77f38d2f51c60ca51bf2a8450ac3abab50c17fdb91d91bf
+    platform: "${VALHALLA_PLATFORM:-linux/amd64}"
+    container_name: atlas-valhalla-cloudflared
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      valhalla:
+        condition: service_healthy
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - "${TUNNEL_TOKEN:?set TUNNEL_TOKEN outside the repository}"
