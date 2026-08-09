@@ -12,7 +12,7 @@ import {
   smoothingWeight,
 } from "./location-accuracy";
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
-import { loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
+import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
 import { formatMiles } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
 import RoutePlanner, {
@@ -536,6 +536,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
     setTracking(false);
+    clearRouteGuidance(sessionStorage);
+    setActiveGuidance(null);
     setOrientation("north");
     const map = mapRef.current;
     locationMarkerRef.current?.remove();

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  clearRouteGuidance,
   loadRouteGuidance,
   ROUTE_GUIDANCE_MAX_AGE_MS,
   ROUTE_GUIDANCE_STORAGE_KEY,
@@ -102,4 +103,13 @@ test("guidance rejects unsupported, malformed, and stale payloads", () => {
     assert.equal(loadRouteGuidance(storage, readAt), null);
     assert.equal(storage.value(), null);
   }
+});
+
+test("completed guidance can be cleared without affecting interrupted-session retention", () => {
+  const storage = memoryStorage();
+  saveRouteGuidance(storage, guidance, now);
+
+  assert.equal(loadRouteGuidance(storage, now + 1000)?.route.totalMiles, 4.2);
+  assert.equal(clearRouteGuidance(storage), true);
+  assert.equal(loadRouteGuidance(storage, now + 2000), null);
 });

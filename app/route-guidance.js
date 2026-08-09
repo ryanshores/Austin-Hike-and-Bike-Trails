@@ -75,3 +75,12 @@ export function loadRouteGuidance(storage, now = Date.now()) {
     return null;
   }
 }
+
+export function clearRouteGuidance(storage) {
+  try {
+    storage.removeItem(ROUTE_GUIDANCE_STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
