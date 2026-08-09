@@ -3,6 +3,7 @@ import {
   SafetyFinding,
   classifyRouteEdge,
 } from "../worker/route-safety.js";
+import { isDeepStrictEqual } from "node:util";
 import { distanceMeters, pointToSegmentMeters } from "./conflation-evaluator.js";
 
 const METERS_PER_MILE = 1_609.344;
@@ -309,5 +310,64 @@ export function buildRoutingEnrichment({
       ).length,
     },
     edges,
+  };
+}
+
+function validExpectedManifest(expectedManifest) {
+  if (expectedManifest === undefined || expectedManifest === null) return {};
+  if (typeof expectedManifest !== "object" || Array.isArray(expectedManifest)) {
+    throw new Error("Expected enrichment manifest pins must be an object.");
+  }
+  return Object.fromEntries(
+    Object.entries(expectedManifest).map(([field, value]) => [field, String(value)]),
+  );
+}
+
+/**
+ * Rebuild an enrichment artifact from its pinned inputs before a provider
+ * installs it. This deliberately checks every normalized edge and summary so
+ * a valid-looking manifest cannot mask a truncated or hand-edited sidecar.
+ */
+export function verifyRoutingEnrichment({
+  enrichment,
+  cityCollection,
+  routingEdgeCollection,
+  cityDatasetSha256,
+  routingEdgesSha256,
+  expectedManifest,
+} = {}) {
+  if (enrichment?.schemaVersion !== 1) {
+    throw new Error("Routing enrichment must use schemaVersion 1.");
+  }
+  const manifest = enrichment.manifest;
+  const pinnedManifest = validatedManifest(manifest);
+  if (pinnedManifest.cityDatasetSha256 !== String(cityDatasetSha256 ?? "")) {
+    throw new Error("Routing enrichment City dataset SHA-256 does not match the supplied input.");
+  }
+  if (pinnedManifest.routingEdgesSha256 !== String(routingEdgesSha256 ?? "")) {
+    throw new Error("Routing enrichment routing-edge SHA-256 does not match the supplied input.");
+  }
+
+  const expectedPins = validExpectedManifest(expectedManifest);
+  for (const [field, value] of Object.entries(expectedPins)) {
+    if (manifest[field] !== value) {
+      throw new Error(`Routing enrichment manifest ${field} does not match the expected value.`);
+    }
+  }
+
+  const rebuilt = buildRoutingEnrichment({
+    cityCollection,
+    routingEdgeCollection,
+    manifest,
+    toleranceMeters: manifest.toleranceMeters,
+    sampleSpacingMeters: manifest.sampleSpacingMeters,
+    minimumCoverage: manifest.minimumCoverage,
+  });
+  if (!isDeepStrictEqual(rebuilt, enrichment)) {
+    throw new Error("Routing enrichment does not exactly match a rebuild from its pinned inputs.");
+  }
+  return {
+    manifest: rebuilt.manifest,
+    summary: rebuilt.summary,
   };
 }
