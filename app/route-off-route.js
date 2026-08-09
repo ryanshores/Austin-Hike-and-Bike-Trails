@@ -43,9 +43,6 @@ export function updateOffRouteState(
     timeAwareLookaheadMiles,
   );
   const corridorMeters = guidanceRouteMatchCorridorMeters(point.accuracyMeters);
-  const lastTrustedTimestamp = Number.isFinite(timestamp)
-    ? timestamp
-    : previous.lastTrustedTimestamp;
   if (distanceMeters > corridorMeters) {
     const consecutiveOffRouteSamples = previous.consecutiveOffRouteSamples + 1;
     const confirmed = consecutiveOffRouteSamples >= OFF_ROUTE_CONFIRMATION_SAMPLES
@@ -55,7 +52,10 @@ export function updateOffRouteState(
       consecutiveOffRouteSamples,
       consecutiveOnRouteSamples: 0,
       distanceMeters,
-      lastTrustedTimestamp,
+      // Preserve the timestamp of the last route match. Off-route samples can
+      // arrive continuously while a rider takes a detour, and must not shrink
+      // the recovery window when they later rejoin farther along the route.
+      lastTrustedTimestamp: previous.lastTrustedTimestamp,
     };
   }
 
@@ -67,7 +67,9 @@ export function updateOffRouteState(
     consecutiveOffRouteSamples: 0,
     consecutiveOnRouteSamples,
     distanceMeters,
-    lastTrustedTimestamp,
+    lastTrustedTimestamp: !remainsConfirmed && Number.isFinite(timestamp)
+      ? timestamp
+      : previous.lastTrustedTimestamp,
   };
 }
 

@@ -181,11 +181,70 @@ test("a trustworthy on-route fix can recover progress after a long signal gap", 
   assert.ok(committed.progressMiles > trustedProgress.progressMiles + 0.25);
 });
 
+test("off-route detour samples preserve the recovery window from the last route match", () => {
+  const longRoute = {
+    geometry: {
+      type: "LineString",
+      coordinates: [[-97.75, 30.26], [-97.65, 30.26]],
+    },
+    totalMiles: 5,
+    maneuvers: [],
+    divergences: [],
+  };
+  const trustedProgress = {
+    ...initialGuidanceProgress(longRoute),
+    progressMiles: 0.3,
+    remainingMiles: 4.7,
+  };
+  let state = updateOffRouteState(longRoute, initialOffRouteState(), {
+    accuracyMeters: 10,
+    latitude: 30.26,
+    longitude: -97.744,
+    timestamp: 0,
+  }, trustedProgress.progressMiles);
+
+  for (const timestamp of [30_000, 60_000, 90_000]) {
+    state = updateOffRouteState(longRoute, state, {
+      accuracyMeters: 10,
+      latitude: 30.2605,
+      longitude: -97.744,
+      timestamp,
+    }, trustedProgress.progressMiles);
+    assert.equal(state.lastTrustedTimestamp, 0);
+  }
+
+  const rejoinedPoint = {
+    accuracyMeters: 10,
+    latitude: 30.26,
+    longitude: -97.736,
+    timestamp: 120_000,
+  };
+  const firstRejoined = updateOffRouteState(
+    longRoute,
+    state,
+    rejoinedPoint,
+    trustedProgress.progressMiles,
+  );
+  const rejoined = updateOffRouteState(longRoute, firstRejoined, {
+    ...rejoinedPoint,
+    timestamp: 150_000,
+  }, trustedProgress.progressMiles);
+  const candidate = updateGuidanceProgress(longRoute, trustedProgress, rejoinedPoint);
+
+  assert.equal(state.status, "off-route");
+  assert.equal(firstRejoined.status, "off-route");
+  assert.equal(firstRejoined.lastTrustedTimestamp, 0);
+  assert.equal(rejoined.status, "on-route");
+  assert.equal(rejoined.lastTrustedTimestamp, 150_000);
+  assert.equal(guidanceProgressAfterOffRouteCheck(trustedProgress, candidate, rejoined), candidate);
+});
+
 test("rerouting requires a recent trustworthy fix timestamp", () => {
   const now = 100_000;
 
   assert.equal(rerouteFixIsFresh({ timestamp: now - 15_000 }, now), true);
   assert.equal(rerouteFixIsFresh({ timestamp: now - 15_001 }, now), false);
+  assert.equal(rerouteFixIsFresh({ timestamp: now - 15_000 }, now + 1), false);
   assert.equal(rerouteFixIsFresh({ timestamp: now + 1 }, now), false);
   assert.equal(rerouteFixIsFresh({}, now), false);
 });

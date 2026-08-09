@@ -639,6 +639,11 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       });
       const value: unknown = await response.json().catch(() => ({}));
       if (rerouteControllerRef.current !== controller || controller.signal.aborted) return;
+      if (!rerouteFixIsFresh(point)) {
+        setRerouteFixFresh(false);
+        setRerouteMessage("");
+        return;
+      }
       if (!response.ok) {
         setRerouteMessage(routeErrorMessage(response.status, value));
         return;
