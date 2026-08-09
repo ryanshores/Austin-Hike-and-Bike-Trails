@@ -60,6 +60,19 @@ function routeMilesAtIndex(cumulativeMeters, index, scale) {
   return cumulativeMeters[boundedIndex] / METERS_PER_MILE * scale;
 }
 
+function maneuverEndMiles(route, maneuverIndex, cumulativeMeters, scale) {
+  const indexedEnd = routeMilesAtIndex(
+    cumulativeMeters,
+    route.maneuvers[maneuverIndex].endShapeIndex,
+    scale,
+  );
+  if (indexedEnd !== null) return indexedEnd;
+  const cumulativeManeuverMiles = route.maneuvers
+    .slice(0, maneuverIndex + 1)
+    .reduce((sum, maneuver) => sum + maneuver.distanceMiles, 0);
+  return Math.min(route.totalMiles, cumulativeManeuverMiles);
+}
+
 function divergenceRanges(route, cumulativeMeters, scale) {
   return route.divergences.map((divergence) => {
     const coordinates = divergence.geometry.coordinates;
@@ -98,17 +111,17 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
 
   let maneuverIndex = previous.maneuverIndex;
   while (maneuverIndex !== null && maneuverIndex < route.maneuvers.length) {
-    const maneuverEnd = routeMilesAtIndex(cumulativeMeters, route.maneuvers[maneuverIndex].endShapeIndex, scale);
-    if (maneuverEnd === null || progressMiles < maneuverEnd + MANEUVER_PASS_TOLERANCE_MILES) break;
+    const maneuverEnd = maneuverEndMiles(route, maneuverIndex, cumulativeMeters, scale);
+    if (progressMiles < maneuverEnd + MANEUVER_PASS_TOLERANCE_MILES) break;
     maneuverIndex += 1;
     if (maneuverIndex >= route.maneuvers.length) maneuverIndex = null;
   }
   const maneuverEnd = maneuverIndex === null
     ? null
-    : routeMilesAtIndex(cumulativeMeters, route.maneuvers[maneuverIndex].endShapeIndex, scale);
+    : maneuverEndMiles(route, maneuverIndex, cumulativeMeters, scale);
   const maneuverDistanceMiles = maneuverIndex === null
     ? null
-    : Math.max(0, (maneuverEnd ?? progressMiles + route.maneuvers[maneuverIndex].distanceMiles) - progressMiles);
+    : Math.max(0, maneuverEnd - progressMiles);
 
   const nextDivergence = divergenceRanges(route, cumulativeMeters, scale)
     .find((divergence) => divergence.endMiles > progressMiles

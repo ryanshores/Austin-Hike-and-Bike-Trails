@@ -13,6 +13,7 @@ import {
 } from "./location-accuracy";
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
+import { RouteGuidanceCard } from "./route-guidance-card.js";
 import { initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
 import { formatMiles } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
@@ -843,22 +844,12 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
           </div>
         )}
         {isRide && tracking && activeGuidance && (
-          <aside className="ride-guidance-card" aria-label="Active route guidance" aria-live="polite">
-            <div>
-              <p className="eyebrow">{guidanceProgress?.safetyWarning ? "Lower-safety section" : "Next direction"}</p>
-              <h2>{guidanceProgress?.safetyWarning
-                ? `${guidanceProgress.safetyWarning.active ? "Use care" : "Ahead"}: ${guidanceProgress.safetyWarning.reason}`
-                : activeManeuver?.instruction ?? "Follow the highlighted route."}</h2>
-            </div>
-            <p>
-              <strong>{guidanceProgress?.safetyWarning
-                ? guidanceProgress.safetyWarning.active ? "Now" : formatMiles(guidanceProgress.safetyWarning.distanceMiles)
-                : activeManeuver && guidanceProgress?.maneuverDistanceMiles !== null
-                  ? formatMiles(guidanceProgress?.maneuverDistanceMiles ?? activeManeuver.distanceMiles)
-                  : "Route"}</strong>
-              <span>{formatMiles(guidanceProgress?.remainingMiles ?? activeGuidance.route.totalMiles)} remaining to {activeGuidance.endpoints.destination.label}</span>
-            </p>
-          </aside>
+          <RouteGuidanceCard
+            destinationLabel={activeGuidance.endpoints.destination.label}
+            maneuver={activeManeuver}
+            progress={guidanceProgress}
+            totalMiles={activeGuidance.route.totalMiles}
+          />
         )}
         {tracking && (
           <div className="orientation-control" role="group" aria-label="Map orientation">

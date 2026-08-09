@@ -51,6 +51,24 @@ test("maneuvers advance only after their route threshold is passed", () => {
   assert.ok(passed.maneuverDistanceMiles < route.maneuvers[1].distanceMiles);
 });
 
+test("maneuvers without shape indices advance from cumulative maneuver miles", () => {
+  const indexFreeRoute = {
+    ...route,
+    maneuvers: route.maneuvers.map((maneuver) => ({
+      instruction: maneuver.instruction,
+      distanceMiles: maneuver.distanceMiles,
+    })),
+  };
+  const initial = initialGuidanceProgress(indexFreeRoute);
+  const beforeThreshold = updateGuidanceProgress(indexFreeRoute, initial, { latitude: 30.26, longitude: -97.7401 });
+  const passed = updateGuidanceProgress(indexFreeRoute, beforeThreshold, { latitude: 30.26, longitude: -97.7397 });
+
+  assert.equal(beforeThreshold.maneuverIndex, 0);
+  assert.ok(beforeThreshold.maneuverDistanceMiles < 0.02);
+  assert.equal(passed.maneuverIndex, 1);
+  assert.ok(passed.maneuverDistanceMiles < indexFreeRoute.maneuvers[1].distanceMiles);
+});
+
 test("lower-safety warnings appear before entry, remain active within, and clear after passing", () => {
   const initial = initialGuidanceProgress(route);
   const approaching = updateGuidanceProgress(route, initial, { latitude: 30.26, longitude: -97.7385 });
