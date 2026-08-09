@@ -1,6 +1,6 @@
 import { createElement } from "react";
 
-export function RouteOffRouteAlert({ busy, message, onReroute }) {
+export function RouteOffRouteAlert({ busy, fixFresh, message, onReroute }) {
   return createElement(
     "aside",
     { className: "ride-off-route-alert", role: "alert", "aria-live": "assertive" },
@@ -12,13 +12,15 @@ export function RouteOffRouteAlert({ busy, message, onReroute }) {
       createElement(
         "span",
         null,
-        message || "Rerouting uses your last trustworthy GPS fix and keeps your safety preference.",
+        message || (fixFresh
+          ? "Rerouting uses your last trustworthy GPS fix and keeps your safety preference."
+          : "Waiting for a fresh good or fair GPS fix before rerouting."),
       ),
     ),
     createElement(
       "button",
-      { type: "button", disabled: busy, onClick: onReroute },
-      busy ? "Finding route…" : "Reroute",
+      { type: "button", disabled: busy || !fixFresh, onClick: onReroute },
+      busy ? "Finding route…" : fixFresh ? "Reroute" : "Waiting for GPS",
     ),
   );
 }

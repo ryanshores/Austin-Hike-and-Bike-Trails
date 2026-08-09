@@ -2,6 +2,7 @@ import {
   guidanceRouteDistanceMeters,
   guidanceRouteMatchCorridorMeters,
 } from "./route-guidance-progress.js";
+import { MAX_FIX_AGE_MS } from "./location-accuracy.js";
 
 export const OFF_ROUTE_CONFIRMATION_SAMPLES = 3;
 export const OFF_ROUTE_CLEAR_SAMPLES = 2;
@@ -16,9 +17,15 @@ export function initialOffRouteState() {
   };
 }
 
-export function updateOffRouteState(route, previous, point, accepted = true) {
+export function updateOffRouteState(
+  route,
+  previous,
+  point,
+  progressMiles = 0,
+  accepted = true,
+) {
   if (!accepted) return previous;
-  const distanceMeters = guidanceRouteDistanceMeters(route, point);
+  const distanceMeters = guidanceRouteDistanceMeters(route, point, progressMiles);
   const corridorMeters = guidanceRouteMatchCorridorMeters(point.accuracyMeters);
   if (distanceMeters > corridorMeters) {
     const consecutiveOffRouteSamples = previous.consecutiveOffRouteSamples + 1;
@@ -41,6 +48,13 @@ export function updateOffRouteState(route, previous, point, accepted = true) {
     consecutiveOnRouteSamples,
     distanceMeters,
   };
+}
+
+export function rerouteFixIsFresh(point, now = Date.now()) {
+  const timestamp = Number(point?.timestamp);
+  return Number.isFinite(timestamp)
+    && timestamp <= now
+    && now - timestamp <= MAX_FIX_AGE_MS;
 }
 
 export function rerouteRequest(guidance, point) {

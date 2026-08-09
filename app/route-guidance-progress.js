@@ -5,6 +5,8 @@ export const MANEUVER_PASS_TOLERANCE_MILES = 0.015;
 export const MAX_PROGRESS_ADVANCE_MILES = 0.2;
 export const ROUTE_MATCH_AMBIGUITY_METERS = 100;
 export const ROUTE_MATCH_CORRIDOR_METERS = 35;
+export const ROUTE_MATCH_LOOKBEHIND_MILES = 0.05;
+export const ROUTE_MATCH_LOOKAHEAD_MILES = 0.25;
 
 const routeAnalysisCache = new WeakMap();
 
@@ -94,9 +96,26 @@ function projectPoint(
   );
 }
 
-export function guidanceRouteDistanceMeters(route, point) {
-  const { coordinates, cumulativeMeters } = prepareGuidanceRoute(route);
-  return projectPoint(coordinates, cumulativeMeters, point).distanceMeters;
+export function guidanceRouteDistanceMeters(route, point, progressMiles = 0) {
+  const { coordinates, cumulativeMeters, scale } = prepareGuidanceRoute(route);
+  const minimumProgressMiles = Math.max(0, progressMiles - ROUTE_MATCH_LOOKBEHIND_MILES);
+  const maximumProgressMiles = Math.min(
+    route.totalMiles,
+    progressMiles + ROUTE_MATCH_LOOKAHEAD_MILES,
+  );
+  const minimumAlongMeters = scale > 0
+    ? minimumProgressMiles / scale * METERS_PER_MILE
+    : 0;
+  const maximumAlongMeters = scale > 0
+    ? maximumProgressMiles / scale * METERS_PER_MILE
+    : cumulativeMeters[cumulativeMeters.length - 1];
+  return projectPoint(
+    coordinates,
+    cumulativeMeters,
+    point,
+    minimumAlongMeters,
+    maximumAlongMeters,
+  ).distanceMeters;
 }
 
 export function guidanceRouteMatchCorridorMeters(accuracyMeters) {
