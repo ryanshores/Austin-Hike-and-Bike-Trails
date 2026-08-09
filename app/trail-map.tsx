@@ -14,7 +14,7 @@ import {
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
 import { RouteGuidanceCard } from "./route-guidance-card.js";
-import { initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
+import { guidanceQualityCanAdvance, initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
 import { formatMiles } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
 import RoutePlanner, {
@@ -631,11 +631,15 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       lastAccuracyRef.current = position.coords.accuracy;
       lastTimestampRef.current = position.timestamp;
       appendDiagnostic({ ...baseSample, accepted: true, action: "use-fix" });
-      if (activeGuidance) {
+      if (activeGuidance && guidanceQualityCanAdvance(quality)) {
         setGuidanceProgress((current) => updateGuidanceProgress(
           activeGuidance.route,
           current ?? initialGuidanceProgress(activeGuidance.route),
-          { latitude: latlng.lat, longitude: latlng.lng },
+          {
+            accuracyMeters: position.coords.accuracy,
+            latitude: latlng.lat,
+            longitude: latlng.lng,
+          },
         ));
       }
       rideRecorderRef.current?.record({

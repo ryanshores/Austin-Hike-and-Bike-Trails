@@ -4,6 +4,7 @@ export const DIVERGENCE_WARNING_MILES = 0.25;
 export const MANEUVER_PASS_TOLERANCE_MILES = 0.015;
 export const MAX_PROGRESS_ADVANCE_MILES = 0.2;
 export const ROUTE_MATCH_AMBIGUITY_METERS = 100;
+export const ROUTE_MATCH_CORRIDOR_METERS = 35;
 
 function radians(value) {
   return value * Math.PI / 180;
@@ -27,12 +28,19 @@ function routeMeasure(coordinates) {
   return cumulativeMeters;
 }
 
-function projectPoint(coordinates, cumulativeMeters, point, maxAlongMeters = Number.POSITIVE_INFINITY) {
+function pointProjections(
+  coordinates,
+  cumulativeMeters,
+  point,
+  minAlongMeters = 0,
+  maxAlongMeters = Number.POSITIVE_INFINITY,
+) {
   const latitudeScale = 111_320;
   const longitudeScale = latitudeScale * Math.cos(radians(point.latitude));
-  let best = null;
+  const projections = [];
 
   for (let index = 0; index < coordinates.length - 1; index += 1) {
+    if (cumulativeMeters[index + 1] < minAlongMeters) continue;
     if (cumulativeMeters[index] > maxAlongMeters) break;
     const start = coordinates[index];
     const end = coordinates[index + 1];
@@ -47,20 +55,41 @@ function projectPoint(coordinates, cumulativeMeters, point, maxAlongMeters = Num
       ? 0
       : Math.max(0, Math.min(1, -(startX * deltaX + startY * deltaY) / squaredLength));
     const segmentMeters = cumulativeMeters[index + 1] - cumulativeMeters[index];
+    const minimumFraction = segmentMeters === 0
+      ? 0
+      : Math.max(0, Math.min(1, (minAlongMeters - cumulativeMeters[index]) / segmentMeters));
     const maximumFraction = segmentMeters === 0
       ? 1
       : Math.max(0, Math.min(1, (maxAlongMeters - cumulativeMeters[index]) / segmentMeters));
-    const fraction = Math.min(nearestFraction, maximumFraction);
+    const fraction = Math.max(minimumFraction, Math.min(nearestFraction, maximumFraction));
     const projectedX = startX + deltaX * fraction;
     const projectedY = startY + deltaY * fraction;
     const distance = Math.hypot(projectedX, projectedY);
     const alongMeters = cumulativeMeters[index] + segmentMeters * fraction;
-    if (!best || distance < best.distanceMeters) {
-      best = { alongMeters, distanceMeters: distance, segmentIndex: index };
-    }
+    projections.push({ alongMeters, distanceMeters: distance, segmentIndex: index });
   }
 
-  return best ?? { alongMeters: 0, distanceMeters: Number.POSITIVE_INFINITY, segmentIndex: 0 };
+  return projections;
+}
+
+function projectPoint(
+  coordinates,
+  cumulativeMeters,
+  point,
+  minAlongMeters = 0,
+  maxAlongMeters = Number.POSITIVE_INFINITY,
+) {
+  const projections = pointProjections(
+    coordinates,
+    cumulativeMeters,
+    point,
+    minAlongMeters,
+    maxAlongMeters,
+  );
+  return projections.reduce(
+    (best, candidate) => candidate.distanceMeters < best.distanceMeters ? candidate : best,
+    { alongMeters: minAlongMeters, distanceMeters: Number.POSITIVE_INFINITY, segmentIndex: 0 },
+  );
 }
 
 function segmentIndexAtAlong(cumulativeMeters, alongMeters) {
@@ -90,19 +119,53 @@ function maneuverEndMiles(route, maneuverIndex, cumulativeMeters, scale) {
 }
 
 function divergenceRanges(route, cumulativeMeters, scale) {
+  let minimumAlongMeters = 0;
   return route.divergences.map((divergence) => {
     const coordinates = divergence.geometry.coordinates;
-    const start = projectPoint(route.geometry.coordinates, cumulativeMeters, {
+    const startPoint = {
       longitude: coordinates[0][0],
       latitude: coordinates[0][1],
-    }).alongMeters / METERS_PER_MILE * scale;
+    };
     const last = coordinates[coordinates.length - 1];
-    const end = projectPoint(route.geometry.coordinates, cumulativeMeters, {
+    const endPoint = {
       longitude: last[0],
       latitude: last[1],
-    }).alongMeters / METERS_PER_MILE * scale;
-    return { ...divergence, startMiles: Math.min(start, end), endMiles: Math.max(start, end) };
-  }).sort((left, right) => left.startMiles - right.startMiles);
+    };
+    const starts = pointProjections(
+      route.geometry.coordinates,
+      cumulativeMeters,
+      startPoint,
+      minimumAlongMeters,
+    );
+    const ends = pointProjections(
+      route.geometry.coordinates,
+      cumulativeMeters,
+      endPoint,
+      minimumAlongMeters,
+    );
+    const expectedMeters = scale > 0 ? divergence.miles / scale * METERS_PER_MILE : 0;
+    let bestRange = null;
+    for (const start of starts) {
+      for (const end of ends) {
+        if (end.alongMeters < start.alongMeters) continue;
+        const score = start.distanceMeters + end.distanceMeters
+          + Math.abs(end.alongMeters - start.alongMeters - expectedMeters);
+        if (!bestRange || score < bestRange.score) bestRange = { start, end, score };
+      }
+    }
+    const startAlongMeters = bestRange?.start.alongMeters ?? minimumAlongMeters;
+    const endAlongMeters = bestRange?.end.alongMeters ?? startAlongMeters;
+    minimumAlongMeters = endAlongMeters;
+    return {
+      ...divergence,
+      startMiles: startAlongMeters / METERS_PER_MILE * scale,
+      endMiles: endAlongMeters / METERS_PER_MILE * scale,
+    };
+  });
+}
+
+export function guidanceQualityCanAdvance(quality) {
+  return quality === "good" || quality === "fair";
 }
 
 export function initialGuidanceProgress(route) {
@@ -133,7 +196,12 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
     : 0;
   const previousSegmentIndex = segmentIndexAtAlong(cumulativeMeters, previousAlongMeters);
   const nearestProjection = projectPoint(coordinates, cumulativeMeters, point);
-  const boundedProjection = projectPoint(coordinates, cumulativeMeters, point, maxAlongMeters);
+  const routeMatchCorridorMeters = Math.max(
+    ROUTE_MATCH_CORRIDOR_METERS,
+    Math.min(75, Number(point.accuracyMeters) || 0),
+  );
+  if (nearestProjection.distanceMeters > routeMatchCorridorMeters) return previous;
+  const boundedProjection = projectPoint(coordinates, cumulativeMeters, point, 0, maxAlongMeters);
   const projected = nearestProjection.segmentIndex > previousSegmentIndex + 1
     && nearestProjection.alongMeters > maxAlongMeters
     && boundedProjection.distanceMeters <= nearestProjection.distanceMeters + ROUTE_MATCH_AMBIGUITY_METERS

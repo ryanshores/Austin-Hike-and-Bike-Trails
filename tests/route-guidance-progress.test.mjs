@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  guidanceQualityCanAdvance,
   initialGuidanceProgress,
   MAX_PROGRESS_ADVANCE_MILES,
   updateGuidanceProgress,
@@ -74,7 +75,7 @@ test("lower-safety warnings appear before entry, remain active within, and clear
   const initial = initialGuidanceProgress(route);
   const approaching = updateGuidanceProgress(route, initial, { latitude: 30.26, longitude: -97.7385 });
   const active = updateGuidanceProgress(route, approaching, { latitude: 30.26, longitude: -97.734 });
-  const passed = updateGuidanceProgress(route, active, { latitude: 30.26, longitude: -97.7295 });
+  const passed = updateGuidanceProgress(route, active, { latitude: 30.26, longitude: -97.73 });
 
   assert.equal(approaching.safetyWarning?.reason, "unprotected bike lane");
   assert.equal(approaching.safetyWarning?.active, false);
@@ -92,6 +93,24 @@ test("guidance changes only when the caller supplies an accepted point", () => {
   );
 
   assert.equal(rejected, initial);
+});
+
+test("poor fixes cannot advance precise guidance", () => {
+  assert.equal(guidanceQualityCanAdvance("good"), true);
+  assert.equal(guidanceQualityCanAdvance("fair"), true);
+  assert.equal(guidanceQualityCanAdvance("poor"), false);
+  assert.equal(guidanceQualityCanAdvance("unusable"), false);
+});
+
+test("precise fixes outside the route corridor retain the last guidance state", () => {
+  const initial = initialGuidanceProgress(route);
+  const offRoute = updateGuidanceProgress(route, initial, {
+    accuracyMeters: 8,
+    latitude: 30.261,
+    longitude: -97.74,
+  });
+
+  assert.equal(offRoute, initial);
 });
 
 test("nearby later route legs cannot skip guidance at a self-crossing", () => {
@@ -123,4 +142,43 @@ test("nearby later route legs cannot skip guidance at a self-crossing", () => {
 
   assert.ok(ambiguousFix.progressMiles <= MAX_PROGRESS_ADVANCE_MILES + Number.EPSILON);
   assert.equal(ambiguousFix.maneuverIndex, 0);
+});
+
+test("overlapping divergence geometry matches the correct route traversal", () => {
+  const overlappingRoute = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [-97.75, 30.26],
+        [-97.74, 30.26],
+        [-97.73, 30.26],
+        [-97.74, 30.26],
+        [-97.74, 30.27],
+      ],
+    },
+    totalMiles: 3,
+    maneuvers: [],
+    divergences: [{
+      miles: 0.8,
+      reason: "lower-safety later leg",
+      geometry: {
+        type: "LineString",
+        coordinates: [[-97.74, 30.26], [-97.74, 30.27]],
+      },
+    }],
+  };
+  const initial = initialGuidanceProgress(overlappingRoute);
+  const firstVisit = updateGuidanceProgress(overlappingRoute, initial, {
+    latitude: 30.26,
+    longitude: -97.74,
+  });
+  const laterVisit = updateGuidanceProgress(
+    overlappingRoute,
+    { ...initial, progressMiles: 2.15, remainingMiles: 0.85 },
+    { latitude: 30.2601, longitude: -97.74 },
+  );
+
+  assert.equal(firstVisit.safetyWarning, null);
+  assert.equal(laterVisit.safetyWarning?.reason, "lower-safety later leg");
+  assert.equal(laterVisit.safetyWarning?.active, true);
 });
