@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { locationFixAction } from "./location-accuracy";
 import {
   formatFeet,
   formatMiles,
+  nextComboboxOptionIndex,
   normalizePlannedRoute,
   routeErrorMessage,
   routeRequestIsCurrent,
@@ -79,6 +80,7 @@ export default function RoutePlanner({
     target: PlanningEndpointKey;
     results: GeocodeResult[];
     attribution: string;
+    activeResultIndex: number;
   } | null>(null);
   const [busy, setBusy] = useState<PlanningEndpointKey | "route" | "location" | null>(null);
   const [message, setMessage] = useState("");
@@ -135,7 +137,11 @@ export default function RoutePlanner({
         return;
       }
       const normalized = geocodeResults(value);
-      setSearch({ target, ...normalized });
+      setSearch({
+        target,
+        ...normalized,
+        activeResultIndex: normalized.results.length > 0 ? 0 : -1,
+      });
       if (normalized.results.length === 0) {
         setMessage("No Austin-area matches were found. Try a more specific address or place.");
       }
@@ -153,6 +159,30 @@ export default function RoutePlanner({
     setSearch(null);
     setMessage("");
     onMapTargetChange(null);
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>, target: PlanningEndpointKey) {
+    if (search?.target !== target) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSearch(null);
+      return;
+    }
+    if (event.key === "Enter" && search.results[search.activeResultIndex]) {
+      event.preventDefault();
+      chooseResult(target, search.results[search.activeResultIndex]);
+      return;
+    }
+    const nextIndex = nextComboboxOptionIndex(
+      search.results.length,
+      search.activeResultIndex,
+      event.key,
+    );
+    if (nextIndex === null) return;
+    event.preventDefault();
+    setSearch((current) => current?.target === target
+      ? { ...current, activeResultIndex: nextIndex }
+      : current);
   }
 
   function clearEndpoint(target: PlanningEndpointKey) {
@@ -278,6 +308,11 @@ export default function RoutePlanner({
   function endpointEditor(target: PlanningEndpointKey, label: string) {
     const endpoint = endpoints[target];
     const choosingOnMap = activeMapTarget === target;
+    const hasSearchResults = search?.target === target && search.results.length > 0;
+    const resultsId = `planner-${target}-matches`;
+    const activeResultId = hasSearchResults && search.results[search.activeResultIndex]
+      ? `${resultsId}-${search.activeResultIndex}`
+      : undefined;
     return (
       <div className="planner-endpoint">
         <div className="planner-endpoint-heading">
@@ -292,9 +327,19 @@ export default function RoutePlanner({
             onChange={(event) => setQueries((current) => ({ ...current, [target]: event.target.value }))}
             placeholder={`Search ${label.toLowerCase()} address or place`}
             autoComplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls={hasSearchResults ? resultsId : undefined}
+            aria-expanded={hasSearchResults}
+            aria-activedescendant={activeResultId}
+            aria-describedby={`planner-${target}-keyboard-help`}
+            onKeyDown={(event) => handleSearchKeyDown(event, target)}
           />
           <button type="submit" disabled={busy !== null}>{busy === target ? "Searching…" : "Search"}</button>
         </form>
+        <p id={`planner-${target}-keyboard-help`} className="screen-reader-only">
+          After searching, use the up and down arrow keys to choose a result, Enter to select it, or Escape to close the matches.
+        </p>
         {endpoint && <p className="planner-selected"><span aria-hidden="true" />{endpoint.label}</p>}
         <div className="planner-endpoint-actions">
           <button type="button" onClick={() => chooseMyLocation(target)} disabled={busy !== null}>Use my location</button>
@@ -308,9 +353,20 @@ export default function RoutePlanner({
           </button>
         </div>
         {search?.target === target && search.results.length > 0 && (
-          <div className="planner-geocode-results" role="listbox" aria-label={`${label} address matches`}>
-            {search.results.map((result) => (
-              <button key={result.id} type="button" role="option" aria-selected="false" onClick={() => chooseResult(target, result)}>
+          <div id={resultsId} className="planner-geocode-results" role="listbox" aria-label={`${label} address matches`}>
+            {search.results.map((result, index) => (
+              <button
+                key={result.id}
+                id={`${resultsId}-${index}`}
+                type="button"
+                role="option"
+                aria-selected={search.activeResultIndex === index}
+                tabIndex={-1}
+                onMouseMove={() => setSearch((current) => current?.target === target
+                  ? { ...current, activeResultIndex: index }
+                  : current)}
+                onClick={() => chooseResult(target, result)}
+              >
                 <strong>{result.label}</strong>
                 <span>{result.type.replaceAll("_", " ")}</span>
               </button>

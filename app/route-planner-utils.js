@@ -39,6 +39,18 @@ export function routeRequestIsCurrent(activeRequest, request) {
   return activeRequest === request && !request.signal.aborted;
 }
 
+export function nextComboboxOptionIndex(optionCount, activeIndex, key) {
+  if (!Number.isInteger(optionCount) || optionCount < 1) return null;
+  const current = Number.isInteger(activeIndex)
+    ? Math.max(0, Math.min(optionCount - 1, activeIndex))
+    : 0;
+  if (key === "ArrowDown") return Math.min(optionCount - 1, current + 1);
+  if (key === "ArrowUp") return Math.max(0, current - 1);
+  if (key === "Home") return 0;
+  if (key === "End") return optionCount - 1;
+  return null;
+}
+
 function finiteNonNegative(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {

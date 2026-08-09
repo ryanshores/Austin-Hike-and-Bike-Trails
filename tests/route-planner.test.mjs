@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   formatFeet,
   formatMiles,
+  nextComboboxOptionIndex,
   normalizePlannedRoute,
   routeErrorMessage,
   routeRequestIsCurrent,
@@ -44,6 +45,16 @@ test("planner accepts responses only from the current route request", () => {
   assert.equal(routeRequestIsCurrent(second, first), false);
   second.abort();
   assert.equal(routeRequestIsCurrent(second, second), false);
+});
+
+test("planner keyboard navigation keeps a bounded active address match", () => {
+  assert.equal(nextComboboxOptionIndex(3, 0, "ArrowDown"), 1);
+  assert.equal(nextComboboxOptionIndex(3, 2, "ArrowDown"), 2);
+  assert.equal(nextComboboxOptionIndex(3, 0, "ArrowUp"), 0);
+  assert.equal(nextComboboxOptionIndex(3, 1, "Home"), 0);
+  assert.equal(nextComboboxOptionIndex(3, 1, "End"), 2);
+  assert.equal(nextComboboxOptionIndex(3, 1, "Enter"), null);
+  assert.equal(nextComboboxOptionIndex(0, 0, "ArrowDown"), null);
 });
 
 test("planner normalizes only route fields needed by the UI", () => {
