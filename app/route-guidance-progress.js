@@ -96,12 +96,17 @@ function projectPoint(
   );
 }
 
-export function guidanceRouteDistanceMeters(route, point, progressMiles = 0) {
+export function guidanceRouteDistanceMeters(
+  route,
+  point,
+  progressMiles = 0,
+  lookaheadMiles = ROUTE_MATCH_LOOKAHEAD_MILES,
+) {
   const { coordinates, cumulativeMeters, scale } = prepareGuidanceRoute(route);
   const minimumProgressMiles = Math.max(0, progressMiles - ROUTE_MATCH_LOOKBEHIND_MILES);
   const maximumProgressMiles = Math.min(
     route.totalMiles,
-    progressMiles + ROUTE_MATCH_LOOKAHEAD_MILES,
+    progressMiles + Math.max(ROUTE_MATCH_LOOKAHEAD_MILES, lookaheadMiles),
   );
   const minimumAlongMeters = scale > 0
     ? minimumProgressMiles / scale * METERS_PER_MILE

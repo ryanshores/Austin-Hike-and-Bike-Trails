@@ -154,6 +154,33 @@ test("off-route samples cannot commit a projection jump to a later parallel leg"
   assert.equal(trustedProgress.progressMiles, 0.3);
 });
 
+test("a trustworthy on-route fix can recover progress after a long signal gap", () => {
+  const longRoute = {
+    geometry: {
+      type: "LineString",
+      coordinates: [[-97.75, 30.26], [-97.65, 30.26]],
+    },
+    totalMiles: 5,
+    maneuvers: [],
+    divergences: [],
+  };
+  const trustedProgress = {
+    ...initialGuidanceProgress(longRoute),
+    progressMiles: 0.3,
+    remainingMiles: 4.7,
+  };
+  const firstPoint = { accuracyMeters: 10, latitude: 30.26, longitude: -97.744, timestamp: 0 };
+  const recoveredPoint = { accuracyMeters: 10, latitude: 30.26, longitude: -97.736, timestamp: 120_000 };
+  const initialState = updateOffRouteState(longRoute, initialOffRouteState(), firstPoint, 0.3);
+  const recoveredState = updateOffRouteState(longRoute, initialState, recoveredPoint, trustedProgress.progressMiles);
+  const candidate = updateGuidanceProgress(longRoute, trustedProgress, recoveredPoint);
+  const committed = guidanceProgressAfterOffRouteCheck(trustedProgress, candidate, recoveredState);
+
+  assert.equal(recoveredState.status, "on-route");
+  assert.equal(committed, candidate);
+  assert.ok(committed.progressMiles > trustedProgress.progressMiles + 0.25);
+});
+
 test("rerouting requires a recent trustworthy fix timestamp", () => {
   const now = 100_000;
 

@@ -7,6 +7,8 @@ import { MAX_FIX_AGE_MS } from "./location-accuracy.js";
 export const OFF_ROUTE_CONFIRMATION_SAMPLES = 3;
 export const OFF_ROUTE_CLEAR_SAMPLES = 2;
 export const MEANINGFUL_OFF_ROUTE_DISTANCE_METERS = 120;
+export const MAX_GAP_ROUTE_SPEED_MPH = 25;
+export const MAX_GAP_LOOKAHEAD_MILES = 2;
 
 export function initialOffRouteState() {
   return {
@@ -14,6 +16,7 @@ export function initialOffRouteState() {
     consecutiveOffRouteSamples: 0,
     consecutiveOnRouteSamples: 0,
     distanceMeters: null,
+    lastTrustedTimestamp: null,
   };
 }
 
@@ -25,8 +28,24 @@ export function updateOffRouteState(
   accepted = true,
 ) {
   if (!accepted) return previous;
-  const distanceMeters = guidanceRouteDistanceMeters(route, point, progressMiles);
+  const timestamp = Number(point.timestamp);
+  const elapsedMs = Number.isFinite(timestamp) && Number.isFinite(previous.lastTrustedTimestamp)
+    ? Math.max(0, timestamp - previous.lastTrustedTimestamp)
+    : 0;
+  const timeAwareLookaheadMiles = Math.min(
+    MAX_GAP_LOOKAHEAD_MILES,
+    elapsedMs / 3_600_000 * MAX_GAP_ROUTE_SPEED_MPH,
+  );
+  const distanceMeters = guidanceRouteDistanceMeters(
+    route,
+    point,
+    progressMiles,
+    timeAwareLookaheadMiles,
+  );
   const corridorMeters = guidanceRouteMatchCorridorMeters(point.accuracyMeters);
+  const lastTrustedTimestamp = Number.isFinite(timestamp)
+    ? timestamp
+    : previous.lastTrustedTimestamp;
   if (distanceMeters > corridorMeters) {
     const consecutiveOffRouteSamples = previous.consecutiveOffRouteSamples + 1;
     const confirmed = consecutiveOffRouteSamples >= OFF_ROUTE_CONFIRMATION_SAMPLES
@@ -36,6 +55,7 @@ export function updateOffRouteState(
       consecutiveOffRouteSamples,
       consecutiveOnRouteSamples: 0,
       distanceMeters,
+      lastTrustedTimestamp,
     };
   }
 
@@ -47,6 +67,7 @@ export function updateOffRouteState(
     consecutiveOffRouteSamples: 0,
     consecutiveOnRouteSamples,
     distanceMeters,
+    lastTrustedTimestamp,
   };
 }
 
