@@ -1,4 +1,6 @@
-const MAX_EDGE_IDS_PER_QUERY = 200;
+// D1 permits at most 100 bound parameters per query. One belongs to the graph
+// version, leaving at most 99 exact edge IDs in a single lookup.
+const MAX_EDGE_IDS_PER_QUERY = 99;
 
 function validId(value) {
   const id = String(value ?? "").trim();

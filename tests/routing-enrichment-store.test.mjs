@@ -39,10 +39,11 @@ test("D1 enrichment lookup binds exact graph IDs in bounded batches", async () =
     edgeIds: Array.from({ length: 201 }, (_, index) => `edge-${index}`),
   });
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].values[0], "graph-v1");
-  assert.equal(calls[0].values.length, 201);
-  assert.equal(calls[1].values.length, 2);
+  assert.equal(calls[0].values.length, 100);
+  assert.equal(calls[1].values.length, 100);
+  assert.equal(calls[2].values.length, 4);
   assert.equal(records.size, 201);
   assert.equal(records.get("edge-200").classification.safetyClass, 3);
 });
