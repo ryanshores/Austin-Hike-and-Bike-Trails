@@ -15,7 +15,9 @@ import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
 import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
 import { RouteGuidanceCard } from "./route-guidance-card.js";
 import { guidanceQualityCanAdvance, initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
-import { formatMiles } from "./route-planner-utils.js";
+import { RouteOffRouteAlert } from "./route-off-route-alert.js";
+import { initialOffRouteState, rerouteRequest, updateOffRouteState } from "./route-off-route.js";
+import { formatMiles, normalizePlannedRoute, routeErrorMessage } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
 import RoutePlanner, {
   type PlannedRoute,
@@ -54,6 +56,8 @@ type RouteGuidance = {
   route: PlannedRoute;
 };
 type GuidanceProgress = ReturnType<typeof initialGuidanceProgress>;
+type OffRouteState = ReturnType<typeof initialOffRouteState>;
+type GuidancePoint = { accuracyMeters: number; latitude: number; longitude: number };
 
 const categories: Record<Category, { label: string; note: string; color: string; dash?: string }> = {
   offRoadBike: { label: "Separated path, off road", note: "Lowest traffic exposure", color: "#1f6b4f" },
@@ -136,6 +140,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const searchRecordsRef = useRef<Partial<Record<Category, SearchRecord[]>>>({});
   const planningEndpointMarkersRef = useRef<Partial<Record<PlanningEndpointKey, Marker>>>({});
   const guidanceDestinationMarkerRef = useRef<Marker | null>(null);
+  const activeGuidanceRef = useRef<RouteGuidance | null>(null);
+  const lastGuidancePointRef = useRef<GuidancePoint | null>(null);
+  const rerouteControllerRef = useRef<AbortController | null>(null);
   const plannedRouteLayerRef = useRef<LeafletGeoJSON | null>(null);
   const divergenceLayerRef = useRef<LeafletGeoJSON | null>(null);
   const activeMapTargetRef = useRef<PlanningEndpointKey | null>(null);
@@ -158,6 +165,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const [plannedRoute, setPlannedRoute] = useState<PlannedRoute | null>(null);
   const [activeGuidance, setActiveGuidance] = useState<RouteGuidance | null>(null);
   const [guidanceProgress, setGuidanceProgress] = useState<GuidanceProgress | null>(null);
+  const [offRouteState, setOffRouteState] = useState<OffRouteState>(initialOffRouteState);
+  const [rerouting, setRerouting] = useState(false);
+  const [rerouteMessage, setRerouteMessage] = useState("");
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
@@ -319,8 +329,10 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     if (!isRide) return;
     const guidanceTimer = window.setTimeout(() => {
       const guidance = loadRouteGuidance(sessionStorage) as RouteGuidance | null;
+      activeGuidanceRef.current = guidance;
       setActiveGuidance(guidance);
       setGuidanceProgress(guidance ? initialGuidanceProgress(guidance.route) : null);
+      setOffRouteState(initialOffRouteState());
     }, 0);
     const recorder = new RideRecorder();
     rideRecorderRef.current = recorder;
@@ -330,6 +342,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       rideRecorderRef.current = null;
     };
   }, [isRide]);
+
+  useEffect(() => () => rerouteControllerRef.current?.abort(), []);
 
   useEffect(() => {
     activeMapTargetRef.current = activeMapTarget;
@@ -544,7 +558,14 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     setTracking(false);
     clearRouteGuidance(sessionStorage);
     setActiveGuidance(null);
+    activeGuidanceRef.current = null;
     setGuidanceProgress(null);
+    setOffRouteState(initialOffRouteState());
+    lastGuidancePointRef.current = null;
+    rerouteControllerRef.current?.abort();
+    rerouteControllerRef.current = null;
+    setRerouting(false);
+    setRerouteMessage("");
     setOrientation("north");
     const map = mapRef.current;
     locationMarkerRef.current?.remove();
@@ -567,6 +588,56 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       .catch(() => setStatus("Ride stopped. Route points will retry when you resume."));
   }
 
+  async function rerouteFromLastTrustworthyFix() {
+    const guidance = activeGuidanceRef.current;
+    const point = lastGuidancePointRef.current;
+    if (!guidance || !point || rerouting) return;
+    rerouteControllerRef.current?.abort();
+    const controller = new AbortController();
+    rerouteControllerRef.current = controller;
+    setRerouting(true);
+    setRerouteMessage("");
+    try {
+      const response = await fetch("/api/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(rerouteRequest(guidance, point)),
+        signal: controller.signal,
+      });
+      const value: unknown = await response.json().catch(() => ({}));
+      if (rerouteControllerRef.current !== controller || controller.signal.aborted) return;
+      if (!response.ok) {
+        setRerouteMessage(routeErrorMessage(response.status, value));
+        return;
+      }
+      const route = normalizePlannedRoute(value);
+      const nextGuidance = saveRouteGuidance(sessionStorage, {
+        safetyPreference: guidance.safetyPreference,
+        endpoints: {
+          start: { label: "Current location", latitude: point.latitude, longitude: point.longitude },
+          destination: guidance.endpoints.destination,
+        },
+        route,
+      }) as RouteGuidance;
+      activeGuidanceRef.current = nextGuidance;
+      setActiveGuidance(nextGuidance);
+      setGuidanceProgress(initialGuidanceProgress(route));
+      setOffRouteState(initialOffRouteState());
+      setRerouteMessage("");
+      setStatus("Ride mode · New route ready from your last trustworthy position");
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setRerouteMessage(error instanceof Error && error.message.startsWith("Route response")
+        ? "The routing service returned an unusable route. Try again."
+        : "Rerouting is temporarily unavailable. Keep riding safely and try again.");
+    } finally {
+      if (rerouteControllerRef.current === controller) {
+        rerouteControllerRef.current = null;
+        setRerouting(false);
+      }
+    }
+  }
+
   function startTracking() {
     const map = mapRef.current;
     const L = leafletRef.current;
@@ -577,6 +648,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     }
     if (watchIdRef.current !== null) return;
     setTracking(true);
+    setOffRouteState(initialOffRouteState());
+    setRerouteMessage("");
     setGpsQuality("acquiring");
     setStatus("Starting high-accuracy GPS…");
     requestWakeLock();
@@ -631,15 +704,23 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       lastAccuracyRef.current = position.coords.accuracy;
       lastTimestampRef.current = position.timestamp;
       appendDiagnostic({ ...baseSample, accepted: true, action: "use-fix" });
-      if (activeGuidance && guidanceQualityCanAdvance(quality)) {
+      const currentGuidance = activeGuidanceRef.current;
+      if (currentGuidance && guidanceQualityCanAdvance(quality)) {
+        const guidancePoint = {
+          accuracyMeters: position.coords.accuracy,
+          latitude: latlng.lat,
+          longitude: latlng.lng,
+        };
+        lastGuidancePointRef.current = guidancePoint;
         setGuidanceProgress((current) => updateGuidanceProgress(
-          activeGuidance.route,
-          current ?? initialGuidanceProgress(activeGuidance.route),
-          {
-            accuracyMeters: position.coords.accuracy,
-            latitude: latlng.lat,
-            longitude: latlng.lng,
-          },
+          currentGuidance.route,
+          current ?? initialGuidanceProgress(currentGuidance.route),
+          guidancePoint,
+        ));
+        setOffRouteState((current) => updateOffRouteState(
+          currentGuidance.route,
+          current,
+          guidancePoint,
         ));
       }
       rideRecorderRef.current?.record({
@@ -853,6 +934,13 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             maneuver={activeManeuver}
             progress={guidanceProgress}
             totalMiles={activeGuidance.route.totalMiles}
+          />
+        )}
+        {isRide && tracking && activeGuidance && offRouteState.status === "off-route" && (
+          <RouteOffRouteAlert
+            busy={rerouting}
+            message={rerouteMessage}
+            onReroute={rerouteFromLastTrustworthyFix}
           />
         )}
         {tracking && (
