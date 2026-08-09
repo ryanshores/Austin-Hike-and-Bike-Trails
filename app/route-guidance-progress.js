@@ -5,6 +5,8 @@ export const MANEUVER_PASS_TOLERANCE_MILES = 0.015;
 export const MAX_PROGRESS_ADVANCE_MILES = 0.2;
 export const ROUTE_MATCH_AMBIGUITY_METERS = 100;
 export const ROUTE_MATCH_CORRIDOR_METERS = 35;
+export const ROUTE_MATCH_LOOKBEHIND_MILES = 0.05;
+export const ROUTE_MATCH_LOOKAHEAD_MILES = 0.25;
 
 const routeAnalysisCache = new WeakMap();
 
@@ -91,6 +93,40 @@ function projectPoint(
   return projections.reduce(
     (best, candidate) => candidate.distanceMeters < best.distanceMeters ? candidate : best,
     { alongMeters: minAlongMeters, distanceMeters: Number.POSITIVE_INFINITY, segmentIndex: 0 },
+  );
+}
+
+export function guidanceRouteDistanceMeters(
+  route,
+  point,
+  progressMiles = 0,
+  lookaheadMiles = ROUTE_MATCH_LOOKAHEAD_MILES,
+) {
+  const { coordinates, cumulativeMeters, scale } = prepareGuidanceRoute(route);
+  const minimumProgressMiles = Math.max(0, progressMiles - ROUTE_MATCH_LOOKBEHIND_MILES);
+  const maximumProgressMiles = Math.min(
+    route.totalMiles,
+    progressMiles + Math.max(ROUTE_MATCH_LOOKAHEAD_MILES, lookaheadMiles),
+  );
+  const minimumAlongMeters = scale > 0
+    ? minimumProgressMiles / scale * METERS_PER_MILE
+    : 0;
+  const maximumAlongMeters = scale > 0
+    ? maximumProgressMiles / scale * METERS_PER_MILE
+    : cumulativeMeters[cumulativeMeters.length - 1];
+  return projectPoint(
+    coordinates,
+    cumulativeMeters,
+    point,
+    minimumAlongMeters,
+    maximumAlongMeters,
+  ).distanceMeters;
+}
+
+export function guidanceRouteMatchCorridorMeters(accuracyMeters) {
+  return Math.max(
+    ROUTE_MATCH_CORRIDOR_METERS,
+    Math.min(75, Number(accuracyMeters) || 0),
   );
 }
 
@@ -235,10 +271,7 @@ export function updateGuidanceProgress(route, previous, point, accepted = true) 
     : 0;
   const previousSegmentIndex = segmentIndexAtAlong(cumulativeMeters, previousAlongMeters);
   const nearestProjection = projectPoint(coordinates, cumulativeMeters, point);
-  const routeMatchCorridorMeters = Math.max(
-    ROUTE_MATCH_CORRIDOR_METERS,
-    Math.min(75, Number(point.accuracyMeters) || 0),
-  );
+  const routeMatchCorridorMeters = guidanceRouteMatchCorridorMeters(point.accuracyMeters);
   if (nearestProjection.distanceMeters > routeMatchCorridorMeters) return previous;
   const boundedProjection = projectPoint(coordinates, cumulativeMeters, point, 0, maxAlongMeters);
   const projected = nearestProjection.segmentIndex > previousSegmentIndex + 1

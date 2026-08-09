@@ -160,6 +160,12 @@ h2 { font-size: 22px; }
 .ride-safety-warning { display: grid; gap: 2px; margin: 7px 0 0; padding: 6px 8px; border-radius: 8px; background: rgba(212, 81, 45, .1); }
 .ride-safety-warning strong { color: #a54125; font: 700 10px Arial, sans-serif; }
 .ride-safety-warning span { color: var(--muted); font: 10px/1.25 Arial, sans-serif; }
+.ride-off-route-alert { position: fixed; z-index: 645; top: calc(max(12px, env(safe-area-inset-top)) + 178px); left: 50%; width: min(460px, calc(100% - 32px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; transform: translateX(-50%); padding: 12px 13px; border: 1px solid #a54125; border-radius: 14px; background: rgba(255, 247, 235, .98); box-shadow: 0 8px 26px rgba(63, 37, 25, .22); }
+.ride-off-route-alert div { min-width: 0; display: grid; gap: 3px; }
+.ride-off-route-alert strong { font: 700 12px/1.3 Arial, sans-serif; }
+.ride-off-route-alert span { color: var(--muted); font: 10px/1.3 Arial, sans-serif; }
+.ride-off-route-alert button { min-height: 40px; padding: 0 13px; border: 1px solid #a54125; border-radius: 999px; background: #a54125; color: #fffaf0; cursor: pointer; font: 700 11px Arial, sans-serif; }
+.ride-off-route-alert button:disabled { cursor: default; opacity: .6; }
 .ride-layers { position: fixed; z-index: 610; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); overflow: hidden; border: 1px solid rgba(45, 59, 42, .22); border-radius: 14px; background: rgba(255, 250, 240, .93); box-shadow: 0 5px 20px rgba(43, 49, 33, .16); backdrop-filter: blur(9px); }
 .ride-layers .legend-heading, .ride-layers .legend-note { display: none; }
 .ride-layers .legend-grid { display: flex; width: 100%; gap: 4px; overflow-x: auto; padding: 5px; scrollbar-width: none; }
