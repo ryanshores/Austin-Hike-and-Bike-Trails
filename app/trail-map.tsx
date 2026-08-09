@@ -18,6 +18,7 @@ import { RouteGuidanceCard } from "./route-guidance-card.js";
 import { guidanceQualityCanAdvance, initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
 import { RouteOffRouteAlert } from "./route-off-route-alert.js";
 import {
+  guidanceProgressAfterOffRouteCheck,
   initialOffRouteState,
   rerouteFixIsFresh,
   rerouteRequest,
@@ -148,6 +149,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const guidanceDestinationMarkerRef = useRef<Marker | null>(null);
   const activeGuidanceRef = useRef<RouteGuidance | null>(null);
   const guidanceProgressRef = useRef<GuidanceProgress | null>(null);
+  const offRouteStateRef = useRef<OffRouteState>(initialOffRouteState());
   const lastGuidancePointRef = useRef<GuidancePoint | null>(null);
   const rerouteFreshnessTimerRef = useRef<number | null>(null);
   const rerouteControllerRef = useRef<AbortController | null>(null);
@@ -343,7 +345,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       const progress = guidance ? initialGuidanceProgress(guidance.route) : null;
       guidanceProgressRef.current = progress;
       setGuidanceProgress(progress);
-      setOffRouteState(initialOffRouteState());
+      const offRoute = initialOffRouteState();
+      offRouteStateRef.current = offRoute;
+      setOffRouteState(offRoute);
     }, 0);
     const recorder = new RideRecorder();
     rideRecorderRef.current = recorder;
@@ -577,7 +581,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     activeGuidanceRef.current = null;
     guidanceProgressRef.current = null;
     setGuidanceProgress(null);
-    setOffRouteState(initialOffRouteState());
+    const offRoute = initialOffRouteState();
+    offRouteStateRef.current = offRoute;
+    setOffRouteState(offRoute);
     lastGuidancePointRef.current = null;
     if (rerouteFreshnessTimerRef.current !== null) {
       window.clearTimeout(rerouteFreshnessTimerRef.current);
@@ -651,7 +657,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       const progress = initialGuidanceProgress(route);
       guidanceProgressRef.current = progress;
       setGuidanceProgress(progress);
-      setOffRouteState(initialOffRouteState());
+      const offRoute = initialOffRouteState();
+      offRouteStateRef.current = offRoute;
+      setOffRouteState(offRoute);
       setRerouteMessage("");
       setStatus("Ride mode · New route ready from your last trustworthy position");
     } catch (error) {
@@ -677,7 +685,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     }
     if (watchIdRef.current !== null) return;
     setTracking(true);
-    setOffRouteState(initialOffRouteState());
+    const offRoute = initialOffRouteState();
+    offRouteStateRef.current = offRoute;
+    setOffRouteState(offRoute);
     setRerouteFixFresh(false);
     setRerouteMessage("");
     setGpsQuality("acquiring");
@@ -751,14 +761,21 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
           previousProgress,
           guidancePoint,
         );
-        guidanceProgressRef.current = nextProgress;
-        setGuidanceProgress(nextProgress);
-        setOffRouteState((current) => updateOffRouteState(
+        const nextOffRouteState = updateOffRouteState(
           currentGuidance.route,
-          current,
+          offRouteStateRef.current,
           guidancePoint,
           hasPreviousGuidanceFix ? previousProgress.progressMiles : nextProgress.progressMiles,
-        ));
+        );
+        offRouteStateRef.current = nextOffRouteState;
+        setOffRouteState(nextOffRouteState);
+        const trustedProgress = guidanceProgressAfterOffRouteCheck(
+          previousProgress,
+          nextProgress,
+          nextOffRouteState,
+        );
+        guidanceProgressRef.current = trustedProgress;
+        setGuidanceProgress(trustedProgress);
         setRerouteFixFresh(true);
         if (rerouteFreshnessTimerRef.current !== null) {
           window.clearTimeout(rerouteFreshnessTimerRef.current);

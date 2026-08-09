@@ -57,6 +57,10 @@ export function rerouteFixIsFresh(point, now = Date.now()) {
     && now - timestamp <= MAX_FIX_AGE_MS;
 }
 
+export function guidanceProgressAfterOffRouteCheck(previous, candidate, offRouteState) {
+  return offRouteState.status === "on-route" ? candidate : previous;
+}
+
 export function rerouteRequest(guidance, point) {
   return {
     start: {

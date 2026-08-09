@@ -3,7 +3,9 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { RouteOffRouteAlert } from "../app/route-off-route-alert.js";
+import { initialGuidanceProgress, updateGuidanceProgress } from "../app/route-guidance-progress.js";
 import {
+  guidanceProgressAfterOffRouteCheck,
   initialOffRouteState,
   OFF_ROUTE_CONFIRMATION_SAMPLES,
   rerouteFixIsFresh,
@@ -103,6 +105,53 @@ test("off-route matching ignores previously traversed and much-later route legs"
 
   assert.equal(state.status, "off-route");
   assert.ok(state.distanceMeters >= 120);
+});
+
+test("off-route samples cannot commit a projection jump to a later parallel leg", () => {
+  const parallelRoute = {
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [-97.75, 30.26],
+        [-97.74, 30.26],
+        [-97.74, 30.28],
+        [-97.75, 30.28],
+        [-97.75, 30.27],
+        [-97.73, 30.27],
+      ],
+    },
+    totalMiles: 5,
+    maneuvers: [],
+    divergences: [],
+  };
+  const pointOnLaterLeg = {
+    accuracyMeters: 10,
+    latitude: 30.27,
+    longitude: -97.74,
+  };
+  let trustedProgress = {
+    ...initialGuidanceProgress(parallelRoute),
+    progressMiles: 0.3,
+    remainingMiles: 4.7,
+  };
+  let offRoute = initialOffRouteState();
+
+  for (let sample = 0; sample < OFF_ROUTE_CONFIRMATION_SAMPLES; sample += 1) {
+    const candidate = updateGuidanceProgress(parallelRoute, trustedProgress, pointOnLaterLeg);
+    assert.ok(candidate.progressMiles > trustedProgress.progressMiles + 1);
+    offRoute = updateOffRouteState(
+      parallelRoute,
+      offRoute,
+      pointOnLaterLeg,
+      trustedProgress.progressMiles,
+    );
+    const retained = guidanceProgressAfterOffRouteCheck(trustedProgress, candidate, offRoute);
+    assert.equal(retained, trustedProgress);
+    trustedProgress = retained;
+  }
+
+  assert.equal(offRoute.status, "off-route");
+  assert.equal(trustedProgress.progressMiles, 0.3);
 });
 
 test("rerouting requires a recent trustworthy fix timestamp", () => {
