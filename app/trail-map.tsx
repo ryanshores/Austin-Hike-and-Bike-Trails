@@ -12,6 +12,8 @@ import {
   smoothingWeight,
 } from "./location-accuracy";
 import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
+import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
+import { formatMiles } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
 import RoutePlanner, {
   type PlannedRoute,
@@ -41,6 +43,13 @@ type DiagnosticSample = {
 type WakeLockSentinelLike = EventTarget & { release: () => Promise<void>; released: boolean };
 type ArcGISFeatureCollection = FeatureCollection<LineString | MultiLineString, TrailProperties> & {
   properties?: { exceededTransferLimit?: boolean };
+};
+type RouteGuidance = {
+  version: number;
+  createdAt: number;
+  safetyPreference: string;
+  endpoints: { start: PlanningPoint; destination: PlanningPoint };
+  route: PlannedRoute;
 };
 
 const categories: Record<Category, { label: string; note: string; color: string; dash?: string }> = {
@@ -123,6 +132,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const rideRecorderRef = useRef<RideRecorder | null>(null);
   const searchRecordsRef = useRef<Partial<Record<Category, SearchRecord[]>>>({});
   const planningEndpointMarkersRef = useRef<Partial<Record<PlanningEndpointKey, Marker>>>({});
+  const guidanceDestinationMarkerRef = useRef<Marker | null>(null);
   const plannedRouteLayerRef = useRef<LeafletGeoJSON | null>(null);
   const divergenceLayerRef = useRef<LeafletGeoJSON | null>(null);
   const activeMapTargetRef = useRef<PlanningEndpointKey | null>(null);
@@ -143,6 +153,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const [activeMapTarget, setActiveMapTarget] = useState<PlanningEndpointKey | null>(null);
   const [planningEndpoints, setPlanningEndpoints] = useState<PlanningEndpoints>({ start: null, destination: null });
   const [plannedRoute, setPlannedRoute] = useState<PlannedRoute | null>(null);
+  const [activeGuidance, setActiveGuidance] = useState<RouteGuidance | null>(null);
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
@@ -158,13 +169,11 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       leafletRef.current = L;
       const map = L.map(mapNode.current, mapOptionsForMode(isRide)).setView([30.2672, -97.7431], 12);
       mapRef.current = map;
-      if (!isRide) {
-        const routePane = map.createPane("planned-route");
-        routePane.style.zIndex = "460";
-        routePane.style.pointerEvents = "none";
-        const markerPane = map.createPane("planned-route-markers");
-        markerPane.style.zIndex = "610";
-      }
+      const routePane = map.createPane("planned-route");
+      routePane.style.zIndex = "460";
+      routePane.style.pointerEvents = "none";
+      const markerPane = map.createPane("planned-route-markers");
+      markerPane.style.zIndex = "610";
       const mapSizeSync = installMapSizeSync({ map, mapNode: mapNode.current });
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
@@ -296,6 +305,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       mapRef.current = null;
       leafletRef.current = null;
       planningEndpointMarkersRef.current = {};
+      guidanceDestinationMarkerRef.current = null;
       plannedRouteLayerRef.current = null;
       divergenceLayerRef.current = null;
     };
@@ -303,10 +313,16 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
 
   useEffect(() => {
     if (!isRide) return;
+    const guidanceTimer = window.setTimeout(() => {
+      setActiveGuidance(loadRouteGuidance(sessionStorage) as RouteGuidance | null);
+    }, 0);
     const recorder = new RideRecorder();
     rideRecorderRef.current = recorder;
     recorder.activeRide().then((ride) => setHasInterruptedRide(Boolean(ride))).catch(() => {});
-    return () => { rideRecorderRef.current = null; };
+    return () => {
+      window.clearTimeout(guidanceTimer);
+      rideRecorderRef.current = null;
+    };
   }, [isRide]);
 
   useEffect(() => {
@@ -353,17 +369,17 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   }, [isRide, mapVersion, planningEndpoints]);
 
   useEffect(() => {
-    if (isRide) return;
     const map = mapRef.current;
     const L = leafletRef.current;
     if (!map || !L) return;
+    const displayedRoute = isRide ? activeGuidance?.route : plannedRoute;
     plannedRouteLayerRef.current?.remove();
     divergenceLayerRef.current?.remove();
     plannedRouteLayerRef.current = null;
     divergenceLayerRef.current = null;
-    if (!plannedRoute) return;
+    if (!displayedRoute) return;
 
-    plannedRouteLayerRef.current = L.geoJSON(plannedRoute.geometry, {
+    plannedRouteLayerRef.current = L.geoJSON(displayedRoute.geometry, {
       style: {
         pane: "planned-route",
         color: "#203b31",
@@ -375,7 +391,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     }).addTo(map);
     divergenceLayerRef.current = L.geoJSON({
       type: "FeatureCollection",
-      features: plannedRoute.divergences.map((divergence) => ({
+      features: displayedRoute.divergences.map((divergence) => ({
         type: "Feature",
         properties: {},
         geometry: divergence.geometry,
@@ -392,7 +408,32 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     }).addTo(map);
     const bounds = plannedRouteLayerRef.current.getBounds();
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 16 });
-  }, [isRide, mapVersion, plannedRoute]);
+  }, [activeGuidance, isRide, mapVersion, plannedRoute]);
+
+  useEffect(() => {
+    if (!isRide) return;
+    const map = mapRef.current;
+    const L = leafletRef.current;
+    guidanceDestinationMarkerRef.current?.remove();
+    guidanceDestinationMarkerRef.current = null;
+    if (!map || !L || !activeGuidance) return;
+    const destination = activeGuidance.endpoints.destination;
+    const icon = L.divIcon({
+      className: "planner-marker-wrapper",
+      html: '<span class="planner-marker destination" aria-hidden="true"><b>B</b></span>',
+      iconSize: [34, 42],
+      iconAnchor: [17, 39],
+    });
+    guidanceDestinationMarkerRef.current = L.marker(
+      [destination.latitude, destination.longitude],
+      {
+        icon,
+        keyboard: true,
+        pane: "planned-route-markers",
+        title: `Destination: ${destination.label}`,
+      },
+    ).addTo(map);
+  }, [activeGuidance, isRide, mapVersion]);
 
   function setPlanningEndpoint(
     target: PlanningEndpointKey,
@@ -426,6 +467,20 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     setPlanningEndpoints(next);
     setPlannedRoute(null);
     setActiveMapTarget(null);
+  }
+
+  function startGuidance(safetyPreference: string) {
+    const start = planningEndpoints.start;
+    const destination = planningEndpoints.destination;
+    if (!plannedRoute || !start || !destination) {
+      throw new Error("A planned route is required before guidance can start.");
+    }
+    saveRouteGuidance(sessionStorage, {
+      safetyPreference,
+      endpoints: { start, destination },
+      route: plannedRoute,
+    });
+    window.location.assign("/ride");
   }
 
   function choosePlanningPointAtMapCenter() {
@@ -481,6 +536,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
     setTracking(false);
+    clearRouteGuidance(sessionStorage);
+    setActiveGuidance(null);
     setOrientation("north");
     const map = mapRef.current;
     locationMarkerRef.current?.remove();
@@ -667,6 +724,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       .filter((record) => `${record.label} ${record.detail}`.toLowerCase().includes(normalizedSearch))
       .filter((record, index, records) => records.findIndex((candidate) => candidate.label === record.label && candidate.category === record.category) === index)
       .slice(0, 6);
+  const firstGuidanceManeuver = activeGuidance?.route.maneuvers[0] ?? null;
+  const startGpsLabel = `${hasInterruptedRide ? "Resume" : "Start"} GPS${activeGuidance ? " guidance" : ""}`;
 
   return (
     <main className={isRide ? "ride-shell" : "atlas-shell"}>
@@ -725,6 +784,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             onEndpointChange={setPlanningEndpoint}
             onMapTargetChange={setActiveMapTarget}
             onRouteChange={setPlannedRoute}
+            onStartGuidance={startGuidance}
             onSwapEndpoints={swapPlanningEndpoints}
           />
         )}
@@ -749,13 +809,32 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         )}
         {isRide && !tracking && (
           <div className="ride-start-card">
-            <p className="eyebrow">Full-screen navigation</p>
-            <h1>Ready to ride?</h1>
-            <p>Keep the phone in view and allow precise location. Accepted route points are saved to your private route history.</p>
+            <p className="eyebrow">{activeGuidance ? "Guidance ready" : "Full-screen navigation"}</p>
+            <h1>{activeGuidance ? `Ride to ${activeGuidance.endpoints.destination.label}` : "Ready to ride?"}</h1>
+            <p>{activeGuidance
+              ? `${formatMiles(activeGuidance.route.totalMiles)} remaining on the highlighted route.`
+              : "Keep the phone in view and allow precise location. Accepted route points are saved to your private route history."}</p>
+            {activeGuidance && (
+              <div className="ride-first-maneuver">
+                <span>First direction</span>
+                <strong>{firstGuidanceManeuver?.instruction ?? "Follow the highlighted route."}</strong>
+                {firstGuidanceManeuver && <small>{formatMiles(firstGuidanceManeuver.distanceMiles)}</small>}
+              </div>
+            )}
+            {activeGuidance && <p>Allow precise location when you start. Only accepted GPS fixes will move the map or be saved to your private route history.</p>}
             {hasInterruptedRide && <p>Your last interrupted ride is ready to resume; queued points will upload when you reconnect.</p>}
-            <button onClick={startTracking}>{hasInterruptedRide ? "Resume GPS" : "Start GPS"}</button>
+            <button onClick={startTracking}>{startGpsLabel}</button>
             <Link href="/">Return to the atlas</Link>
           </div>
+        )}
+        {isRide && tracking && activeGuidance && (
+          <aside className="ride-guidance-card" aria-label="Active route guidance" aria-live="polite">
+            <div>
+              <p className="eyebrow">Next direction</p>
+              <h2>{firstGuidanceManeuver?.instruction ?? "Follow the highlighted route."}</h2>
+            </div>
+            <p><strong>{firstGuidanceManeuver ? formatMiles(firstGuidanceManeuver.distanceMiles) : "Route"}</strong><span>{formatMiles(activeGuidance.route.totalMiles)} remaining to {activeGuidance.endpoints.destination.label}</span></p>
+          </aside>
         )}
         {tracking && (
           <div className="orientation-control" role="group" aria-label="Map orientation">

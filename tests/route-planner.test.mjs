@@ -62,15 +62,22 @@ test("planner normalizes only route fields needed by the UI", () => {
         geometry,
         minimumSafetyClass: 0,
       }],
-      maneuvers: [{ instruction: "Hidden from this slice", duration: 20 }],
+      maneuvers: [{
+        instruction: "Ride north on Congress Avenue.",
+        distanceMiles: 0.3,
+        beginShapeIndex: 0,
+        endShapeIndex: 1,
+        duration: 20,
+      }],
       duration: 900,
     },
   });
 
   assert.equal(route.totalMiles, 4.26);
   assert.equal(route.divergences[0].reason, "not in the Atlas trails list");
+  assert.equal(route.maneuvers[0].instruction, "Ride north on Congress Avenue.");
   assert.equal("duration" in route, false);
-  assert.equal("maneuvers" in route, false);
+  assert.equal("duration" in route.maneuvers[0], false);
 });
 
 test("planner rejects malformed geometry and inconsistent divergence counts", () => {

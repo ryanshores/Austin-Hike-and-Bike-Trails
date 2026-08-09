@@ -65,6 +65,41 @@ function lineString(value) {
   return { type: "LineString", coordinates };
 }
 
+function normalizedManeuvers(value) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const instruction = String(item.instruction ?? "").trim();
+    if (!instruction) return [];
+    const type = item.type === null || item.type === undefined
+      ? null
+      : Number(item.type);
+    const beginShapeIndex = item.beginShapeIndex === null || item.beginShapeIndex === undefined
+      ? null
+      : Number(item.beginShapeIndex);
+    const endShapeIndex = item.endShapeIndex === null || item.endShapeIndex === undefined
+      ? null
+      : Number(item.endShapeIndex);
+    if (
+      (type !== null && !Number.isInteger(type)) ||
+      (beginShapeIndex !== null && (!Number.isInteger(beginShapeIndex) || beginShapeIndex < 0)) ||
+      (endShapeIndex !== null && (!Number.isInteger(endShapeIndex) || endShapeIndex < 0))
+    ) {
+      throw new Error("Route response contains invalid guidance details.");
+    }
+    return [{
+      type,
+      instruction,
+      distanceMiles: finiteNonNegative(item.distanceMiles),
+      beginShapeIndex,
+      endShapeIndex,
+      streetNames: Array.isArray(item.streetNames)
+        ? item.streetNames.map((name) => String(name).trim()).filter(Boolean)
+        : [],
+    }];
+  });
+}
+
 export function normalizePlannedRoute(value) {
   const route = value?.route;
   if (!route || typeof route !== "object") {
@@ -101,6 +136,7 @@ export function normalizePlannedRoute(value) {
     divergenceCount,
     divergenceMiles: finiteNonNegative(route.divergenceMiles),
     divergences,
+    maneuvers: normalizedManeuvers(route.maneuvers),
   };
 }
 
