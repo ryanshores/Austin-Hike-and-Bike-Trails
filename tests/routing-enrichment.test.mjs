@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import {
   SafetyClass,
   SafetyFinding,
 } from "../worker/route-safety.js";
-import { buildRoutingEnrichment } from "../scripts/routing-enrichment.js";
+import {
+  buildRoutingEnrichment,
+  verifyRoutingEnrichment,
+} from "../scripts/routing-enrichment.js";
+
+const execFile = promisify(execFileCallback);
 
 const line = (longitude, south = 30.26, north = 30.262) => ({
   type: "LineString",
@@ -145,4 +155,109 @@ test("enrichment requires pinned City, OSM, graph, and Valhalla inputs", () => {
     routingEdgeCollection: { type: "FeatureCollection", features: [] },
     manifest: { ...manifest, osmExtractChecksum: "" },
   }), /requires osmExtractChecksum/);
+});
+
+test("verification rejects artifacts that do not exactly rebuild from pinned inputs", () => {
+  const cityCollection = {
+    type: "FeatureCollection",
+    features: [city("Urban Trail", -97.74)],
+  };
+  const routingEdgeCollection = {
+    type: "FeatureCollection",
+    features: [edge("city-trail", -97.74, { highway: "residential" })],
+  };
+  const enrichment = buildRoutingEnrichment({ cityCollection, routingEdgeCollection, manifest });
+  const verification = {
+    enrichment,
+    cityCollection,
+    routingEdgeCollection,
+    cityDatasetSha256: manifest.cityDatasetSha256,
+    routingEdgesSha256: manifest.routingEdgesSha256,
+    expectedManifest: { routingGraphVersion: manifest.routingGraphVersion },
+  };
+
+  assert.deepEqual(verifyRoutingEnrichment(verification).summary, enrichment.summary);
+  assert.throws(() => verifyRoutingEnrichment({
+    ...verification,
+    enrichment: {
+      ...enrichment,
+      summary: { ...enrichment.summary, edges: 99 },
+    },
+  }), /does not exactly match/);
+  assert.throws(() => verifyRoutingEnrichment({
+    ...verification,
+    expectedManifest: { routingGraphVersion: "wrong-graph" },
+  }), /does not match the expected value/);
+});
+
+test("verification rejects artifacts built with unapproved City-classification thresholds", () => {
+  const cityCollection = {
+    type: "FeatureCollection",
+    features: [city("Urban Trail", -97.74)],
+  };
+  const routingEdgeCollection = {
+    type: "FeatureCollection",
+    features: [edge("city-trail", -97.74, { highway: "residential" })],
+  };
+  const enrichment = buildRoutingEnrichment({
+    cityCollection,
+    routingEdgeCollection,
+    manifest,
+    toleranceMeters: 25,
+    sampleSpacingMeters: 20,
+    minimumCoverage: 0.01,
+  });
+
+  assert.throws(() => verifyRoutingEnrichment({
+    enrichment,
+    cityCollection,
+    routingEdgeCollection,
+    cityDatasetSha256: manifest.cityDatasetSha256,
+    routingEdgesSha256: manifest.routingEdgesSha256,
+  }), /minimumCoverage does not match the approved verification policy/);
+});
+
+test("builder atomically writes an artifact the verifier accepts from file inputs", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "atlas-enrichment-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const cityPath = join(directory, "city.geojson");
+  const edgePath = join(directory, "edges.geojson");
+  const outputPath = join(directory, "enrichment.json");
+  await writeFile(cityPath, JSON.stringify({
+    type: "FeatureCollection",
+    features: [city("Urban Trail", -97.74)],
+  }));
+  await writeFile(edgePath, JSON.stringify({
+    type: "FeatureCollection",
+    features: [edge("city-trail", -97.74, { highway: "residential" })],
+  }));
+
+  const buildArguments = [
+    "scripts/build-routing-enrichment.mjs",
+    "--city", cityPath,
+    "--routing-edges", edgePath,
+    "--output", outputPath,
+    "--city-dataset-version", manifest.cityDatasetVersion,
+    "--osm-extract-source", manifest.osmExtractSource,
+    "--osm-extract-date", manifest.osmExtractDate,
+    "--osm-extract-checksum", manifest.osmExtractChecksum,
+    "--routing-graph-version", manifest.routingGraphVersion,
+    "--valhalla-image", manifest.valhallaImage,
+  ];
+  await execFile(process.execPath, buildArguments);
+  const files = await readdir(directory);
+  assert.deepEqual(files.sort(), ["city.geojson", "edges.geojson", "enrichment.json"]);
+
+  const { stdout } = await execFile(process.execPath, [
+    "scripts/verify-routing-enrichment.mjs",
+    "--enrichment", outputPath,
+    "--city", cityPath,
+    "--routing-edges", edgePath,
+    "--expected-routing-graph-version", manifest.routingGraphVersion,
+    "--expected-valhalla-image", manifest.valhallaImage,
+  ]);
+  assert.deepEqual(JSON.parse(stdout), {
+    verified: true,
+    summary: JSON.parse(await readFile(outputPath)).summary,
+  });
 });
