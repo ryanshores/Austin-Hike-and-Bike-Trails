@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, rename, writeFile } from "node:fs/promises";
 
 import { buildRoutingEnrichment } from "./routing-enrichment.js";
 
@@ -43,5 +43,7 @@ const enrichment = buildRoutingEnrichment({
   },
 });
 
-await writeFile(outputPath, `${JSON.stringify(enrichment, null, 2)}\n`);
+const temporaryOutputPath = `${outputPath}.${process.pid}.${randomUUID()}.tmp`;
+await writeFile(temporaryOutputPath, `${JSON.stringify(enrichment, null, 2)}\n`);
+await rename(temporaryOutputPath, outputPath);
 console.log(JSON.stringify(enrichment.summary));
