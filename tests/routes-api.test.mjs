@@ -8,6 +8,7 @@ import {
 } from "../worker/route-safety.js";
 import {
   ROUTE_MAX_BODY_BYTES,
+  ROUTE_METRIC_EVENT,
   createRoutesHandler,
   createRoutingHealthHandler,
   decodePolyline6,
@@ -82,10 +83,14 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
     [30.285, -97.735],
   ]);
   const upstream = [];
+  const metrics = [];
+  const clock = [1_000, 1_037];
   const handle = createRoutesHandler({
     providerUrl: "https://valhalla.internal",
     accessClientId: "staging-access-client",
     accessClientSecret: "staging-access-secret",
+    reportMetric: (metric) => metrics.push(metric),
+    now: () => clock.shift(),
     fetchImpl: async (url, options) => {
       const endpoint = new URL(url);
       upstream.push({ endpoint, options });
@@ -153,6 +158,36 @@ test("stock Valhalla routes normalize geometry, elevation, and maneuvers without
   assert.equal(body.route.versions.routingGraph, "1784950400");
   assert.equal(recursivelyHasForbiddenKey(body), false);
   assert.equal(JSON.stringify(body).includes("staging-access-secret"), false);
+  assert.deepEqual(metrics, [{
+    event: ROUTE_METRIC_EVENT,
+    outcome: "success",
+    status: 200,
+    durationMs: 37,
+    safetyPreference: SafetyPreference.PROTECTED_OR_SEPARATED,
+  }]);
+});
+
+test("routing metrics omit endpoint and provider details", async () => {
+  const metrics = [];
+  const handle = createRoutesHandler({
+    reportMetric: (metric) => metrics.push(metric),
+    now: (() => {
+      const clock = [2_000, 2_019];
+      return () => clock.shift();
+    })(),
+  });
+
+  const response = await handle(routeRequest());
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(metrics, [{
+    event: ROUTE_METRIC_EVENT,
+    outcome: "provider-unconfigured",
+    status: 503,
+    durationMs: 19,
+    safetyPreference: SafetyPreference.PROTECTED_OR_SEPARATED,
+  }]);
+  assert.doesNotMatch(JSON.stringify(metrics), /30\.2672|-97\.7431|internal/);
 });
 
 test("incomplete routing Access credentials fail closed without contacting the provider", async () => {

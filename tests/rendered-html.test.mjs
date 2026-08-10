@@ -36,6 +36,9 @@ test("server-renders the Austin trail atlas", async () => {
   assert.match(html, /Plan a bicycle route/);
   assert.match(html, /Use my location/);
   assert.match(html, /Choose on map/);
+  assert.match(html, /role="combobox"/);
+  assert.match(html, /aria-autocomplete="list"/);
+  assert.match(html, /After searching, use the up and down arrow keys/);
   assert.match(html, /Bike facilities or safer/);
   assert.match(html, /Bicycle-legal streets may still be used/);
   assert.match(html, /Trail safety legend/);

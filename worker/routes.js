@@ -25,6 +25,7 @@ const BICYCLE_USE_ROADS = Object.freeze({
 export const ROUTE_DATASET_VERSION = "austin-route-safety-v1";
 export const ROUTE_MAX_BODY_BYTES = 65_536;
 export const ROUTE_MAX_DIRECT_DISTANCE_MILES = 75;
+export const ROUTE_METRIC_EVENT = "route_request";
 
 const PREFERENCES = new Set(Object.values(SafetyPreference));
 const SAFETY_CLASSES = new Set(Object.values(SafetyClass));
@@ -254,6 +255,23 @@ function explicitElevation(value) {
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
+function reportRouteOutcome(reportMetric, now, startedAt, response, outcome, safetyPreference) {
+  if (!reportMetric) return;
+  const elapsedMs = Number(now()) - startedAt;
+  const metric = {
+    event: ROUTE_METRIC_EVENT,
+    outcome,
+    status: response.status,
+    durationMs: Number.isFinite(elapsedMs) ? Math.max(0, Math.round(elapsedMs)) : 0,
+  };
+  if (safetyPreference) metric.safetyPreference = safetyPreference;
+  try {
+    reportMetric(metric);
+  } catch {
+    // Metrics must not change routing availability.
+  }
+}
+
 function distributeRouteElevation(edges, property, total) {
   const missing = edges.filter((edge) => explicitElevation(edge[property]) === null);
   if (missing.length === 0) {
@@ -431,13 +449,20 @@ export function createRoutesHandler({
   accessClientId,
   accessClientSecret,
   rateLimiter,
+  reportMetric,
   fetchImpl = fetch,
+  now = Date.now,
 } = {}) {
   const providerAccessHeaders = routingProviderAccessHeaders(accessClientId, accessClientSecret);
   return async function handleRoutes(request) {
-    if (request.method !== "POST") return jsonError("Method not allowed.", 405);
+    const startedAt = Number(now());
+    const respond = (response, outcome, safetyPreference) => {
+      reportRouteOutcome(reportMetric, now, startedAt, response, outcome, safetyPreference);
+      return response;
+    };
+    if (request.method !== "POST") return respond(jsonError("Method not allowed.", 405), "method-not-allowed");
     if (!(await requestAllowed(rateLimiter, request))) {
-      return jsonError("Too many route requests. Try again shortly.", 429);
+      return respond(jsonError("Too many route requests. Try again shortly.", 429), "rate-limited");
     }
 
     let routeRequest;
@@ -447,11 +472,24 @@ export function createRoutesHandler({
       );
     } catch (error) {
       const status = error instanceof RangeError ? 413 : 400;
-      return jsonError(error instanceof Error ? error.message : "Invalid route request.", status);
+      return respond(
+        jsonError(error instanceof Error ? error.message : "Invalid route request.", status),
+        "invalid-request",
+      );
     }
-    if (!providerUrl) return jsonError("Routing provider is not configured.", 503);
+    if (!providerUrl) {
+      return respond(
+        jsonError("Routing provider is not configured.", 503),
+        "provider-unconfigured",
+        routeRequest.safetyPreference,
+      );
+    }
     if (!providerAccessHeaders) {
-      return jsonError("Routing provider access is not configured.", 503);
+      return respond(
+        jsonError("Routing provider access is not configured.", 503),
+        "provider-access-unconfigured",
+        routeRequest.safetyPreference,
+      );
     }
 
     try {
@@ -487,13 +525,13 @@ export function createRoutesHandler({
       });
       if (!response.ok) {
         const status = response.status === 400 || response.status === 404 ? 422 : 502;
-        return jsonError(
+        return respond(jsonError(
           status === 422
             ? "No reasonable bicycle route was found for those endpoints."
             : `Routing service unavailable: provider returned HTTP ${response.status}.`,
           status,
           status === 422 ? { code: "no-reasonable-route" } : {},
-        );
+        ), status === 422 ? "no-reasonable-route" : "provider-unavailable", routeRequest.safetyPreference);
       }
       const providerValue = await response.json();
       const [candidates, graphVersion] = await Promise.all([
@@ -520,13 +558,13 @@ export function createRoutesHandler({
         (candidate) => !candidate.summary.hasBicycleProhibitedEdge,
       );
       if (!selected) {
-        return jsonError(
+        return respond(jsonError(
           "No reasonable bicycle route was found for the selected safety preference.",
           422,
           { code: "no-reasonable-route" },
-        );
+        ), "no-reasonable-route", routeRequest.safetyPreference);
       }
-      return Response.json(
+      return respond(Response.json(
         {
           safetyPreference: routeRequest.safetyPreference,
           route: publicRoute(selected, {
@@ -540,11 +578,15 @@ export function createRoutesHandler({
             "Content-Type": "application/json; charset=utf-8",
           },
         },
-      );
+      ), "success", routeRequest.safetyPreference);
     } catch (error) {
       if (request.signal.aborted) throw error;
       const detail = error instanceof Error ? error.message : "provider request failed";
-      return jsonError(`Routing service unavailable: ${detail}.`, 502);
+      return respond(
+        jsonError(`Routing service unavailable: ${detail}.`, 502),
+        "provider-unavailable",
+        routeRequest.safetyPreference,
+      );
     }
   };
 }
