@@ -4,6 +4,7 @@ set -euo pipefail
 readonly status_url="${VALHALLA_STATUS_URL:-http://127.0.0.1:8002/status}"
 readonly base_url="${status_url%/status}"
 readonly enrichment_url="${ROUTING_ENRICHMENT_URL:-http://127.0.0.1:8003}"
+readonly verify_routing_enrichment="${VERIFY_ROUTING_ENRICHMENT:-false}"
 
 echo "Listening socket:"
 ss -ltn | awk 'NR == 1 || /127\.0\.0\.1:8002|127\.0\.0\.1:8003/'
@@ -17,9 +18,13 @@ echo "Valhalla status:"
 curl --fail --silent --show-error "$status_url"
 echo
 
-echo "Routing enrichment sidecar:"
-curl --fail --silent --show-error "$enrichment_url/health"
-echo
+if [[ "$verify_routing_enrichment" == "true" ]]; then
+  echo "Routing enrichment sidecar:"
+  curl --fail --silent --show-error "$enrichment_url/health"
+  echo
+else
+  echo "Routing enrichment sidecar: skipped (set VERIFY_ROUTING_ENRICHMENT=true after installing SQLite data)"
+fi
 
 python3 - "$base_url" <<'PY'
 import json

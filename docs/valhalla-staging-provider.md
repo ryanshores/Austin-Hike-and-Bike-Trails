@@ -69,6 +69,9 @@ docker compose \
   --env-file infra/valhalla/host.env \
   --file infra/valhalla/compose.yaml \
   up --detach routing-enrichment
+
+# Run this additional check only after routing-enrichment.sqlite is installed.
+VERIFY_ROUTING_ENRICHMENT=true scripts/verify-valhalla-host.sh
 ```
 
 Create separate Tunnel hostnames and separate Cloudflare Access applications

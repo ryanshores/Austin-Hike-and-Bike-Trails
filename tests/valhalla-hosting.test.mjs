@@ -32,6 +32,8 @@ test("host verification fails if either private routing port is publicly exposed
   assert.match(verifier, /127\\\.0\\\.0\\\.1:8002\|127\\\.0\\\.0\\\.1:8003/);
   assert.match(verifier, /\(8002\|8003\)/);
   assert.match(verifier, /ROUTING_ENRICHMENT_URL/);
+  assert.match(verifier, /VERIFY_ROUTING_ENRICHMENT:-false/);
+  assert.match(verifier, /\[\[ "\$verify_routing_enrichment" == "true" \]\]/);
   assert.match(verifier, /\$enrichment_url\/health/);
 });
 
