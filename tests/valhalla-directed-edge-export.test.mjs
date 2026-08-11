@@ -18,6 +18,28 @@ const cityCollection = {
   }],
 };
 
+function encodePolyline6(coordinates) {
+  let previousLatitude = 0;
+  let previousLongitude = 0;
+  let encoded = "";
+  for (const [longitude, latitude] of coordinates) {
+    for (const delta of [
+      Math.round(latitude * 1e6) - previousLatitude,
+      Math.round(longitude * 1e6) - previousLongitude,
+    ]) {
+      let value = delta < 0 ? ~(delta << 1) : delta << 1;
+      while (value >= 0x20) {
+        encoded += String.fromCharCode((0x20 | (value & 0x1f)) + 63);
+        value >>= 5;
+      }
+      encoded += String.fromCharCode(value + 63);
+    }
+    previousLatitude = Math.round(latitude * 1e6);
+    previousLongitude = Math.round(longitude * 1e6);
+  }
+  return encoded;
+}
+
 test("directed-edge export traces City lines against the pinned graph and keeps exact IDs", async () => {
   const calls = [];
   const output = await exportDirectedEdges({
@@ -36,12 +58,14 @@ test("directed-edge export traces City lines against the pinned graph and keeps 
         "edge.id",
         "edge.way_id",
         "edge.forward",
+        "edge.length",
         "edge.begin_shape_index",
         "edge.end_shape_index",
         "shape",
       ]);
       assert.ok(request.shape.length >= 2);
       return new Response(JSON.stringify({
+        shape: encodePolyline6(request.shape.map(({ lon, lat }) => [lon, lat])),
         edges: [{
           id: "2/123/4",
           way_id: 99,
@@ -60,6 +84,7 @@ test("directed-edge export traces City lines against the pinned graph and keeps 
     shapes: 1,
     tracedShapes: 1,
     fallbackTracedShapes: 0,
+    partialEdgesOmitted: 0,
     untracedShapes: 0,
     failures: {},
   });
@@ -110,9 +135,32 @@ test("directed-edge export records client trace failures without emitting unsafe
     shapes: 1,
     tracedShapes: 0,
     fallbackTracedShapes: 0,
+    partialEdgesOmitted: 0,
     untracedShapes: 1,
     failures: { "400:443": 1 },
   });
+});
+
+test("directed-edge export omits a City fragment that covers only part of a graph edge", async () => {
+  const output = await exportDirectedEdges({
+    cityCollection,
+    routingUrl: "http://127.0.0.1:8002",
+    expectedGraphVersion: "1786234669",
+    fetchImpl: async (url) => url.pathname === "/status"
+      ? new Response(JSON.stringify({ tileset_last_modified: 1786234669 }), { status: 200 })
+      : new Response(JSON.stringify({
+        shape: encodePolyline6(cityCollection.features[0].geometry.coordinates),
+        edges: [{
+          id: "2/123/partial",
+          forward: true,
+          begin_shape_index: 0,
+          end_shape_index: 1,
+          source_percent_along: 0.25,
+        }],
+      }), { status: 200 }),
+  });
+  assert.equal(output.features.length, 0);
+  assert.equal(output.traceSummary.partialEdgesOmitted, 1);
 });
 
 test("directed-edge export uses provider-returned geometry for walk-or-snap fallback", async () => {

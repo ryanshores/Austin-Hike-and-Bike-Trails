@@ -249,6 +249,17 @@ function validatedCollection(value, label) {
   return value.features;
 }
 
+function validatedRoutingEdgeCollection(value, expectedGraphVersion) {
+  const graphVersion = String(value?.routingGraphVersion ?? "").trim();
+  if (!graphVersion) {
+    throw new Error("Routing edges must declare their routingGraphVersion.");
+  }
+  if (graphVersion !== expectedGraphVersion) {
+    throw new Error("Routing edges routingGraphVersion does not match the enrichment manifest.");
+  }
+  return validatedCollection(value, "Routing edges");
+}
+
 function validatedManifest(manifest) {
   const required = [
     "cityDatasetVersion",
@@ -276,9 +287,12 @@ export function buildRoutingEnrichment({
   sampleSpacingMeters = VERIFIED_ROUTING_ENRICHMENT_POLICY.sampleSpacingMeters,
   minimumCoverage = VERIFIED_ROUTING_ENRICHMENT_POLICY.minimumCoverage,
 } = {}) {
-  const cityFeatures = validatedCollection(cityCollection, "City facilities");
-  const routingEdges = validatedCollection(routingEdgeCollection, "Routing edges");
   const pinnedManifest = validatedManifest(manifest);
+  const cityFeatures = validatedCollection(cityCollection, "City facilities");
+  const routingEdges = validatedRoutingEdgeCollection(
+    routingEdgeCollection,
+    pinnedManifest.routingGraphVersion,
+  );
   if (!Number.isFinite(toleranceMeters) || toleranceMeters <= 0) {
     throw new Error("Tolerance must be a positive finite number of meters.");
   }

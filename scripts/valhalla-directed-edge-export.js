@@ -98,9 +98,11 @@ function edgeGeometry(shape, edge) {
   return coordinates;
 }
 
-function geometryLength(coordinates) {
-  return coordinates.slice(1).reduce((total, coordinate, index) =>
-    total + distanceMeters(coordinates[index], coordinate), 0);
+function isPartialEdge(edge) {
+  // Valhalla emits either field only when the trace covers part of an edge.
+  // A City fragment must not grant its classification to the untraced portion
+  // of the directed graph edge identified by edge.id.
+  return edge?.source_percent_along !== undefined || edge?.target_percent_along !== undefined;
 }
 
 function addFailure(failures, key) {
@@ -118,6 +120,7 @@ function traceRequest(shape, shapeMatch = "edge_walk") {
         "edge.id",
         "edge.way_id",
         "edge.forward",
+        "edge.length",
         "edge.begin_shape_index",
         "edge.end_shape_index",
         "shape",
@@ -145,6 +148,7 @@ export async function exportDirectedEdges({
   const attributions = new Array(shapes.length);
   const traceFailures = new Map();
   let fallbackTracedShapes = 0;
+  let partialEdgesOmitted = 0;
   let nextShape = 0;
 
   async function traceNextShape() {
@@ -194,11 +198,17 @@ export async function exportDirectedEdges({
         }
         throw new Error(`Valhalla trace_attributes returned HTTP ${response.status}.`);
       }
-      const attributed = (await response.json())?.edges;
-      if (!Array.isArray(attributed) || attributed.length === 0) {
-        throw new Error("Valhalla trace_attributes returned no directed edges for a City facility line.");
+      const traced = await response.json();
+      try {
+        const tracedShape = decodePolyline6(String(traced?.shape ?? ""));
+        if (!Array.isArray(traced?.edges) || traced.edges.length === 0) {
+          throw new Error("Valhalla trace_attributes returned no directed edges for a City facility line.");
+        }
+        attributions[shapeIndex] = { edges: traced.edges, shape: tracedShape };
+      } catch {
+        addFailure(traceFailures, "200:invalid-attribution");
+        attributions[shapeIndex] = null;
       }
-      attributions[shapeIndex] = { edges: attributed, shape };
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, shapes.length) }, traceNextShape));
@@ -211,6 +221,10 @@ export async function exportDirectedEdges({
       for (const edge of attributed) {
         const edgeId = String(edge?.id ?? "").trim();
         if (!edgeId) throw new Error("Valhalla returned a directed edge without a stable ID.");
+        if (isPartialEdge(edge)) {
+          partialEdgesOmitted += 1;
+          continue;
+        }
         const coordinates = edgeGeometry(shape, edge);
         const travelDirection = typeof edge.forward === "boolean"
           ? edge.forward ? "forward" : "backward"
@@ -236,9 +250,7 @@ export async function exportDirectedEdges({
       if (existing && existing.properties.travelDirection !== record.properties.travelDirection) {
         throw new Error(`Valhalla returned conflicting directions for directed edge ${record.id}.`);
       }
-      if (!existing || geometryLength(record.geometry.coordinates) > geometryLength(existing.geometry.coordinates)) {
-        records.set(record.id, record);
-      }
+      if (!existing) records.set(record.id, record);
     }
   }
 
@@ -250,6 +262,7 @@ export async function exportDirectedEdges({
       shapes: shapes.length,
       tracedShapes: shapes.length - [...traceFailures.values()].reduce((total, value) => total + value, 0),
       fallbackTracedShapes,
+      partialEdgesOmitted,
       untracedShapes: [...traceFailures.values()].reduce((total, value) => total + value, 0),
       failures: Object.fromEntries([...traceFailures.entries()].sort(([left], [right]) => left.localeCompare(right))),
     },

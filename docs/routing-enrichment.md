@@ -87,16 +87,22 @@ npm run routing:export-directed-edges -- \
   --output /path/to/austin-directed-edges.geojson
 ```
 
-The output is one record per exact directed graph ID. Re-run the command after
+The output is one record per exact directed graph ID and records the checked
+`routingGraphVersion` at the collection top level. Re-run the command after
 every graph rebuild; never reuse an export whose graph version differs from the
-sidecar artifact manifest. Keep concurrency at or below the host's Valhalla
-server thread count; the default is four and the exporter caps it at eight.
-The command reports untraced City shapes by HTTP/error code. Those shapes are
-intentionally omitted rather than guessed; their routes stay unknown until the
-underlying graph or City geometry is repaired. When `edge_walk` cannot connect
-a short City shape, the exporter uses Valhalla's `walk_or_snap` fallback but
-stores the fallback response's returned geometry—not the City input geometry—so
-the later 25 m spatial join can reject a distant snap.
+sidecar artifact manifest. The builder rejects a directed-edge collection whose
+top-level version differs from `--routing-graph-version`. Keep concurrency at
+or below the host's Valhalla server thread count; the default is four and the
+exporter caps it at eight. The command reports untraced City shapes by
+HTTP/error code. Those shapes are intentionally omitted rather than guessed;
+their routes stay unknown until the underlying graph or City geometry is
+repaired. It also omits a directed edge when Valhalla reports a partial match
+with `source_percent_along` or `target_percent_along`: a City fragment must not
+classify the untraced remainder of that graph edge. For every retained edge, it
+stores Valhalla's returned matched geometry—not the City input geometry. When
+`edge_walk` cannot connect a short City shape, the exporter uses the
+`walk_or_snap` fallback under the same rules, so the later 25 m spatial join
+can reject a distant snap.
 
 ## Build
 
@@ -109,7 +115,7 @@ npm run routing:enrich -- \
   --osm-extract-source https://download.bbbike.org/osm/bbbike/Austin/Austin.osm.pbf \
   --osm-extract-date 2026-08-01T17:06:55Z \
   --osm-extract-checksum md5:49344e78933b3eab0a84454f0d15d877 \
-  --routing-graph-version 1785883953 \
+  --routing-graph-version 1786234669 \
   --valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
@@ -145,7 +151,7 @@ npm run routing:verify-enrichment -- \
   --routing-edges /path/to/austin-directed-edges.geojson \
   --expected-city-dataset-version austin-bike-facilities-v1 \
   --expected-osm-extract-checksum md5:49344e78933b3eab0a84454f0d15d877 \
-  --expected-routing-graph-version 1785883953 \
+  --expected-routing-graph-version 1786234669 \
   --expected-valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
