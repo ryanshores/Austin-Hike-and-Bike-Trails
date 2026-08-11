@@ -3,18 +3,28 @@ set -euo pipefail
 
 readonly status_url="${VALHALLA_STATUS_URL:-http://127.0.0.1:8002/status}"
 readonly base_url="${status_url%/status}"
+readonly enrichment_url="${ROUTING_ENRICHMENT_URL:-http://127.0.0.1:8003}"
+readonly verify_routing_enrichment="${VERIFY_ROUTING_ENRICHMENT:-false}"
 
 echo "Listening socket:"
-ss -ltn | awk 'NR == 1 || /127\.0\.0\.1:8002/'
+ss -ltn | awk 'NR == 1 || /127\.0\.0\.1:8002|127\.0\.0\.1:8003/'
 
-if ss -ltn | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]|\*):8002([[:space:]]|$)'; then
-  echo "Valhalla port 8002 is exposed beyond localhost." >&2
+if ss -ltn | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]|\*):(8002|8003)([[:space:]]|$)'; then
+  echo "Routing provider or enrichment port is exposed beyond localhost." >&2
   exit 1
 fi
 
 echo "Valhalla status:"
 curl --fail --silent --show-error "$status_url"
 echo
+
+if [[ "$verify_routing_enrichment" == "true" ]]; then
+  echo "Routing enrichment sidecar:"
+  curl --fail --silent --show-error "$enrichment_url/health"
+  echo
+else
+  echo "Routing enrichment sidecar: skipped (set VERIFY_ROUTING_ENRICHMENT=true after installing SQLite data)"
+fi
 
 python3 - "$base_url" <<'PY'
 import json

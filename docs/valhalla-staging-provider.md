@@ -55,6 +55,35 @@ feasibility artifact format is documented in
 The `127.0.0.1` binding is intentional. Do not bind Valhalla directly to a LAN
 or public interface.
 
+## Load and expose the routing-enrichment sidecar
+
+The same Compose file runs `atlas-routing-enrichment` from the pinned Valhalla
+image's Python 3 runtime. It reads only
+`/srv/atlas-valhalla/custom_files/routing-enrichment.sqlite`, binds host port
+8003 to `127.0.0.1`, and has no browser-facing route. Build the SQLite file
+offline with `scripts/build-routing-enrichment-sqlite.py` as documented in
+[`routing-enrichment.md`](routing-enrichment.md), then bring the service up:
+
+```bash
+docker compose \
+  --env-file infra/valhalla/host.env \
+  --file infra/valhalla/compose.yaml \
+  up --detach routing-enrichment
+
+# Run this additional check only after routing-enrichment.sqlite is installed.
+VERIFY_ROUTING_ENRICHMENT=true scripts/verify-valhalla-host.sh
+```
+
+Create separate Tunnel hostnames and separate Cloudflare Access applications
+and service tokens for the sidecar, for example
+`routing-enrichment-staging.<your-zone>` and
+`routing-enrichment.<your-zone>`, each forwarding to
+`http://127.0.0.1:8003`. Do not reuse either Valhalla service token or the
+provider hostname: the Worker-side enrichment client is a later integration
+slice. Before adding that client, verify anonymous requests to both sidecar
+hostnames receive Access denial and `http://127.0.0.1:8003/health` is healthy
+on the host.
+
 ## Publish only through Tunnel and Access
 
 1. In Cloudflare Zero Trust, create a remotely managed Tunnel on the routing

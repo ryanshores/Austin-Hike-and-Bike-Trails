@@ -68,12 +68,69 @@ authorize its own City classifications. The output embeds SHA-256 hashes of
 both input files plus the pinned Valhalla image, City dataset, OSM extract, and
 routing graph versions. It is deterministic for identical inputs and options.
 
-Generated full-dataset artifacts belong outside source control. The provider
-can load the result into the graph-versioned D1 sidecar. At request time, the
-Worker asks Valhalla's `trace_attributes` endpoint for the exact graph IDs of a
-returned route, then joins only those IDs against the sidecar. A record is
-valid only for the provider's reported routing-graph version. Missing,
-malformed, or unavailable sidecar data stays unknown instead of promoting a
-route section; an artifact record with no City match still retains its OSM
-fallback classification. Direct binary-tile customization can replace this
-sidecar later without changing the normalized route response or planner UI.
+Generated full-dataset artifacts belong outside source control. The initial
+free-tier provider loads them into a graph-versioned SQLite sidecar co-hosted
+with Valhalla. At request time, the Worker asks Valhalla's
+`trace_attributes` endpoint for the exact graph IDs of a returned route, then
+joins only those IDs against the sidecar. A record is valid only for the
+provider's reported routing-graph version. Missing, malformed, or unavailable
+sidecar data stays unknown instead of promoting a route section; an artifact
+record with no City match still retains its OSM fallback classification.
+Direct binary-tile customization can replace this sidecar later without
+changing the normalized route response or planner UI.
+
+## Verify before staging installation
+
+The builder writes to a same-directory temporary file and renames it only once
+the full JSON artifact is ready. Before installing a refresh on the staging
+provider, rebuild and verify against the exact City and directed-edge inputs:
+
+```bash
+npm run routing:verify-enrichment -- \
+  --enrichment /path/to/austin-routing-enrichment.json \
+  --city /path/to/austin-bike-facilities.geojson \
+  --routing-edges /path/to/austin-directed-edges.geojson \
+  --expected-city-dataset-version austin-bike-facilities-v1 \
+  --expected-osm-extract-checksum md5:49344e78933b3eab0a84454f0d15d877 \
+  --expected-routing-graph-version 1785883953 \
+  --expected-valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
+```
+
+The verifier checks both input SHA-256 values, requested manifest pins, and a
+complete deterministic rebuild, including every edge and summary count. A
+failure means the artifact must not be installed. The Valhalla host sidecar
+loader remains a separate provider-integration step; this command makes the
+artifact it will consume safe to promote.
+
+## SQLite sidecar build and host contract
+
+Build the JSON artifact with the command above, then load it atomically on the
+private Valhalla host:
+
+```bash
+python3 scripts/build-routing-enrichment-sqlite.py \
+  --artifact /path/to/austin-routing-enrichment.json \
+  --output /srv/atlas-valhalla/custom_files/routing-enrichment.sqlite
+```
+
+The loader accepts only schema version 1 artifacts built with the recorded
+25 m tolerance, 20 m sample spacing, and 80% City-coverage threshold. It
+validates every graph version, edge ID, City-match result, OSM tag object, and
+classification before atomically replacing the database. It stores the source
+artifact SHA-256 and keeps `routing_graph_version, edge_id` as the primary key.
+
+The co-hosted service is `POST /v1/lookup` with this intentionally narrow
+request contract:
+
+```json
+{
+  "routingGraphVersion": "1786234669",
+  "edgeIds": ["exact-valhalla-edge-id"]
+}
+```
+
+It returns records only for the requested graph version and exact IDs, limits a
+request to 500 IDs and 64 KiB, and returns no row for unknown or malformed
+data. It is bound only to host `127.0.0.1:8003`; the future Worker client must
+keep missing rows unknown. Do not expose it on the LAN or directly to the
+browser.

@@ -24,6 +24,25 @@ services:
       retries: 5
       start_period: 10m
 
+  routing-enrichment:
+    image: ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:2bafe8a908da3f538caabf867350d4e7c3dfb6e9a7e286bcf7a4cfa0f90b5e57
+    platform: "${VALHALLA_PLATFORM:-linux/amd64}"
+    container_name: atlas-routing-enrichment
+    restart: unless-stopped
+    entrypoint: ["python3", "/sidecar/routing_enrichment_server.py"]
+    command: ["--database", "/custom_files/routing-enrichment.sqlite", "--host", "0.0.0.0", "--port", "8003"]
+    ports:
+      - "127.0.0.1:8003:8003"
+    volumes:
+      - "${VALHALLA_DATA_DIR:?set VALHALLA_DATA_DIR}:/custom_files:ro"
+      - "./routing_enrichment_server.py:/sidecar/routing_enrichment_server.py:ro"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   cloudflared:
     image: cloudflare/cloudflared:latest@sha256:e39ee8da81ad5e05d77f38d2f51c60ca51bf2a8450ac3abab50c17fdb91d91bf
     platform: "${VALHALLA_PLATFORM:-linux/amd64}"
