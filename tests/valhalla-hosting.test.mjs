@@ -29,6 +29,17 @@ test("Austin extract preparation requires and verifies a pinned checksum", async
   assert.match(prepare, /Austin\.osm\.pbf\.provenance/);
 });
 
+test("host verification requires route edge attribution with stable graph IDs", async () => {
+  const verify = await readFile(new URL("../scripts/verify-valhalla-host.sh", import.meta.url), "utf8");
+
+  assert.match(verify, /\/trace_attributes/);
+  assert.match(verify, /"shape_match": "edge_walk"/);
+  assert.match(verify, /"edge\.id"/);
+  assert.match(verify, /"edge\.way_id"/);
+  assert.match(verify, /stable graph ID/);
+  assert.match(verify, /Route edge attribution/);
+});
+
 test("production and preview Workers use distinct non-secret provider URLs", async () => {
   const wrangler = await readFile(wranglerPath, "utf8");
 

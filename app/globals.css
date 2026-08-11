@@ -5,6 +5,7 @@
 html, body { margin: 0; min-height: 100%; max-width: 100%; overflow-x: hidden; background: var(--paper); color: var(--ink); }
 body { font-family: Georgia, "Times New Roman", serif; background-image: radial-gradient(rgba(77, 68, 45, .07) .7px, transparent .7px); background-size: 6px 6px; }
 button { font: inherit; }
+.screen-reader-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .atlas-shell { min-height: 100dvh; padding: 18px; display: grid; grid-template-rows: auto auto minmax(420px, 1fr) auto; gap: 14px; }
 .atlas-header { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 6px; }
 .eyebrow { margin: 0 0 4px; color: var(--orange); font: 700 11px/1.2 Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
@@ -55,6 +56,7 @@ h2 { font-size: 22px; }
 .planner-endpoint-actions button.active { border-color: var(--orange); background: var(--orange); color: #fffaf0; }
 .planner-geocode-results { position: absolute; z-index: 720; left: 8px; right: 8px; top: calc(100% - 8px); overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #fffaf0; box-shadow: 0 14px 34px rgba(40, 46, 31, .2); }
 .planner-geocode-results > button { width: 100%; display: block; padding: 10px 11px; border: 0; border-bottom: 1px solid rgba(61, 70, 50, .12); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.planner-geocode-results > button[aria-selected="true"] { background: #f0e8d4; }
 .planner-geocode-results > button:hover, .planner-geocode-results > button:focus-visible { background: #f0e8d4; outline: 0; }
 .planner-geocode-results strong, .planner-geocode-results span { display: block; }
 .planner-geocode-results strong { font: 700 11px/1.35 Arial, sans-serif; }

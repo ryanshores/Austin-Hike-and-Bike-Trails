@@ -33,6 +33,18 @@ cycle-lane, surface, and related attributes. Exporting those edges is a graph
 build responsibility; the application repository deliberately does not parse
 or mutate Valhalla's private binary tile format.
 
+After each graph build, run `scripts/verify-valhalla-host.sh` on the provider
+host. In addition to route and elevation checks, it sends that exact route
+shape through Valhalla's `trace_attributes` action with `edge_walk` and
+requires a stable graph edge `id`, route-edge length, and (where available) OSM
+`way_id`. This proves the installed provider exposes the identifiers required
+by the directed-edge export and sidecar.
+
+The verification gate does **not** export every graph edge or load an artifact.
+Those remain separate staging integration steps: the exporter must use the
+same pinned graph and directed graph IDs, and the sidecar loader must reject a
+manifest whose graph version does not match the running host.
+
 ## Build
 
 ```bash
@@ -48,11 +60,13 @@ npm run routing:enrich -- \
   --valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
-Defaults are a 25 m City match tolerance, 20 m edge sampling, and 80% minimum
-unambiguous coverage for City authority. Override them only with recorded
-validation evidence. The output embeds SHA-256 hashes of both input files plus
-the pinned Valhalla image, City dataset, OSM extract, and routing graph
-versions. It is deterministic for identical inputs and options.
+The reviewed installation policy is a 25 m City match tolerance, 20 m edge
+sampling, and 80% minimum unambiguous coverage for City authority. The builder
+can accept other values for offline analysis, but `routing:verify-enrichment`
+will reject those artifacts: an artifact must not choose the thresholds that
+authorize its own City classifications. The output embeds SHA-256 hashes of
+both input files plus the pinned Valhalla image, City dataset, OSM extract, and
+routing graph versions. It is deterministic for identical inputs and options.
 
 Generated full-dataset artifacts belong outside source control. The provider
 can load the result into the graph-versioned D1 sidecar. At request time, the
