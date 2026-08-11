@@ -23,7 +23,7 @@ const route = {
       reason: "not in the Atlas trails list",
       geometry: { type: "LineString", coordinates: [[-97.751, 30.265], [-97.755, 30.263]] },
     }],
-    maneuvers: [{ instruction: "Ride west." }],
+    maneuvers: [{ instruction: "Ride west.", distanceMiles: 1.4, type: 1, beginShapeIndex: 0, endShapeIndex: 1 }],
     versions: { dataset: "city-v1", routingGraph: "graph-v1" },
   },
 };
@@ -54,6 +54,8 @@ test("staging probe verifies health and the public route contract without ETA fi
 
   assert.deepEqual(calls.map(({ url }) => url.pathname), ["/api/routing-health", "/api/routes"]);
   assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[0].options.redirect, "manual");
+  assert.equal(calls[1].options.redirect, "manual");
   assert.equal(JSON.parse(calls[1].options.body).safetyPreference, "protected-or-separated");
   assert.deepEqual(result.route, {
     totalMiles: 1.4,
@@ -61,6 +63,24 @@ test("staging probe verifies health and the public route contract without ETA fi
     divergenceMiles: 0.2,
     safetyPreference: "protected-or-separated",
   });
+});
+
+test("staging probe rejects redirects and planner-invalid maneuver details", async () => {
+  await assert.rejects(
+    verifyStagingRoutePlanner({
+      baseUrl: "https://preview.example/",
+      fetchImpl: async () => new Response(null, { status: 307, headers: { Location: "https://production.example" } }),
+    }),
+    /redirected instead of responding from staging/,
+  );
+  assert.throws(() => assertPublicRoute({
+    ...route,
+    route: { ...route.route, maneuvers: [{ instruction: "Ride west." }] },
+  }, "protected-or-separated"), /maneuver distanceMiles/);
+  assert.throws(() => assertPublicRoute({
+    ...route,
+    route: { ...route.route, maneuvers: [{ ...route.route.maneuvers[0], endShapeIndex: -1 }] },
+  }, "protected-or-separated"), /invalid maneuver endShapeIndex/);
 });
 
 test("staging probe rejects forbidden client-facing timing fields", () => {

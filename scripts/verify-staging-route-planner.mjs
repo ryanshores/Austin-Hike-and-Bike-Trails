@@ -58,6 +58,20 @@ function assertNoForbiddenFields(value) {
   }
 }
 
+function assertManeuver(value) {
+  if (!String(value?.instruction ?? "").trim()) {
+    throw new Error("Route returned a maneuver without an instruction.");
+  }
+  assertFiniteNonNegative(value.distanceMiles, "maneuver distanceMiles");
+  for (const field of ["type", "beginShapeIndex", "endShapeIndex"]) {
+    const fieldValue = value[field];
+    if (fieldValue !== null && fieldValue !== undefined &&
+        (!Number.isInteger(fieldValue) || fieldValue < 0)) {
+      throw new Error(`Route returned an invalid maneuver ${field}.`);
+    }
+  }
+}
+
 export function assertRoutingHealth(value) {
   if (value?.status !== "ok" || value?.provider !== "valhalla") {
     throw new Error("Routing health did not report an available Valhalla provider.");
@@ -95,9 +109,7 @@ export function assertPublicRoute(value, preference) {
     assertLineString(divergence.geometry, "divergence");
   }
   for (const maneuver of route.maneuvers) {
-    if (!String(maneuver?.instruction ?? "").trim()) {
-      throw new Error("Route returned a maneuver without an instruction.");
-    }
+    assertManeuver(maneuver);
   }
   assertNoForbiddenFields(value);
 }
@@ -111,6 +123,17 @@ async function jsonResponse(response, label) {
   }
 }
 
+async function sameOriginJson(fetchImpl, url, options, label) {
+  const response = await fetchImpl(url, { ...options, redirect: "manual" });
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`${label} redirected instead of responding from staging.`);
+  }
+  if (response.url && new URL(response.url).origin !== url.origin) {
+    throw new Error(`${label} resolved to a different origin than staging.`);
+  }
+  return jsonResponse(response, label);
+}
+
 export async function verifyStagingRoutePlanner({
   baseUrl,
   start = DEFAULT_START,
@@ -119,17 +142,21 @@ export async function verifyStagingRoutePlanner({
   fetchImpl = fetch,
 } = {}) {
   const origin = stagingBaseUrl(baseUrl);
-  const health = await jsonResponse(
-    await fetchImpl(new URL("/api/routing-health", origin), { headers: { Accept: "application/json" } }),
+  const health = await sameOriginJson(
+    fetchImpl,
+    new URL("/api/routing-health", origin),
+    { headers: { Accept: "application/json" } },
     "Routing health",
   );
   assertRoutingHealth(health);
-  const route = await jsonResponse(
-    await fetchImpl(new URL("/api/routes", origin), {
+  const route = await sameOriginJson(
+    fetchImpl,
+    new URL("/api/routes", origin),
+    {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ start, destination, safetyPreference }),
-    }),
+    },
     "Route request",
   );
   assertPublicRoute(route, safetyPreference);
