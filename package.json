@@ -13,6 +13,8 @@
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "conflation:spike": "node scripts/run-conflation-spike.mjs",
+    "routing:export-city-facilities": "node scripts/export-austin-bike-facilities.mjs",
+    "routing:export-directed-edges": "node scripts/export-valhalla-directed-edges.mjs",
     "routing:enrich": "node scripts/build-routing-enrichment.mjs",
     "staging:route-check": "node scripts/verify-staging-route-planner.mjs",
     "routing:verify-enrichment": "node scripts/verify-routing-enrichment.mjs",

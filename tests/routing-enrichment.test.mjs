@@ -46,6 +46,12 @@ const manifest = {
   valhallaImage: "valhalla@test-digest",
 };
 
+const routingEdgeCollection = (features, routingGraphVersion = manifest.routingGraphVersion) => ({
+  type: "FeatureCollection",
+  routingGraphVersion,
+  features,
+});
+
 test("offline enrichment keeps City authority and bicycle-legal OSM fallback", () => {
   const input = {
     cityCollection: {
@@ -57,16 +63,13 @@ test("offline enrichment keeps City authority and bicycle-legal OSM fallback", (
         city("Urban Trail", -97.78),
       ],
     },
-    routingEdgeCollection: {
-      type: "FeatureCollection",
-      features: [
+    routingEdgeCollection: routingEdgeCollection([
         edge("city-trail", -97.74, { highway: "residential" }),
         edge("ordinary-street", -97.75, { highway: "residential", maxspeed: "35 mph" }),
         edge("city-conflict", -97.76, { highway: "residential", cycleway: "lane" }),
         edge("prohibited", -97.77, { highway: "path", bicycle: "no" }),
         edge("city-prohibited", -97.78, { highway: "path", bicycle: "no" }),
-      ],
-    },
+      ]),
     manifest,
     toleranceMeters: 8,
     sampleSpacingMeters: 15,
@@ -122,10 +125,9 @@ test("partial City coverage remains routable without being promoted", () => {
       type: "FeatureCollection",
       features: [city("Protected Bike Lane", -97.74, line(-97.74, 30.26, 30.2608))],
     },
-    routingEdgeCollection: {
-      type: "FeatureCollection",
-      features: [edge("partial", -97.74, { highway: "residential", cycleway: "lane" })],
-    },
+    routingEdgeCollection: routingEdgeCollection([
+      edge("partial", -97.74, { highway: "residential", cycleway: "lane" }),
+    ]),
     manifest,
     toleranceMeters: 5,
     sampleSpacingMeters: 10,
@@ -141,10 +143,9 @@ test("partial City coverage remains routable without being promoted", () => {
 test("enrichment rejects edges without a stable graph identifier", () => {
   assert.throws(() => buildRoutingEnrichment({
     cityCollection: { type: "FeatureCollection", features: [] },
-    routingEdgeCollection: {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: line(-97.74) }],
-    },
+    routingEdgeCollection: routingEdgeCollection([
+      { type: "Feature", properties: {}, geometry: line(-97.74) },
+    ]),
     manifest,
   }), /stable edgeId/);
 });
@@ -152,9 +153,17 @@ test("enrichment rejects edges without a stable graph identifier", () => {
 test("enrichment requires pinned City, OSM, graph, and Valhalla inputs", () => {
   assert.throws(() => buildRoutingEnrichment({
     cityCollection: { type: "FeatureCollection", features: [] },
-    routingEdgeCollection: { type: "FeatureCollection", features: [] },
+    routingEdgeCollection: routingEdgeCollection([]),
     manifest: { ...manifest, osmExtractChecksum: "" },
   }), /requires osmExtractChecksum/);
+});
+
+test("enrichment rejects a directed-edge collection from another graph version", () => {
+  assert.throws(() => buildRoutingEnrichment({
+    cityCollection: { type: "FeatureCollection", features: [] },
+    routingEdgeCollection: routingEdgeCollection([], "different-graph"),
+    manifest,
+  }), /routingGraphVersion does not match/);
 });
 
 test("verification rejects artifacts that do not exactly rebuild from pinned inputs", () => {
@@ -162,15 +171,14 @@ test("verification rejects artifacts that do not exactly rebuild from pinned inp
     type: "FeatureCollection",
     features: [city("Urban Trail", -97.74)],
   };
-  const routingEdgeCollection = {
-    type: "FeatureCollection",
-    features: [edge("city-trail", -97.74, { highway: "residential" })],
-  };
-  const enrichment = buildRoutingEnrichment({ cityCollection, routingEdgeCollection, manifest });
+  const routingEdges = routingEdgeCollection([
+    edge("city-trail", -97.74, { highway: "residential" }),
+  ]);
+  const enrichment = buildRoutingEnrichment({ cityCollection, routingEdgeCollection: routingEdges, manifest });
   const verification = {
     enrichment,
     cityCollection,
-    routingEdgeCollection,
+    routingEdgeCollection: routingEdges,
     cityDatasetSha256: manifest.cityDatasetSha256,
     routingEdgesSha256: manifest.routingEdgesSha256,
     expectedManifest: { routingGraphVersion: manifest.routingGraphVersion },
@@ -195,13 +203,12 @@ test("verification rejects artifacts built with unapproved City-classification t
     type: "FeatureCollection",
     features: [city("Urban Trail", -97.74)],
   };
-  const routingEdgeCollection = {
-    type: "FeatureCollection",
-    features: [edge("city-trail", -97.74, { highway: "residential" })],
-  };
+  const routingEdges = routingEdgeCollection([
+    edge("city-trail", -97.74, { highway: "residential" }),
+  ]);
   const enrichment = buildRoutingEnrichment({
     cityCollection,
-    routingEdgeCollection,
+    routingEdgeCollection: routingEdges,
     manifest,
     toleranceMeters: 25,
     sampleSpacingMeters: 20,
@@ -211,7 +218,7 @@ test("verification rejects artifacts built with unapproved City-classification t
   assert.throws(() => verifyRoutingEnrichment({
     enrichment,
     cityCollection,
-    routingEdgeCollection,
+    routingEdgeCollection: routingEdges,
     cityDatasetSha256: manifest.cityDatasetSha256,
     routingEdgesSha256: manifest.routingEdgesSha256,
   }), /minimumCoverage does not match the approved verification policy/);
@@ -227,10 +234,9 @@ test("builder atomically writes an artifact the verifier accepts from file input
     type: "FeatureCollection",
     features: [city("Urban Trail", -97.74)],
   }));
-  await writeFile(edgePath, JSON.stringify({
-    type: "FeatureCollection",
-    features: [edge("city-trail", -97.74, { highway: "residential" })],
-  }));
+  await writeFile(edgePath, JSON.stringify(routingEdgeCollection([
+    edge("city-trail", -97.74, { highway: "residential" }),
+  ])));
 
   const buildArguments = [
     "scripts/build-routing-enrichment.mjs",
