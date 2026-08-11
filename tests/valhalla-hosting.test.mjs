@@ -14,10 +14,25 @@ test("Valhalla compose configuration pins the image and exposes only localhost",
   assert.match(compose, /127\.0\.0\.1:8002:8002/);
   assert.doesNotMatch(compose, /^\s+-\s+["']?8002:8002/m);
   assert.match(compose, /VALHALLA_DATA_DIR/);
+  assert.match(compose, /atlas-routing-enrichment/);
+  assert.match(compose, /entrypoint: \["python3", "\/sidecar\/routing_enrichment_server\.py"\]/);
+  assert.match(compose, /127\.0\.0\.1:8003:8003/);
+  assert.doesNotMatch(compose, /^\s+-\s+["']?8003:8003/m);
+  assert.match(compose, /\/custom_files:ro/);
+  assert.match(compose, /routing_enrichment_server\.py:ro/);
   assert.match(compose, /cloudflare\/cloudflared:latest@sha256:[0-9a-f]{64}/);
   assert.match(compose, /network_mode: host/);
   assert.match(compose, /TUNNEL_TOKEN:\?set TUNNEL_TOKEN outside the repository/);
   assert.doesNotMatch(compose, /eyJhIjoi/);
+});
+
+test("host verification fails if either private routing port is publicly exposed", async () => {
+  const verifier = await readFile(new URL("../scripts/verify-valhalla-host.sh", import.meta.url), "utf8");
+
+  assert.match(verifier, /127\\\.0\\\.0\\\.1:8002\|127\\\.0\\\.0\\\.1:8003/);
+  assert.match(verifier, /\(8002\|8003\)/);
+  assert.match(verifier, /ROUTING_ENRICHMENT_URL/);
+  assert.match(verifier, /\$enrichment_url\/health/);
 });
 
 test("Austin extract preparation requires and verifies a pinned checksum", async () => {
