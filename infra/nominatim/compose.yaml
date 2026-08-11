@@ -12,6 +12,9 @@ services:
       - "127.0.0.1:${NOMINATIM_PORT:-8082}:8080"
     volumes:
       - "${NOMINATIM_DB_DIR:?set NOMINATIM_DB_DIR}:/var/lib/postgresql/16/main"
+      # FREEZE drops many update tables in one transaction. Increase the
+      # PostgreSQL lock budget through the image's supported conf.d include.
+      - "./postgres-atlas.conf:/etc/postgresql/16/main/conf.d/99-atlas-nominatim.conf:ro"
       # Nominatim takes ownership of its mounted import directory. The
       # preflight script copies and checks the verified Valhalla extract here,
       # so the routing source is never mounted into this container.

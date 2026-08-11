@@ -16,11 +16,18 @@ test("Nominatim compose configuration pins the image and exposes only localhost"
   assert.doesNotMatch(compose, /^\s+-\s+["']?8082:8080/m);
   assert.match(compose, /NOMINATIM_DB_DIR/);
   assert.match(compose, /NOMINATIM_OSM_DIR/);
+  assert.match(compose, /postgres-atlas\.conf:.*99-atlas-nominatim\.conf:ro/);
   assert.doesNotMatch(compose, /atlas-valhalla/);
   assert.match(compose, /PBF_PATH: \/nominatim\/data\/Austin\.osm\.pbf/);
   assert.match(compose, /UPDATE_MODE: none/);
   assert.match(compose, /FREEZE: "true"/);
   assert.doesNotMatch(compose, /NOMINATIM_PASSWORD=[^$]/);
+});
+
+test("Nominatim lock override supports freezing the imported database", async () => {
+  const lockConfig = await readFile(new URL("../infra/nominatim/postgres-atlas.conf", import.meta.url), "utf8");
+
+  assert.match(lockConfig, /max_locks_per_transaction\s*=\s*256/);
 });
 
 test("Nominatim preparation has a disk guard and verification tests an Austin search", async () => {
