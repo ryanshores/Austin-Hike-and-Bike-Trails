@@ -1,4 +1,4 @@
-import { providerEndpoint } from "./api-utils.js";
+import { providerEndpoint, requestAllowed, sharedGeocoderRateLimitKey } from "./api-utils.js";
 
 export const EXPECTED_D1_MIGRATION = "0003_live-routing-enrichment.sql";
 export const HEALTH_CHECK_TIMEOUT_MS = 3_000;
@@ -32,21 +32,35 @@ function serviceResult(service, status, extra = {}) {
   return { status, service, ...extra };
 }
 
-export async function boundedHealthFetch(fetchImpl, request, url, headers) {
+export async function boundedHealthFetch(
+  fetchImpl,
+  request,
+  url,
+  headers,
+  timeoutMs = HEALTH_CHECK_TIMEOUT_MS,
+) {
   const controller = new AbortController();
   const abortForRequest = () => controller.abort(request.signal.reason);
   if (request.signal.aborted) abortForRequest();
   else request.signal.addEventListener("abort", abortForRequest, { once: true });
-  const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    clearTimeout(timeout);
+    request.signal.removeEventListener("abort", abortForRequest);
+  };
   try {
-    return await fetchImpl(url, {
+    const response = await fetchImpl(url, {
       redirect: "manual",
       headers,
       signal: controller.signal,
     });
-  } finally {
-    clearTimeout(timeout);
-    request.signal.removeEventListener("abort", abortForRequest);
+    return { response, release };
+  } catch (error) {
+    release();
+    throw error;
   }
 }
 
@@ -58,20 +72,25 @@ async function checkProvider({
   pathname,
   request,
   fetchImpl,
+  timeoutMs,
   headers = {},
 }) {
   if (!providerUrl) return serviceResult(service, "unconfigured");
   const providerAccessHeaders = accessHeaders(accessClientId, accessClientSecret);
   if (!providerAccessHeaders) return serviceResult(service, "unconfigured");
   try {
-    const response = await boundedHealthFetch(
+    const { response, release } = await boundedHealthFetch(
       fetchImpl,
       request,
       providerEndpoint(providerUrl, pathname),
       { Accept: "application/json", ...headers, ...providerAccessHeaders },
+      timeoutMs,
     );
-    if (!response.ok) return serviceResult(service, "unavailable");
-    return { response, result: serviceResult(service, "ok") };
+    if (!response.ok) {
+      release();
+      return serviceResult(service, "unavailable");
+    }
+    return { response, release, result: serviceResult(service, "ok") };
   } catch (error) {
     if (request.signal.aborted) throw error;
     return serviceResult(service, "unavailable");
@@ -116,6 +135,7 @@ export async function checkRoutingHealth({
   accessClientSecret,
   request,
   fetchImpl = fetch,
+  timeoutMs,
 } = {}) {
   const checked = await checkProvider({
     service: "routing",
@@ -125,6 +145,7 @@ export async function checkRoutingHealth({
     pathname: "/status",
     request,
     fetchImpl,
+    timeoutMs,
   });
   if (!checked.response) return checked;
   try {
@@ -136,6 +157,8 @@ export async function checkRoutingHealth({
     });
   } catch {
     return serviceResult("routing", "unavailable");
+  } finally {
+    checked.release();
   }
 }
 
@@ -145,6 +168,7 @@ export async function checkGeocodingHealth({
   accessClientSecret,
   request,
   fetchImpl = fetch,
+  timeoutMs,
 } = {}) {
   const checked = await checkProvider({
     service: "geocoding",
@@ -154,11 +178,14 @@ export async function checkGeocodingHealth({
     pathname: "/status",
     request,
     fetchImpl,
+    timeoutMs,
     headers: {
       "User-Agent": "Austin-Hike-Bike-Atlas/1.0 (+https://github.com/ryanshores/Austin-Hike-and-Bike-Trails)",
     },
   });
-  return checked.response ? checked.result : checked;
+  if (!checked.response) return checked;
+  checked.release();
+  return checked.result;
 }
 
 export async function checkRoutingEnrichmentHealth({
@@ -168,6 +195,7 @@ export async function checkRoutingEnrichmentHealth({
   accessClientSecret,
   request,
   fetchImpl = fetch,
+  timeoutMs,
 } = {}) {
   if (!enabled) return serviceResult("routing-enrichment", "disabled");
   const checked = await checkProvider({
@@ -178,6 +206,7 @@ export async function checkRoutingEnrichmentHealth({
     pathname: "/health",
     request,
     fetchImpl,
+    timeoutMs,
   });
   if (!checked.response) return checked;
   try {
@@ -185,6 +214,8 @@ export async function checkRoutingEnrichmentHealth({
     return serviceResult("routing-enrichment", status?.status === "ready" ? "ok" : "unavailable");
   } catch {
     return serviceResult("routing-enrichment", "unavailable");
+  } finally {
+    checked.release();
   }
 }
 
@@ -224,11 +255,42 @@ export function createFullHealthHandler(options = {}) {
   return async function handleFullHealth(request) {
     const methodError = methodNotAllowed(request);
     if (methodError) return methodError;
+    if (!(await requestAllowed(options.rateLimiter, request))) {
+      return healthResponse({
+        status: "rate-limited",
+        error: "Too many full health checks. Try again shortly.",
+      }, 429);
+    }
+    if (!(await requestAllowed(
+      options.geocodeRateLimiter,
+      request,
+      sharedGeocoderRateLimitKey(options.geocoding?.providerUrl),
+    ))) {
+      return healthResponse({
+        status: "rate-limited",
+        error: "Too many full health checks. Try again shortly.",
+      }, 429);
+    }
     const [internal, routing, geocoding, routingEnrichment] = await Promise.all([
       checkInternalHealth(options),
-      checkRoutingHealth({ ...options.routing, request, fetchImpl: options.fetchImpl }),
-      checkGeocodingHealth({ ...options.geocoding, request, fetchImpl: options.fetchImpl }),
-      checkRoutingEnrichmentHealth({ ...options.routingEnrichment, request, fetchImpl: options.fetchImpl }),
+      checkRoutingHealth({
+        ...options.routing,
+        request,
+        fetchImpl: options.fetchImpl,
+        timeoutMs: options.timeoutMs,
+      }),
+      checkGeocodingHealth({
+        ...options.geocoding,
+        request,
+        fetchImpl: options.fetchImpl,
+        timeoutMs: options.timeoutMs,
+      }),
+      checkRoutingEnrichmentHealth({
+        ...options.routingEnrichment,
+        request,
+        fetchImpl: options.fetchImpl,
+        timeoutMs: options.timeoutMs,
+      }),
     ]);
     const checks = {
       ...internal.checks,

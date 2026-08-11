@@ -4,24 +4,13 @@ import {
   pointInServiceArea,
   providerEndpoint,
   requestAllowed,
+  sharedGeocoderRateLimitKey,
 } from "./api-utils.js";
 
 export const GEOCODE_CACHE_VERSION = "austin-geocode-v1";
 export const GEOCODE_CACHE_TTL_SECONDS = 86_400;
 export const GEOCODE_MAX_RESULTS = 5;
 export const GEOCODE_MAX_QUERY_LENGTH = 120;
-const PUBLIC_NOMINATIM_RATE_LIMIT_KEY = "public-nominatim-application";
-
-function sharedGeocoderRateLimitKey(providerUrl) {
-  try {
-    return new URL(providerUrl).hostname.toLowerCase() === "nominatim.openstreetmap.org"
-      ? PUBLIC_NOMINATIM_RATE_LIMIT_KEY
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function geocoderProviderAccessHeaders(accessClientId, accessClientSecret) {
   if (!accessClientId && !accessClientSecret) return {};
   if (!accessClientId || !accessClientSecret) return null;

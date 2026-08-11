@@ -75,6 +75,8 @@ const worker = {
     if (url.pathname === "/api/health/full") {
       return createFullHealthHandler({
         database: env.DB,
+        rateLimiter: env.ROUTE_RATE_LIMITER,
+        geocodeRateLimiter: env.GEOCODE_RATE_LIMITER,
         routing: {
           providerUrl: env.ROUTING_URL,
           accessClientId: env.ROUTING_ACCESS_CLIENT_ID,

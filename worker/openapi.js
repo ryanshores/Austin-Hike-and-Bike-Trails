@@ -10,6 +10,10 @@ const healthCheck = {
         description: "Only GET is supported",
         content: { "application/json": { schema: { $ref: "#/components/schemas/HealthFailure" } } },
       },
+      429: {
+        description: "Full health probe rate limit exceeded",
+        content: { "application/json": { schema: { $ref: "#/components/schemas/HealthFailure" } } },
+      },
       502: {
         description: "Configured remote service is unavailable",
         content: { "application/json": { schema: { $ref: "#/components/schemas/ServiceCheck" } } },
@@ -17,6 +21,30 @@ const healthCheck = {
       503: {
         description: "Required service is unavailable, disabled, or unconfigured",
         content: { "application/json": { schema: { $ref: "#/components/schemas/HealthResponse" } } },
+      },
+    },
+  },
+};
+
+const routingHealthCheck = {
+  get: {
+    summary: "Routing-provider health check",
+    responses: {
+      200: {
+        description: "Routing-provider diagnostic response",
+        content: { "application/json": { schema: { $ref: "#/components/schemas/ServiceCheck" } } },
+      },
+      405: {
+        description: "Only GET is supported",
+        content: { "application/json": { schema: { $ref: "#/components/schemas/HealthFailure" } } },
+      },
+      502: {
+        description: "Routing provider is unavailable",
+        content: { "application/json": { schema: { $ref: "#/components/schemas/HealthFailure" } } },
+      },
+      503: {
+        description: "Routing provider is unconfigured",
+        content: { "application/json": { schema: { $ref: "#/components/schemas/HealthFailure" } } },
       },
     },
   },
@@ -32,7 +60,7 @@ export const OPENAPI_DOCUMENT = Object.freeze({
   paths: {
     "/api/health": healthCheck,
     "/api/health/full": healthCheck,
-    "/api/routing-health": healthCheck,
+    "/api/routing-health": routingHealthCheck,
     "/api/geocoding-health": healthCheck,
     "/api/routing-enrichment-health": healthCheck,
   },
@@ -83,7 +111,7 @@ export const OPENAPI_DOCUMENT = Object.freeze({
         type: "object",
         required: ["status", "error"],
         properties: {
-          status: { type: "string", enum: ["unavailable"] },
+          status: { type: "string", enum: ["unavailable", "rate-limited"] },
           error: { type: "string" },
         },
       },

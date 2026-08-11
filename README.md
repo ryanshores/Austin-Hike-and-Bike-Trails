@@ -122,7 +122,10 @@ ledger includes the latest migration expected by this Worker build. It returns
 dependency is disabled or unconfigured, and `503` with `status: "unavailable"`
 when internal readiness or a configured remote service fails. Use named
 `checks` in the aggregate response to identify the failed service; use an
-individual health URL for focused monitoring.
+individual health URL for focused monitoring. The aggregate endpoint shares the
+route and geocode limiters, returning `429` before it queries D1 or a remote
+provider when the per-client budget is exhausted. For public Nominatim, it uses
+the same application-wide geocoder limiter key as submitted searches.
 
 For a local server, preview, or production host, substitute the appropriate
 origin and run:

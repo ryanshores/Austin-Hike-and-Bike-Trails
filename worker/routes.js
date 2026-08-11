@@ -718,25 +718,29 @@ export function createRoutingHealthHandler({
       });
     }
     try {
-      const response = await boundedHealthFetch(
+      const { response, release } = await boundedHealthFetch(
         fetchImpl,
         request,
         providerEndpoint(providerUrl, "/status"),
         providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
       );
-      if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);
-      const status = await response.json();
-      return Response.json(
-        {
-          status: status.has_tiles === false ? "degraded" : "ok",
-          provider: "valhalla",
-          version: String(status.version ?? "unknown"),
-          routingGraphVersion: String(
-            status.osm_changeset ?? status.tileset_last_modified ?? "unknown",
-          ),
-        },
-        { headers: { "Cache-Control": "no-store" } },
-      );
+      try {
+        if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);
+        const status = await response.json();
+        return Response.json(
+          {
+            status: status.has_tiles === false ? "degraded" : "ok",
+            provider: "valhalla",
+            version: String(status.version ?? "unknown"),
+            routingGraphVersion: String(
+              status.osm_changeset ?? status.tileset_last_modified ?? "unknown",
+            ),
+          },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      } finally {
+        release();
+      }
     } catch (error) {
       if (request.signal.aborted) throw error;
       const detail = error instanceof Error ? error.message : "provider request failed";

@@ -5,6 +5,7 @@ import test from "node:test";
 
 import {
   EXPECTED_D1_MIGRATION,
+  checkRoutingHealth,
   createFullHealthHandler,
   createGeocodingHealthHandler,
   createHealthHandler,
@@ -215,6 +216,66 @@ test("full health exposes remote failures and disabled enrichment without sensit
   assert.equal(JSON.stringify(body).includes("private upstream error"), false);
 });
 
+test("full health is limited before it queries D1 or remote services", async () => {
+  let fetches = 0;
+  const response = await createFullHealthHandler({
+    database: database(),
+    rateLimiter: { async limit() { return { success: false }; } },
+    fetchImpl: async () => {
+      fetches += 1;
+      throw new Error("must not fetch");
+    },
+  })(request("/api/health/full"));
+
+  assert.equal(response.status, 429);
+  assert.equal(fetches, 0);
+  assert.deepEqual(await response.json(), {
+    status: "rate-limited",
+    error: "Too many full health checks. Try again shortly.",
+  });
+});
+
+test("full health uses the application-wide geocoder limiter key for public Nominatim", async () => {
+  const geocoderKeys = [];
+  const response = await createFullHealthHandler({
+    database: database(),
+    rateLimiter: { async limit() { return { success: true }; } },
+    geocodeRateLimiter: {
+      async limit({ key }) {
+        geocoderKeys.push(key);
+        return { success: false };
+      },
+    },
+    geocoding: { providerUrl: "https://nominatim.openstreetmap.org" },
+  })(request("/api/health/full"));
+
+  assert.equal(response.status, 429);
+  assert.deepEqual(geocoderKeys, ["public-nominatim-application"]);
+});
+
+test("remote health timeout remains active until a response body is consumed", async () => {
+  let providerSignal;
+  const result = await checkRoutingHealth({
+    providerUrl: "https://routing.internal",
+    request: request("/api/health/full"),
+    timeoutMs: 5,
+    fetchImpl: async (_url, options) => {
+      providerSignal = options.signal;
+      return {
+        ok: true,
+        json() {
+          return new Promise((_resolve, reject) => {
+            providerSignal.addEventListener("abort", () => reject(new Error("body timed out")));
+          });
+        },
+      };
+    },
+  });
+
+  assert.equal(providerSignal.aborted, true);
+  assert.deepEqual(result, { status: "unavailable", service: "routing" });
+});
+
 test("OpenAPI describes every health endpoint and is non-cacheable", async () => {
   const response = await createOpenApiHandler()(request("/api/openapi.json"));
   assert.equal(response.status, 200);
@@ -229,5 +290,9 @@ test("OpenAPI describes every health endpoint and is non-cacheable", async () =>
   ]) {
     assert.ok(OPENAPI_DOCUMENT.paths[path]);
   }
+  assert.equal(
+    OPENAPI_DOCUMENT.paths["/api/routing-health"].get.responses[502].content["application/json"].schema.$ref,
+    "#/components/schemas/HealthFailure",
+  );
   assert.equal((await createOpenApiHandler()(request("/api/openapi.json", { method: "POST" }))).status, 405);
 });
