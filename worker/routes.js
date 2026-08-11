@@ -6,6 +6,7 @@ import {
   readJsonBody,
   requestAllowed,
 } from "./api-utils.js";
+import { boundedHealthFetch } from "./health.js";
 import {
   SafetyClass,
   SafetyFinding,
@@ -717,11 +718,12 @@ export function createRoutingHealthHandler({
       });
     }
     try {
-      const response = await fetchImpl(providerEndpoint(providerUrl, "/status"), {
-        redirect: "manual",
-        headers: providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
-        signal: request.signal,
-      });
+      const response = await boundedHealthFetch(
+        fetchImpl,
+        request,
+        providerEndpoint(providerUrl, "/status"),
+        providerRequestHeaders(providerAccessHeaders, { Accept: "application/json" }),
+      );
       if (!response.ok) throw new Error(`provider returned HTTP ${response.status}`);
       const status = await response.json();
       return Response.json(
