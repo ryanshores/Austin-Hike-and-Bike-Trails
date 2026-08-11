@@ -33,6 +33,18 @@ cycle-lane, surface, and related attributes. Exporting those edges is a graph
 build responsibility; the application repository deliberately does not parse
 or mutate Valhalla's private binary tile format.
 
+After each graph build, run `scripts/verify-valhalla-host.sh` on the provider
+host. In addition to route and elevation checks, it sends that exact route
+shape through Valhalla's `trace_attributes` action with `edge_walk` and
+requires a stable graph edge `id`, route-edge length, and (where available) OSM
+`way_id`. This proves the installed provider exposes the identifiers required
+by the directed-edge export and sidecar.
+
+The verification gate does **not** export every graph edge or load an artifact.
+Those remain separate staging integration steps: the exporter must use the
+same pinned graph and directed graph IDs, and the sidecar loader must reject a
+manifest whose graph version does not match the running host.
+
 ## Build
 
 ```bash
