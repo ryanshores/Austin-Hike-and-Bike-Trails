@@ -6,10 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 const execFile = promisify(execFileCallback);
-const loaderPath = new URL("../scripts/build-routing-enrichment-sqlite.py", import.meta.url);
-const serverPath = new URL("../infra/valhalla/routing_enrichment_server.py", import.meta.url);
+const loaderPath = fileURLToPath(new URL("../scripts/build-routing-enrichment-sqlite.py", import.meta.url));
+const serverPath = fileURLToPath(new URL("../infra/valhalla/routing_enrichment_server.py", import.meta.url));
 
 function artifact(overrides = {}) {
   return {
@@ -106,10 +107,10 @@ test("SQLite loader atomically validates and serves exact graph-versioned record
   let server;
   try {
     await writeFile(artifactPath, `${JSON.stringify(artifact())}\n`);
-    await execFile("python3", [loaderPath.pathname, "--artifact", artifactPath, "--output", databasePath]);
+    await execFile("python3", [loaderPath, "--artifact", artifactPath, "--output", databasePath]);
 
     server = spawn("python3", [
-      serverPath.pathname,
+      serverPath,
       "--database",
       databasePath,
       "--host",
@@ -170,7 +171,7 @@ test("SQLite loader atomically validates and serves exact graph-versioned record
       manifest: { ...artifact().manifest, minimumCoverage: 0.01 },
     }))}\n`);
     await assert.rejects(
-      execFile("python3", [loaderPath.pathname, "--artifact", artifactPath, "--output", databasePath]),
+      execFile("python3", [loaderPath, "--artifact", artifactPath, "--output", databasePath]),
       /minimumCoverage must equal 0.8/,
     );
     assert.deepEqual(await readFile(databasePath), originalDatabase);

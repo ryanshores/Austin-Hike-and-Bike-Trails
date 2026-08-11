@@ -45,6 +45,65 @@ Those remain separate staging integration steps: the exporter must use the
 same pinned graph and directed graph IDs, and the sidecar loader must reject a
 manifest whose graph version does not match the running host.
 
+## Export directed City-facility edges
+
+The initial exporter deliberately avoids Valhalla's private binary-tile format.
+It densifies every City facility line at 20 m, traces each bounded shape against
+the host's exact graph with `trace_attributes`, and writes the returned directed
+IDs, geometry, OSM way IDs, and direction as GeoJSON. It checks `/status`
+before any trace request and rejects a changed graph version. This covers the
+City-authoritative facilities; graph edges outside that export remain unknown
+until a future full OSM-tag export is available, so they cannot receive an
+unearned safety promotion.
+
+First create a complete City snapshot. This uses the same ordered, paginated
+ArcGIS query as the Worker, but takes a deliberate full-Austin envelope rather
+than a browser viewport. Save the generated file with the artifact evidence;
+it is generated data and must not be committed.
+
+```bash
+npm run routing:export-city-facilities -- \
+  --bounds -98.10,30.05,-97.55,30.55 \
+  --output /path/to/austin-bike-facilities.geojson
+```
+
+Run it from the offline build machine after recording the current `/status`
+graph version. The Linux provider image intentionally does not include Node;
+when the build machine is remote from the host, use a temporary SSH loopback
+tunnel and keep Valhalla private:
+
+```bash
+ssh -N -L 127.0.0.1:18002:127.0.0.1:8002 ryan-mini
+```
+
+Then, in another terminal, run:
+
+```bash
+npm run routing:export-directed-edges -- \
+  --city /path/to/austin-bike-facilities.geojson \
+  --routing-url http://127.0.0.1:18002 \
+  --routing-graph-version 1786234669 \
+  --concurrency 2 \
+  --output /path/to/austin-directed-edges.geojson
+```
+
+The output is one record per exact directed graph ID and records the checked
+`routingGraphVersion` at the collection top level. Re-run the command after
+every graph rebuild; never reuse an export whose graph version differs from the
+sidecar artifact manifest. The builder rejects a directed-edge collection whose
+top-level version differs from `--routing-graph-version`. Keep concurrency at
+or below the host's Valhalla server thread count; the default is four and the
+exporter caps it at eight. The command reports untraced City shapes by
+HTTP/error code. Those shapes are intentionally omitted rather than guessed;
+their routes stay unknown until the underlying graph or City geometry is
+repaired. It also omits a directed edge when Valhalla reports a partial match
+with `source_percent_along` or `target_percent_along`: a City fragment must not
+classify the untraced remainder of that graph edge. For every retained edge, it
+stores Valhalla's returned matched geometry—not the City input geometry. When
+`edge_walk` cannot connect a short City shape, the exporter uses the
+`walk_or_snap` fallback under the same rules, so the later 25 m spatial join
+can reject a distant snap.
+
 ## Build
 
 ```bash
@@ -56,7 +115,7 @@ npm run routing:enrich -- \
   --osm-extract-source https://download.bbbike.org/osm/bbbike/Austin/Austin.osm.pbf \
   --osm-extract-date 2026-08-01T17:06:55Z \
   --osm-extract-checksum md5:49344e78933b3eab0a84454f0d15d877 \
-  --routing-graph-version 1785883953 \
+  --routing-graph-version 1786234669 \
   --valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
@@ -92,7 +151,7 @@ npm run routing:verify-enrichment -- \
   --routing-edges /path/to/austin-directed-edges.geojson \
   --expected-city-dataset-version austin-bike-facilities-v1 \
   --expected-osm-extract-checksum md5:49344e78933b3eab0a84454f0d15d877 \
-  --expected-routing-graph-version 1785883953 \
+  --expected-routing-graph-version 1786234669 \
   --expected-valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
