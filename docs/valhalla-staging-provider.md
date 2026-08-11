@@ -46,7 +46,10 @@ The source checksum is deliberately supplied at deployment time because
 BBBike's stable URL is updated in place. Keep the generated provenance file
 beside the graph. The first start builds graph and elevation artifacts; later
 starts reuse them. Record the `/status` graph version whenever the extract or
-image changes. The feasibility artifact format is documented in
+image changes. The verification script also confirms a routed shape returns
+stable Valhalla graph edge IDs through `trace_attributes`; keep that output
+with the graph build evidence before producing a City enrichment sidecar. The
+feasibility artifact format is documented in
 [`city-osm-conflation-spike.md`](city-osm-conflation-spike.md).
 
 The `127.0.0.1` binding is intentional. Do not bind Valhalla directly to a LAN

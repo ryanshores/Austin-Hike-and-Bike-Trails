@@ -63,6 +63,41 @@ samples = height.get("range_height", [])
 if len(samples) < 2:
     raise SystemExit("Valhalla did not return a usable elevation profile.")
 
+trace_body = json.dumps({
+    "encoded_polyline": legs[0]["shape"],
+    "shape_match": "edge_walk",
+    "costing": "bicycle",
+    "costing_options": {"bicycle": {"bicycle_type": "hybrid"}},
+    "units": "miles",
+    "filters": {
+        "attributes": [
+            "edge.id",
+            "edge.way_id",
+            "edge.length",
+            "edge.begin_shape_index",
+            "edge.end_shape_index",
+            "shape",
+        ],
+        "action": "include",
+    },
+}).encode()
+trace_request = Request(
+    f"{base_url}/trace_attributes",
+    data=trace_body,
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+with urlopen(trace_request, timeout=30) as response:
+    attribution = json.load(response)
+
+attributed_edges = attribution.get("edges", [])
+if not attributed_edges:
+    raise SystemExit("Valhalla did not return route edge attribution.")
+if any(edge.get("id") is None for edge in attributed_edges):
+    raise SystemExit("Valhalla returned an attributed edge without a stable graph ID.")
+if any(not isinstance(edge.get("length"), (int, float)) or edge["length"] < 0 for edge in attributed_edges):
+    raise SystemExit("Valhalla returned an attributed edge without a usable length.")
+
 summary = trip.get("summary", {})
 print(
     "Austin bicycle route: "
@@ -70,4 +105,9 @@ print(
     f"{len(legs[0].get('maneuvers', []))} maneuver(s)"
 )
 print(f"Elevation profile: {len(samples)} samples")
+print(
+    "Route edge attribution: "
+    f"{len(attributed_edges)} graph edge(s), "
+    f"{sum(edge.get('way_id') is not None for edge in attributed_edges)} with OSM way ID"
+)
 PY
