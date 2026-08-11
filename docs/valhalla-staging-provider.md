@@ -79,10 +79,9 @@ and service tokens for the sidecar, for example
 `routing-enrichment-staging.<your-zone>` and
 `routing-enrichment.<your-zone>`, each forwarding to
 `http://127.0.0.1:8003`. Do not reuse either Valhalla service token or the
-provider hostname: the Worker-side enrichment client is a later integration
-slice. Before adding that client, verify anonymous requests to both sidecar
-hostnames receive Access denial and `http://127.0.0.1:8003/health` is healthy
-on the host.
+provider hostname. Before enabling the Worker client, verify anonymous
+requests to both sidecar hostnames receive Access denial and
+`http://127.0.0.1:8003/health` is healthy on the host.
 
 ## Publish only through Tunnel and Access
 
@@ -116,6 +115,18 @@ Access token:
 
 - `ROUTING_ACCESS_CLIENT_ID` as an encrypted secret.
 - `ROUTING_ACCESS_CLIENT_SECRET` as an encrypted secret.
+
+For the SQLite sidecar, configure the environment-specific non-secret
+`ROUTING_ENRICHMENT_URL` and a distinct encrypted Access pair:
+
+- `ROUTING_ENRICHMENT_ACCESS_CLIENT_ID`
+- `ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET`
+
+The sidecar is disabled by default. Set
+`ROUTING_ENRICHMENT_ENABLED=true` only after the matching SQLite artifact is
+installed and the sidecar's Tunnel and Access policy have been verified. The
+Worker requests only exact graph-versioned edge IDs; missing, mismatched, or
+unavailable sidecar data remains unknown rather than making a route safer.
 
 Never commit the service token, put it in a browser variable, or add it to a
 preview URL. The Worker adds the two Cloudflare Access headers to its server-

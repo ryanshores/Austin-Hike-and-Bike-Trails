@@ -5,7 +5,7 @@ import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
 import { createRideHandler } from "./rides";
 import { createGeocodeHandler } from "./geocode";
-import { createD1RoutingEnrichmentStore, routingEnrichmentEnabled } from "./routing-enrichment";
+import { createSqliteRoutingEnrichmentStore, routingEnrichmentEnabled } from "./routing-enrichment";
 import { createRoutesHandler, createRoutingHealthHandler } from "./routes";
 
 interface RateLimitBinding {
@@ -29,6 +29,9 @@ interface Env {
   ROUTING_URL?: string;
   ROUTING_ACCESS_CLIENT_ID?: string;
   ROUTING_ACCESS_CLIENT_SECRET?: string;
+  ROUTING_ENRICHMENT_URL?: string;
+  ROUTING_ENRICHMENT_ACCESS_CLIENT_ID?: string;
+  ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET?: string;
   ROUTING_ENRICHMENT_ENABLED?: string;
   GEOCODE_RATE_LIMITER?: RateLimitBinding;
   ROUTE_RATE_LIMITER?: RateLimitBinding;
@@ -86,7 +89,11 @@ const worker = {
         rateLimiter: env.ROUTE_RATE_LIMITER,
         reportMetric: (metric: RouteMetric) => console.log(metric),
         enrichmentStore: routingEnrichmentEnabled(env.ROUTING_ENRICHMENT_ENABLED)
-          ? createD1RoutingEnrichmentStore(env.DB)
+          ? createSqliteRoutingEnrichmentStore({
+            sidecarUrl: env.ROUTING_ENRICHMENT_URL,
+            accessClientId: env.ROUTING_ENRICHMENT_ACCESS_CLIENT_ID,
+            accessClientSecret: env.ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET,
+          })
           : undefined,
       })(request);
     }
