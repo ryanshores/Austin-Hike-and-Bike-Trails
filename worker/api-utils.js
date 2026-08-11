@@ -5,6 +5,18 @@ export const AUSTIN_SERVICE_AREA = Object.freeze({
   north: 30.85,
 });
 
+const PUBLIC_NOMINATIM_RATE_LIMIT_KEY = "public-nominatim-application";
+
+export function sharedGeocoderRateLimitKey(providerUrl) {
+  try {
+    return new URL(providerUrl).hostname.toLowerCase() === "nominatim.openstreetmap.org"
+      ? PUBLIC_NOMINATIM_RATE_LIMIT_KEY
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function pointInServiceArea(point) {
   return (
     Number.isFinite(point?.latitude) &&

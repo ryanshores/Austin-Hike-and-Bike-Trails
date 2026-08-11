@@ -39,7 +39,12 @@ Route planning providers stay behind same-origin Worker endpoints:
 
 - `GET /api/geocode?q=…&limit=…`
 - `POST /api/routes`
+- `GET /api/health`
+- `GET /api/health/full`
 - `GET /api/routing-health`
+- `GET /api/geocoding-health`
+- `GET /api/routing-enrichment-health`
+- `GET /api/openapi.json`
 
 Set `GEOCODER_URL` to the base URL of a Nominatim-compatible geocoder and
 `ROUTING_URL` to the base URL of a Valhalla-compatible routing service. These
@@ -94,6 +99,50 @@ The selected safety preference also tunes Valhalla bicycle `use_roads` from a
 balanced value down to zero for the strictest preference. Valhalla treats that
 as avoidance rather than a prohibition, so regular bicycle-legal streets can
 still complete a route when facility coverage is incomplete.
+
+## Health and API diagnostics
+
+Choose the endpoint that matches the operational question. Every response uses
+`Cache-Control: no-store`, supports `GET` only, and intentionally omits
+provider URLs, credentials, database identifiers, SQL, upstream response
+bodies, and raw errors.
+
+| Endpoint | Scope | Intended use |
+| --- | --- | --- |
+| `GET /api/health` | Worker execution, D1 read, and expected D1 migration | Fast readiness probe. It makes no remote provider requests. |
+| `GET /api/health/full` | Internal readiness plus routing, geocoding, and routing-enrichment | Full operational picture. Remote checks run concurrently, so it is slower than `/api/health`. |
+| `GET /api/routing-health` | `ROUTING_URL` / Valhalla | Routing-provider diagnosis, including allowlisted version and graph metadata. |
+| `GET /api/geocoding-health` | `GEOCODER_URL` / Nominatim-compatible `/status` | Geocoder diagnosis without issuing a search. |
+| `GET /api/routing-enrichment-health` | `ROUTING_ENRICHMENT_URL` sidecar `/health` | Enrichment-sidecar diagnosis; reports `disabled` when routing enrichment is not enabled. |
+
+`/api/health` returns `200` only when D1 responds and its `d1_migrations`
+ledger includes the latest migration expected by this Worker build. It returns
+`503` for an unavailable database, unavailable ledger, or unapplied migration.
+`/api/health/full` returns `200` with `status: "degraded"` when an optional
+dependency is disabled or unconfigured, and `503` with `status: "unavailable"`
+when internal readiness or a configured remote service fails. Use named
+`checks` in the aggregate response to identify the failed service; use an
+individual health URL for focused monitoring. The aggregate endpoint shares the
+route and geocode limiters, returning `429` before it queries D1 or a remote
+provider when the per-client budget is exhausted. For public Nominatim, it uses
+the same application-wide geocoder limiter key as submitted searches.
+
+For a local server, preview, or production host, substitute the appropriate
+origin and run:
+
+```bash
+curl --fail --show-error https://YOUR_HOST/api/health
+curl --fail --show-error https://YOUR_HOST/api/health/full
+curl --fail --show-error https://YOUR_HOST/api/routing-health
+curl --fail --show-error https://YOUR_HOST/api/geocoding-health
+curl --fail --show-error https://YOUR_HOST/api/routing-enrichment-health
+curl --fail --show-error https://YOUR_HOST/api/openapi.json
+```
+
+`/api/openapi.json` is an OpenAPI 3.1 document for this health surface. Import
+that stable URL into Swagger UI or another OpenAPI viewer; the Worker does not
+load a third-party documentation bundle at runtime.
+
 ## Route history authentication
 
 The Worker exposes same-origin endpoints under `/api/auth/` for anonymous

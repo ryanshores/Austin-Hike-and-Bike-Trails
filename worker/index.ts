@@ -5,6 +5,13 @@ import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
 import { createRideHandler } from "./rides";
 import { createGeocodeHandler } from "./geocode";
+import {
+  createFullHealthHandler,
+  createGeocodingHealthHandler,
+  createHealthHandler,
+  createRoutingEnrichmentHealthHandler,
+} from "./health";
+import { createOpenApiHandler } from "./openapi";
 import { createSqliteRoutingEnrichmentStore, routingEnrichmentEnabled } from "./routing-enrichment";
 import { createRoutesHandler, createRoutingHealthHandler } from "./routes";
 
@@ -60,6 +67,55 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/health") {
+      return createHealthHandler({ database: env.DB })(request);
+    }
+
+    if (url.pathname === "/api/health/full") {
+      return createFullHealthHandler({
+        database: env.DB,
+        rateLimiter: env.ROUTE_RATE_LIMITER,
+        geocodeRateLimiter: env.GEOCODE_RATE_LIMITER,
+        routing: {
+          providerUrl: env.ROUTING_URL,
+          accessClientId: env.ROUTING_ACCESS_CLIENT_ID,
+          accessClientSecret: env.ROUTING_ACCESS_CLIENT_SECRET,
+        },
+        geocoding: {
+          providerUrl: env.GEOCODER_URL,
+          accessClientId: env.GEOCODER_ACCESS_CLIENT_ID,
+          accessClientSecret: env.GEOCODER_ACCESS_CLIENT_SECRET,
+        },
+        routingEnrichment: {
+          enabled: routingEnrichmentEnabled(env.ROUTING_ENRICHMENT_ENABLED),
+          sidecarUrl: env.ROUTING_ENRICHMENT_URL,
+          accessClientId: env.ROUTING_ENRICHMENT_ACCESS_CLIENT_ID,
+          accessClientSecret: env.ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET,
+        },
+      })(request);
+    }
+
+    if (url.pathname === "/api/geocoding-health") {
+      return createGeocodingHealthHandler({
+        providerUrl: env.GEOCODER_URL,
+        accessClientId: env.GEOCODER_ACCESS_CLIENT_ID,
+        accessClientSecret: env.GEOCODER_ACCESS_CLIENT_SECRET,
+      })(request);
+    }
+
+    if (url.pathname === "/api/routing-enrichment-health") {
+      return createRoutingEnrichmentHealthHandler({
+        enabled: routingEnrichmentEnabled(env.ROUTING_ENRICHMENT_ENABLED),
+        sidecarUrl: env.ROUTING_ENRICHMENT_URL,
+        accessClientId: env.ROUTING_ENRICHMENT_ACCESS_CLIENT_ID,
+        accessClientSecret: env.ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET,
+      })(request);
+    }
+
+    if (url.pathname === "/api/openapi.json") {
+      return createOpenApiHandler()(request);
+    }
 
     if (url.pathname === "/api/bike-facilities") {
       const cache = typeof caches === "undefined"
