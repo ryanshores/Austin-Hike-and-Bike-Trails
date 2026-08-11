@@ -75,7 +75,13 @@ and speed-derived wording.
 The deterministic offline edge-manifest workflow is documented in
 [`docs/routing-enrichment.md`](docs/routing-enrichment.md). It preserves
 ordinary bicycle-legal streets as fallback routes while treating City matches
-as authoritative only when coverage is unambiguous.
+as authoritative only when coverage is unambiguous. When the private SQLite
+sidecar has a validated installed artifact, configure its non-secret
+`ROUTING_ENRICHMENT_URL` plus encrypted
+`ROUTING_ENRICHMENT_ACCESS_CLIENT_ID` and
+`ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET` values. Set
+`ROUTING_ENRICHMENT_ENABLED=true` only after the sidecar's Access boundary and
+health check have been verified; missing or invalid records remain unknown.
 
 Each `/api/routes` request also emits one structured Workers Log event with
 `event: "route_request"`, an outcome, HTTP status, rounded handler duration,

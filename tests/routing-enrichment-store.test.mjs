@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createD1RoutingEnrichmentStore,
+  createSqliteRoutingEnrichmentStore,
   routingEnrichmentEnabled,
 } from "../worker/routing-enrichment.js";
 
@@ -75,5 +76,71 @@ test("D1 enrichment lookup ignores malformed sidecar records", async () => {
   assert.deepEqual(
     await store.lookup({ routingGraphVersion: "graph-v1", edgeIds: ["broken"] }),
     new Map(),
+  );
+});
+
+test("SQLite sidecar lookup uses exact IDs, Access headers, and bounded requests", async () => {
+  const calls = [];
+  const store = createSqliteRoutingEnrichmentStore({
+    sidecarUrl: "https://enrichment.internal/base/",
+    accessClientId: "preview-client-id",
+    accessClientSecret: "preview-client-secret",
+    fetchImpl: async (url, options) => {
+      const body = JSON.parse(options.body);
+      calls.push({ url: new URL(url), options, body });
+      return Response.json({
+        routingGraphVersion: body.routingGraphVersion,
+        records: body.edgeIds.map((edgeId) => ({
+          edgeId,
+          travelDirection: "forward",
+          cityMatch: { status: "matched" },
+          city: { BICYCLE_FACILITY: "Urban Trail" },
+          osm: { highway: "cycleway" },
+          classification: {
+            safetyClass: 3,
+            finding: "atlas",
+            source: "city",
+            reason: "fully separated path",
+          },
+        })),
+      });
+    },
+  });
+
+  const records = await store.lookup({
+    routingGraphVersion: "graph-v1",
+    edgeIds: Array.from({ length: 201 }, (_, index) => `edge-${index}`),
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url.href, "https://enrichment.internal/base/v1/lookup");
+  assert.equal(calls[0].options.redirect, "manual");
+  assert.equal(calls[0].options.headers["CF-Access-Client-Id"], "preview-client-id");
+  assert.equal(calls[0].options.headers["CF-Access-Client-Secret"], "preview-client-secret");
+  assert.equal(calls[0].body.edgeIds.length, 200);
+  assert.equal(calls[1].body.edgeIds.length, 1);
+  assert.equal(records.size, 201);
+  assert.equal(records.get("edge-200").classification.safetyClass, 3);
+});
+
+test("SQLite sidecar rejects mismatched or malformed responses and requires a complete Access pair", async () => {
+  assert.equal(createSqliteRoutingEnrichmentStore({
+    sidecarUrl: "https://enrichment.internal",
+    accessClientId: "client-id",
+  }), null);
+
+  const store = createSqliteRoutingEnrichmentStore({
+    sidecarUrl: "https://enrichment.internal",
+    accessClientId: "client-id",
+    accessClientSecret: "client-secret",
+    fetchImpl: async () => Response.json({
+      routingGraphVersion: "different-graph",
+      records: [],
+    }),
+  });
+
+  await assert.rejects(
+    store.lookup({ routingGraphVersion: "graph-v1", edgeIds: ["edge-1"] }),
+    /invalid lookup response/,
   );
 });
