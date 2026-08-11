@@ -133,10 +133,10 @@ curl --fail https://<atlas-preview-host>/api/routing-health
 curl --fail https://<atlas-production-host>/api/routing-health
 ```
 
-Then submit an Austin-area route to `POST /api/routes` and verify that its
-elevation profile is returned in each environment. Confirm in browser developer
-tools that clients only call Atlas `/api/routes`; they must not call either
-provider hostname directly.
+Then run the same-origin Atlas acceptance probe and complete the browser/device
+checklist in [`staging-route-field-tests.md`](staging-route-field-tests.md).
+It verifies the normalized route contract (including elevation), while the
+checklist covers input, mobile guidance, and browser network boundaries.
 
 If the Tunnel, Access policy, or local host is unavailable, leave routing
 disabled rather than bypassing Access or exposing the local Valhalla port.

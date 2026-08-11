@@ -370,23 +370,127 @@ function normalizedEdges(candidate, geometry, elevation) {
   );
 }
 
+function unknownEdgeClassification() {
+  return classifyRouteEdge();
+}
+
+function edgeGeometry(geometry, edge) {
+  const begin = Number(edge?.begin_shape_index);
+  const end = Number(edge?.end_shape_index);
+  if (!Number.isInteger(begin) || !Number.isInteger(end) || begin < 0 || end < begin) {
+    throw new Error("Routing provider returned invalid edge shape indexes.");
+  }
+  const coordinates = geometry.coordinates.slice(begin, end + 1);
+  if (coordinates.length < 2) {
+    throw new Error("Routing provider returned an edge without usable geometry.");
+  }
+  return { type: "LineString", coordinates };
+}
+
+async function attributedEdges(
+  geometry,
+  routingGraphVersion,
+  providerUrl,
+  providerAccessHeaders,
+  enrichmentStore,
+  fetchImpl,
+  signal,
+) {
+  if (!enrichmentStore) return null;
+  const response = await fetchImpl(providerEndpoint(providerUrl, "/trace_attributes"), {
+    method: "POST",
+    redirect: "manual",
+    headers: providerRequestHeaders(providerAccessHeaders, {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    }),
+    body: JSON.stringify({
+      shape: geometry.coordinates.map(([longitude, latitude]) => ({ lat: latitude, lon: longitude })),
+      shape_match: "edge_walk",
+      costing: "bicycle",
+      costing_options: { bicycle: { bicycle_type: "hybrid" } },
+      units: "miles",
+      filters: {
+        attributes: [
+          "edge.id",
+          "edge.length",
+          "edge.begin_shape_index",
+          "edge.end_shape_index",
+        ],
+        action: "include",
+      },
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`route edge attribution provider returned HTTP ${response.status}`);
+  }
+  const attributed = (await response.json()).edges;
+  if (!Array.isArray(attributed) || attributed.length === 0) {
+    throw new Error("Routing provider returned no attributed route edges.");
+  }
+  const edgeIds = attributed.map((edge) => String(edge?.id ?? "").trim());
+  if (edgeIds.some((edgeId) => !edgeId)) {
+    throw new Error("Routing provider returned an attributed edge without a stable graph ID.");
+  }
+  const records = await enrichmentStore.lookup({ routingGraphVersion, edgeIds });
+  return attributed.map((edge) => {
+    const record = records.get(String(edge.id));
+    let classification = unknownEdgeClassification();
+    if (record) {
+      try {
+        classification = normalizedEdgeClassification(record);
+      } catch {
+        // A malformed sidecar row must not become a route outage or a safety
+        // promotion. Treat this exact edge as unknown until the next import.
+      }
+    }
+    return {
+      ...(record ?? { osm: {}, city: null, travelDirection: null }),
+      classification,
+      miles: finiteNonNegative(edge.length),
+      geometry: edgeGeometry(geometry, edge),
+    };
+  });
+}
+
 async function normalizeCandidate(
   candidate,
   preference,
+  routingGraphVersionPromise,
   providerUrl,
   providerAccessHeaders,
+  enrichmentStore,
   fetchImpl,
   signal,
 ) {
   const geometry = candidateGeometry(candidate);
-  const elevation = await fetchElevation(
+  const elevationPromise = fetchElevation(
     candidate,
     providerUrl,
     providerAccessHeaders,
     fetchImpl,
     signal,
   );
-  const edges = normalizedEdges(candidate, geometry, elevation);
+  let enrichedCandidate = candidate;
+  if (!Array.isArray(candidate.edges) && enrichmentStore) {
+    try {
+      const edges = await attributedEdges(
+        geometry,
+        await routingGraphVersionPromise,
+        providerUrl,
+        providerAccessHeaders,
+        enrichmentStore,
+        fetchImpl,
+        signal,
+      );
+      if (edges) enrichedCandidate = { ...candidate, edges };
+    } catch (error) {
+      if (signal.aborted) throw error;
+    }
+  }
+  const elevation = await elevationPromise;
+  const edges = normalizedEdges(enrichedCandidate, geometry, elevation);
   return {
     geometry,
     edges,
@@ -449,6 +553,7 @@ export function createRoutesHandler({
   accessClientId,
   accessClientSecret,
   rateLimiter,
+  enrichmentStore,
   reportMetric,
   fetchImpl = fetch,
   now = Date.now,
@@ -534,25 +639,26 @@ export function createRoutesHandler({
         ), status === 422 ? "no-reasonable-route" : "provider-unavailable", routeRequest.safetyPreference);
       }
       const providerValue = await response.json();
-      const [candidates, graphVersion] = await Promise.all([
-        Promise.all(providerCandidates(providerValue).map((candidate) =>
-          normalizeCandidate(
-            candidate,
-            routeRequest.safetyPreference,
-            providerUrl,
-            providerAccessHeaders,
-            fetchImpl,
-            request.signal,
-          ),
-        )),
-        routingGraphVersion(
-          providerValue,
+      const graphVersionPromise = routingGraphVersion(
+        providerValue,
+        providerUrl,
+        providerAccessHeaders,
+        fetchImpl,
+        request.signal,
+      );
+      const candidatesPromise = Promise.all(providerCandidates(providerValue).map((candidate) =>
+        normalizeCandidate(
+          candidate,
+          routeRequest.safetyPreference,
+          graphVersionPromise,
           providerUrl,
           providerAccessHeaders,
+          enrichmentStore,
           fetchImpl,
           request.signal,
         ),
-      ]);
+      ));
+      const [graphVersion, candidates] = await Promise.all([graphVersionPromise, candidatesPromise]);
       const ranked = rankRouteCandidates(candidates, routeRequest.safetyPreference);
       const selected = ranked.find(
         (candidate) => !candidate.summary.hasBicycleProhibitedEdge,

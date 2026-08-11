@@ -4,6 +4,7 @@ import {
   foreignKey,
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -317,4 +318,47 @@ export const authRateLimits = sqliteTable(
     resetAt: integer("reset_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [index("auth_rate_limits_reset_idx").on(table.resetAt)],
+);
+
+export const routingEnrichmentManifests = sqliteTable(
+  "routing_enrichment_manifests",
+  {
+    routingGraphVersion: text("routing_graph_version").primaryKey(),
+    manifestJson: text("manifest_json", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    artifactSha256: text("artifact_sha256").notNull(),
+    loadedAt: integer("loaded_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+);
+
+export const routingEdgeEnrichments = sqliteTable(
+  "routing_edge_enrichments",
+  {
+    routingGraphVersion: text("routing_graph_version")
+      .notNull()
+      .references(() => routingEnrichmentManifests.routingGraphVersion, {
+        onDelete: "cascade",
+      }),
+    edgeId: text("edge_id").notNull(),
+    osmWayId: text("osm_way_id"),
+    travelDirection: text("travel_direction", {
+      enum: ["forward", "backward"],
+    }),
+    cityMatchJson: text("city_match_json", { mode: "json" })
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    cityJson: text("city_json", { mode: "json" }).$type<Record<string, unknown>>(),
+    osmJson: text("osm_json", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    classificationJson: text("classification_json", { mode: "json" })
+      .$type<Record<string, unknown>>()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.routingGraphVersion, table.edgeId] }),
+    check(
+      "routing_edge_enrichments_direction_check",
+      sql`${table.travelDirection} is null or ${table.travelDirection} in ('forward', 'backward')`,
+    ),
+  ],
 );

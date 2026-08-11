@@ -58,6 +58,8 @@ test("route-history migrations create the required tables and indexes", () => {
     "ride_points",
     "ride_upload_batches",
     "rides",
+    "routing_edge_enrichments",
+    "routing_enrichment_manifests",
     "users",
   ]);
 
@@ -79,6 +81,43 @@ test("route-history migrations create the required tables and indexes", () => {
     assert.ok(indexes.includes(requiredIndex), `missing ${requiredIndex}`);
   }
 
+  database.close();
+});
+
+test("routing enrichments are keyed to an installed graph manifest", () => {
+  const database = createTestDatabase();
+  const insertManifest = database.prepare(`
+    INSERT INTO routing_enrichment_manifests
+      (routing_graph_version, manifest_json, artifact_sha256)
+    VALUES (?, ?, ?)
+  `);
+  const insertEdge = database.prepare(`
+    INSERT INTO routing_edge_enrichments
+      (routing_graph_version, edge_id, travel_direction, city_match_json, osm_json, classification_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  assert.throws(
+    () => insertEdge.run("unknown-graph", "1/2/3", null, "{}", "{}", "{}"),
+    /FOREIGN KEY constraint failed/,
+  );
+  insertManifest.run("graph-v1", "{}", "sha256:fixture");
+  insertEdge.run("graph-v1", "1/2/3", null, "{}", "{}", "{}");
+  assert.throws(
+    () => insertEdge.run("graph-v1", "1/2/3", null, "{}", "{}", "{}"),
+    /UNIQUE constraint failed/,
+  );
+  assert.throws(
+    () => insertEdge.run("graph-v1", "1/2/4", "sideways", "{}", "{}", "{}"),
+    /CHECK constraint failed/,
+  );
+  database.prepare(
+    "DELETE FROM routing_enrichment_manifests WHERE routing_graph_version = ?",
+  ).run("graph-v1");
+  assert.equal(
+    database.prepare("SELECT count(*) AS count FROM routing_edge_enrichments").get().count,
+    0,
+  );
   database.close();
 });
 
