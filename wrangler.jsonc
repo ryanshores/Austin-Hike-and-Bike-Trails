@@ -30,6 +30,26 @@
 			"migrations_dir": "drizzle"
 		}
 	],
+	// These account-scoped namespaces intentionally differ by endpoint and
+	// environment so a preview load test cannot consume production capacity.
+	"ratelimits": [
+		{
+			"name": "GEOCODE_RATE_LIMITER",
+			"namespace_id": "480101",
+			"simple": {
+				"limit": 30,
+				"period": 60
+			}
+		},
+		{
+			"name": "ROUTE_RATE_LIMITER",
+			"namespace_id": "480102",
+			"simple": {
+				"limit": 15,
+				"period": 60
+			}
+		}
+	],
 	"env": {
 		"preview": {
 			"name": "austin-trails-preview",
@@ -46,6 +66,24 @@
 					"database_name": "austin-trails-preview",
 					"database_id": "07ab33cf-23cb-419d-8cc7-41d407e49990",
 					"migrations_dir": "drizzle"
+				}
+			],
+			"ratelimits": [
+				{
+					"name": "GEOCODE_RATE_LIMITER",
+					"namespace_id": "480103",
+					"simple": {
+						"limit": 30,
+						"period": 60
+					}
+				},
+				{
+					"name": "ROUTE_RATE_LIMITER",
+					"namespace_id": "480104",
+					"simple": {
+						"limit": 15,
+						"period": 60
+					}
 				}
 			]
 		}

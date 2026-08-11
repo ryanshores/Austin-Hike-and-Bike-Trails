@@ -60,14 +60,39 @@ npm run routing:enrich -- \
   --valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
 ```
 
-Defaults are a 25 m City match tolerance, 20 m edge sampling, and 80% minimum
-unambiguous coverage for City authority. Override them only with recorded
-validation evidence. The output embeds SHA-256 hashes of both input files plus
-the pinned Valhalla image, City dataset, OSM extract, and routing graph
-versions. It is deterministic for identical inputs and options.
+The reviewed installation policy is a 25 m City match tolerance, 20 m edge
+sampling, and 80% minimum unambiguous coverage for City authority. The builder
+can accept other values for offline analysis, but `routing:verify-enrichment`
+will reject those artifacts: an artifact must not choose the thresholds that
+authorize its own City classifications. The output embeds SHA-256 hashes of
+both input files plus the pinned Valhalla image, City dataset, OSM extract, and
+routing graph versions. It is deterministic for identical inputs and options.
 
 Generated full-dataset artifacts belong outside source control. The provider
 can load the result as a sidecar keyed by directed edge ID and return the
 allowlisted `city`, `osm`, and classification fields already understood by the
 Worker. Direct binary-tile customization can replace the sidecar later without
 changing the normalized route response or planner UI.
+
+## Verify before staging installation
+
+The builder writes to a same-directory temporary file and renames it only once
+the full JSON artifact is ready. Before installing a refresh on the staging
+provider, rebuild and verify against the exact City and directed-edge inputs:
+
+```bash
+npm run routing:verify-enrichment -- \
+  --enrichment /path/to/austin-routing-enrichment.json \
+  --city /path/to/austin-bike-facilities.geojson \
+  --routing-edges /path/to/austin-directed-edges.geojson \
+  --expected-city-dataset-version austin-bike-facilities-v1 \
+  --expected-osm-extract-checksum md5:49344e78933b3eab0a84454f0d15d877 \
+  --expected-routing-graph-version 1785883953 \
+  --expected-valhalla-image ghcr.io/valhalla/valhalla-scripted:3.7.0@sha256:0a58e6f4d167437e0ec0fffa2cbf63582652c7d12bcbc895e581f3c86b7de6a4
+```
+
+The verifier checks both input SHA-256 values, requested manifest pins, and a
+complete deterministic rebuild, including every edge and summary count. A
+failure means the artifact must not be installed. The Valhalla host sidecar
+loader remains a separate provider-integration step; this command makes the
+artifact it will consume safe to promote.
