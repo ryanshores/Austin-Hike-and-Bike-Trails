@@ -3,10 +3,8 @@ import { providerEndpoint } from "./api-utils.js";
 // D1 permits at most 100 bound parameters per query. One belongs to the graph
 // version, leaving at most 99 exact edge IDs in a single lookup.
 const MAX_EDGE_IDS_PER_QUERY = 99;
-// The private sidecar permits 500 IDs but caps request bodies at 64 KiB. This
-// lower bound accommodates its maximum 256-character IDs without relying on
-// caller-controlled payload sizes.
-const MAX_EDGE_IDS_PER_SIDECAR_REQUEST = 200;
+const MAX_EDGE_IDS_PER_SIDECAR_REQUEST = 500;
+const MAX_SIDECAR_REQUEST_BYTES = 65_536;
 
 export function routingEnrichmentEnabled(value) {
   return value === "true";
@@ -94,6 +92,31 @@ function accessHeaders(accessClientId, accessClientSecret) {
   };
 }
 
+function sidecarRequestBody(routingGraphVersion, edgeIds) {
+  return JSON.stringify({ routingGraphVersion, edgeIds });
+}
+
+function sidecarBatches(routingGraphVersion, edgeIds) {
+  const batches = [];
+  let batch = [];
+  for (const edgeId of edgeIds) {
+    const candidate = [...batch, edgeId];
+    const candidateBody = sidecarRequestBody(routingGraphVersion, candidate);
+    const exceedsLimit = candidate.length > MAX_EDGE_IDS_PER_SIDECAR_REQUEST ||
+      new TextEncoder().encode(candidateBody).byteLength > MAX_SIDECAR_REQUEST_BYTES;
+    if (exceedsLimit && batch.length > 0) {
+      batches.push({ edgeIds: batch, body: sidecarRequestBody(routingGraphVersion, batch) });
+      batch = [edgeId];
+    } else {
+      batch = candidate;
+    }
+  }
+  if (batch.length > 0) {
+    batches.push({ edgeIds: batch, body: sidecarRequestBody(routingGraphVersion, batch) });
+  }
+  return batches;
+}
+
 /**
  * Reads an already-verified routing-enrichment sidecar by graph version and
  * exact Valhalla edge ID. All variable values are bound, and large route
@@ -148,7 +171,7 @@ export function createSqliteRoutingEnrichmentStore({
 
       const uniqueIds = [...new Set(edgeIds.map(validId).filter(Boolean))];
       const records = new Map();
-      for (let index = 0; index < uniqueIds.length; index += MAX_EDGE_IDS_PER_SIDECAR_REQUEST) {
+      for (const batch of sidecarBatches(graphVersion, uniqueIds)) {
         const endpoint = providerEndpoint(sidecarUrl, "/v1/lookup");
         const response = await fetchImpl(endpoint, {
           method: "POST",
@@ -158,10 +181,7 @@ export function createSqliteRoutingEnrichmentStore({
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify({
-            routingGraphVersion: graphVersion,
-            edgeIds: uniqueIds.slice(index, index + MAX_EDGE_IDS_PER_SIDECAR_REQUEST),
-          }),
+          body: batch.body,
           signal,
         });
         if (!response.ok) {
@@ -179,7 +199,7 @@ export function createSqliteRoutingEnrichmentStore({
         }
         for (const value of payload.records) {
           const record = normalizedSidecarRecord(value);
-          if (record && uniqueIds.includes(record.edgeId)) records.set(record.edgeId, record);
+          if (record && batch.edgeIds.includes(record.edgeId)) records.set(record.edgeId, record);
         }
       }
       return records;
