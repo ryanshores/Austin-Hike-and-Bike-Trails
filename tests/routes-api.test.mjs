@@ -373,13 +373,14 @@ test("attributed Valhalla graph edges use the matching D1 sidecar classification
     },
   });
 
-  const response = await handle(routeRequest());
+  const request = routeRequest();
+  const response = await handle(request);
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.deepEqual(lookupCalls, [{
-    routingGraphVersion: "graph-v1",
-    edgeIds: ["1/2/3", "1/2/4"],
-  }]);
+  assert.equal(lookupCalls.length, 1);
+  assert.equal(lookupCalls[0].routingGraphVersion, "graph-v1");
+  assert.deepEqual(lookupCalls[0].edgeIds, ["1/2/3", "1/2/4"]);
+  assert.equal(lookupCalls[0].signal, request.signal);
   assert.equal(body.route.mileageBySafetyClass[SafetyClass.FULLY_SEPARATED], 1);
   assert.equal(body.route.mileageBySafetyClass[SafetyClass.BIKE_FACILITY], 1);
   assert.equal(body.route.divergenceCount, 1);

@@ -131,6 +131,5 @@ request contract:
 
 It returns records only for the requested graph version and exact IDs, limits a
 request to 500 IDs and 64 KiB, and returns no row for unknown or malformed
-data. It is bound only to host `127.0.0.1:8003`; the future Worker client must
-keep missing rows unknown. Do not expose it on the LAN or directly to the
-browser.
+data. It is bound only to host `127.0.0.1:8003`; the Worker client keeps
+missing rows unknown. Do not expose it on the LAN or directly to the browser.

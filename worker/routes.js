@@ -433,7 +433,7 @@ async function attributedEdges(
   if (edgeIds.some((edgeId) => !edgeId)) {
     throw new Error("Routing provider returned an attributed edge without a stable graph ID.");
   }
-  const records = await enrichmentStore.lookup({ routingGraphVersion, edgeIds });
+  const records = await enrichmentStore.lookup({ routingGraphVersion, edgeIds, signal });
   return attributed.map((edge) => {
     const record = records.get(String(edge.id));
     let classification = unknownEdgeClassification();
