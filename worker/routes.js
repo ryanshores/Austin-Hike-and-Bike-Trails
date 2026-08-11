@@ -457,7 +457,7 @@ async function attributedEdges(
 async function normalizeCandidate(
   candidate,
   preference,
-  routingGraphVersion,
+  routingGraphVersionPromise,
   providerUrl,
   providerAccessHeaders,
   enrichmentStore,
@@ -465,7 +465,7 @@ async function normalizeCandidate(
   signal,
 ) {
   const geometry = candidateGeometry(candidate);
-  const elevation = await fetchElevation(
+  const elevationPromise = fetchElevation(
     candidate,
     providerUrl,
     providerAccessHeaders,
@@ -477,7 +477,7 @@ async function normalizeCandidate(
     try {
       const edges = await attributedEdges(
         geometry,
-        routingGraphVersion,
+        await routingGraphVersionPromise,
         providerUrl,
         providerAccessHeaders,
         enrichmentStore,
@@ -489,6 +489,7 @@ async function normalizeCandidate(
       if (signal.aborted) throw error;
     }
   }
+  const elevation = await elevationPromise;
   const edges = normalizedEdges(enrichedCandidate, geometry, elevation);
   return {
     geometry,
@@ -638,18 +639,18 @@ export function createRoutesHandler({
         ), status === 422 ? "no-reasonable-route" : "provider-unavailable", routeRequest.safetyPreference);
       }
       const providerValue = await response.json();
-      const graphVersion = await routingGraphVersion(
+      const graphVersionPromise = routingGraphVersion(
         providerValue,
         providerUrl,
         providerAccessHeaders,
         fetchImpl,
         request.signal,
       );
-      const candidates = await Promise.all(providerCandidates(providerValue).map((candidate) =>
+      const candidatesPromise = Promise.all(providerCandidates(providerValue).map((candidate) =>
         normalizeCandidate(
           candidate,
           routeRequest.safetyPreference,
-          graphVersion,
+          graphVersionPromise,
           providerUrl,
           providerAccessHeaders,
           enrichmentStore,
@@ -657,6 +658,7 @@ export function createRoutesHandler({
           request.signal,
         ),
       ));
+      const [graphVersion, candidates] = await Promise.all([graphVersionPromise, candidatesPromise]);
       const ranked = rankRouteCandidates(candidates, routeRequest.safetyPreference);
       const selected = ranked.find(
         (candidate) => !candidate.summary.hasBicycleProhibitedEdge,

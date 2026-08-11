@@ -190,6 +190,39 @@ test("routing metrics omit endpoint and provider details", async () => {
   assert.doesNotMatch(JSON.stringify(metrics), /30\.2672|-97\.7431|internal/);
 });
 
+test("graph-version lookup does not delay stock-candidate normalization", async () => {
+  const shape = encodePolyline6([
+    [30.2672, -97.7431],
+    [30.285, -97.735],
+  ]);
+  let releaseStatus;
+  const statusPending = new Promise((resolve) => { releaseStatus = resolve; });
+  let elevationStarted = false;
+  const handle = createRoutesHandler({
+    providerUrl: "https://valhalla.internal",
+    fetchImpl: async (url) => {
+      switch (new URL(url).pathname) {
+        case "/route":
+          return Response.json({ trip: { summary: { length: 2 }, legs: [{ shape }] } });
+        case "/status":
+          await statusPending;
+          return Response.json({ tileset_last_modified: "graph-v1" });
+        case "/height":
+          elevationStarted = true;
+          return Response.json({ range_height: [[0, 100], [1_000, 100]] });
+        default:
+          throw new Error("unexpected provider endpoint");
+      }
+    },
+  });
+
+  const responsePromise = handle(routeRequest());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(elevationStarted, true);
+  releaseStatus();
+  assert.equal((await responsePromise).status, 200);
+});
+
 test("incomplete routing Access credentials fail closed without contacting the provider", async () => {
   let fetches = 0;
   const handle = createRoutesHandler({

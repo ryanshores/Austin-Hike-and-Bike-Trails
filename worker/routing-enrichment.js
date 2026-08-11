@@ -2,6 +2,10 @@
 // version, leaving at most 99 exact edge IDs in a single lookup.
 const MAX_EDGE_IDS_PER_QUERY = 99;
 
+export function routingEnrichmentEnabled(value) {
+  return value === "true";
+}
+
 function validId(value) {
   const id = String(value ?? "").trim();
   return id && id.length <= 256 ? id : null;

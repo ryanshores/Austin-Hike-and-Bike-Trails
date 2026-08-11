@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createD1RoutingEnrichmentStore } from "../worker/routing-enrichment.js";
+import {
+  createD1RoutingEnrichmentStore,
+  routingEnrichmentEnabled,
+} from "../worker/routing-enrichment.js";
 
 function row(edgeId) {
   return {
@@ -46,6 +49,12 @@ test("D1 enrichment lookup binds exact graph IDs in bounded batches", async () =
   assert.equal(calls[2].values.length, 4);
   assert.equal(records.size, 201);
   assert.equal(records.get("edge-200").classification.safetyClass, 3);
+});
+
+test("D1 enrichment is disabled until an explicit post-import feature flag is set", () => {
+  assert.equal(routingEnrichmentEnabled(undefined), false);
+  assert.equal(routingEnrichmentEnabled("false"), false);
+  assert.equal(routingEnrichmentEnabled("true"), true);
 });
 
 test("D1 enrichment lookup ignores malformed sidecar records", async () => {
