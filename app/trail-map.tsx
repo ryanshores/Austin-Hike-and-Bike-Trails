@@ -1024,7 +1024,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
               <div className="ride-login-reminder" role="dialog" aria-labelledby="ride-login-reminder-title">
                 <h2 id="ride-login-reminder-title">Save rides beyond this browser</h2>
                 <p>Sign in to keep your ride history when you change phones or browsers. You can also continue with private browser-only history.</p>
-                <Link className="ride-login-link" href="/account">Sign in</Link>
+                <Link className="ride-login-link" href="/account?returnTo=/ride">Sign in</Link>
                 <button className="ride-continue-anonymously" onClick={continueAnonymously}>Continue without signing in</button>
               </div>
             ) : <button onClick={beginRide} disabled={checkingIdentity}>{checkingIdentity ? "Checking account…" : startGpsLabel}</button>}
