@@ -49,17 +49,17 @@ registerXcodeFrameworkCopy(
     name = "copyDebugIosSimulatorArm64FrameworkForXcode",
     linkTask = "linkDebugFrameworkIosSimulatorArm64",
     sourceDirectory = "bin/iosSimulatorArm64/debugFramework/AtlasShared.framework",
-    destinationDirectory = "xcode-frameworks/Debug/iphonesimulator",
+    destinationDirectory = "xcode-frameworks/Debug/iphonesimulator/AtlasShared.framework",
 )
 registerXcodeFrameworkCopy(
     name = "copyDebugIosX64FrameworkForXcode",
     linkTask = "linkDebugFrameworkIosX64",
     sourceDirectory = "bin/iosX64/debugFramework/AtlasShared.framework",
-    destinationDirectory = "xcode-frameworks/Debug/iphonesimulator",
+    destinationDirectory = "xcode-frameworks/Debug/iphonesimulator/AtlasShared.framework",
 )
 registerXcodeFrameworkCopy(
     name = "copyDebugIosArm64FrameworkForXcode",
     linkTask = "linkDebugFrameworkIosArm64",
     sourceDirectory = "bin/iosArm64/debugFramework/AtlasShared.framework",
-    destinationDirectory = "xcode-frameworks/Debug/iphoneos",
+    destinationDirectory = "xcode-frameworks/Debug/iphoneos/AtlasShared.framework",
 )
