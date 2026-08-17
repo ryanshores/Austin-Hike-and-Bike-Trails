@@ -16,14 +16,14 @@
       "totalMiles": 2.4,
       "totalAscentFeet": 66,
       "totalDescentFeet": 33,
-      "mileageBySafetyClass": { "unknown": 2.4 },
+      "mileageBySafetyClass": { "0": 0, "1": 0, "2": 0, "3": 0 },
       "divergenceCount": 1,
       "divergenceMiles": 2.4,
       "divergences": [
         {
           "miles": 2.4,
           "reason": "Unknown safety classification.",
-          "minimumSafetyClass": 0,
+          "minimumSafetyClass": -1,
           "geometry": { "type": "LineString", "coordinates": [[-97.7431, 30.2672], [-97.735, 30.285]] }
         }
       ],

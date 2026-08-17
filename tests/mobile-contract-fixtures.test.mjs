@@ -13,6 +13,7 @@ import {
   MAX_FIX_AGE_MS,
   MAX_USABLE_ACCURACY_METERS,
 } from "../app/location-accuracy.js";
+import { SafetyPreference, summarizeRoute } from "../worker/route-safety.js";
 
 const contractsDirectory = join(dirname(fileURLToPath(import.meta.url)), "../mobile/contracts/v1");
 
@@ -70,7 +71,7 @@ test("mobile ride fixture retains ordered idempotent server-owned semantics", ()
   assert.ok(rides.invariants.includes("serverRemainsAuthoritativeForOwnershipAndValidation"));
 });
 
-test("routing fixture preserves the Worker-only and no-ETA client contract", () => {
+test("routing fixture preserves Worker safety classes, unknown divergence, and no-ETA fields", () => {
   const routing = contract("routing.json");
 
   assert.equal(routing.status, "currentWorkerContract");
@@ -79,6 +80,13 @@ test("routing fixture preserves the Worker-only and no-ETA client contract", () 
   assert.equal(routing.clientBoundary.mayCallProviderDirectly, false);
   assert.equal(recursivelyFindKey(routing.response, (key) => /eta|duration|arrival|time|speed/iu.test(key)), false);
   assert.equal(routing.response.route.geometry.type, "LineString");
+  const unknownSummary = summarizeRoute([{
+    safetyClass: null,
+    miles: 2.4,
+    geometry: routing.response.route.geometry,
+  }], SafetyPreference.PROTECTED_OR_SEPARATED);
+  assert.deepEqual(routing.response.route.mileageBySafetyClass, unknownSummary.mileageBySafetyClass);
+  assert.equal(routing.response.route.divergences[0].minimumSafetyClass, unknownSummary.divergences[0].minimumSafetyClass);
   assert.ok(routing.response.route.divergenceCount >= 0);
 });
 
