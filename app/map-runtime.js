@@ -12,6 +12,16 @@ export function mapOptionsForMode(isRide) {
   };
 }
 
+export function forwardMapBearing(heading) {
+  return (360 - heading) % 360;
+}
+
+export function nextForwardMapBearing(currentBearing, heading, weight = 0.35) {
+  const targetBearing = forwardMapBearing(heading);
+  const shortestTurn = ((targetBearing - currentBearing + 540) % 360) - 180;
+  return (currentBearing + shortestTurn * weight + 360) % 360;
+}
+
 export function installMapSizeSync({
   map,
   mapNode,

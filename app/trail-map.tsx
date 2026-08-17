@@ -12,7 +12,7 @@ import {
   MAX_FIX_AGE_MS,
   smoothingWeight,
 } from "./location-accuracy";
-import { installMapSizeSync, mapOptionsForMode } from "./map-runtime";
+import { forwardMapBearing, installMapSizeSync, mapOptionsForMode, nextForwardMapBearing } from "./map-runtime";
 import { clearRouteGuidance, loadRouteGuidance, saveRouteGuidance } from "./route-guidance.js";
 import { RouteGuidanceCard } from "./route-guidance-card.js";
 import { guidanceQualityCanAdvance, initialGuidanceProgress, updateGuidanceProgress } from "./route-guidance-progress.js";
@@ -846,11 +846,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         map.panTo(latlng, { animate: true, duration: 0.45 });
       }
       if (orientationRef.current === "forward" && heading !== null) {
-        const current = map.getBearing();
-        const shortestTurn = ((heading - current + 540) % 360) - 180;
-        const nextBearing = current + shortestTurn * 0.35;
+        const nextBearing = nextForwardMapBearing(map.getBearing(), heading);
         map.setBearing(nextBearing);
-        setBearing((nextBearing + 360) % 360);
+        setBearing(nextBearing);
       }
       const speed = position.coords.speed && position.coords.speed > 0 ? ` · ${(position.coords.speed * 2.237).toFixed(1)} mph` : "";
       setStatus(`Ride mode · GPS ±${roundedAccuracy} m${speed}`);
@@ -877,8 +875,9 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
       map.setBearing(0);
       setBearing(0);
     } else if (lastHeadingRef.current !== null) {
-      map.setBearing(lastHeadingRef.current);
-      setBearing(lastHeadingRef.current);
+      const bearing = forwardMapBearing(lastHeadingRef.current);
+      map.setBearing(bearing);
+      setBearing(bearing);
     }
   }
 
