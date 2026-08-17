@@ -42,6 +42,11 @@ export default function AccountPanel() {
         ? true
         : await clearRecorderSafely();
       setUser(result.user);
+      const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+      if (recorderCleared && returnTo === "/ride") {
+        window.location.assign(returnTo);
+        return;
+      }
       setStatus(!recorderCleared
         ? "Signed in, but this browser could not clear an interrupted ride. Do not resume Ride Mode on this device."
         : action === "register"
