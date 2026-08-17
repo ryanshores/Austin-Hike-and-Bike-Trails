@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { installMapSizeSync, mapOptionsForMode } from "../app/map-runtime.js";
+import {
+  forwardMapBearing,
+  installMapSizeSync,
+  mapOptionsForMode,
+  nextForwardMapBearing,
+} from "../app/map-runtime.js";
 
 test("Ride Mode uses SVG while Atlas keeps the Canvas renderer", () => {
   assert.equal(mapOptionsForMode(true).preferCanvas, false);
   assert.equal(mapOptionsForMode(false).preferCanvas, true);
+});
+
+test("Forward Up rotates the map opposite the rider heading", () => {
+  assert.equal(forwardMapBearing(0), 0);
+  assert.equal(forwardMapBearing(90), 270);
+  assert.equal(forwardMapBearing(180), 180);
+  assert.equal(nextForwardMapBearing(0, 90), 328.5);
 });
 
 test("visual viewport changes invalidate the map size and listeners are cleaned up", () => {
