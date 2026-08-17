@@ -115,7 +115,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd \"$SRCROOT/..\"\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  echo \"Only the Debug framework is configured in this initial scaffold.\" >&2\n  exit 1\nfi\nif [ \"$SDK_NAME\" = \"iphoneos\" ]; then\n  ./gradlew :shared:copyDebugIosArm64FrameworkForXcode\nelif echo \"$ARCHS\" | grep -q x86_64; then\n  ./gradlew :shared:copyDebugIosX64FrameworkForXcode\nelse\n  ./gradlew :shared:copyDebugIosSimulatorArm64FrameworkForXcode\nfi\n";
+			shellScript = "cd \"$SRCROOT/..\"\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  echo \"Only the Debug framework is configured in this initial scaffold.\" >&2\n  exit 1\nfi\nif [ \"$PLATFORM_NAME\" = \"iphoneos\" ]; then\n  ./gradlew :shared:copyDebugIosArm64FrameworkForXcode\nelif echo \"$ARCHS\" | grep -q x86_64; then\n  ./gradlew :shared:copyDebugIosX64FrameworkForXcode\nelse\n  ./gradlew :shared:copyDebugIosSimulatorArm64FrameworkForXcode\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -201,7 +201,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -220,7 +220,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
 				LD_RUNPATH_SEARCH_PATHS = (

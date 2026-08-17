@@ -33,7 +33,7 @@ jobs:
             ./gradlew :shared:iosX64Test
           fi
       - name: Build the SwiftUI host without signing
-        run: >-
-          xcodebuild -project iosApp/AtlasMobile.xcodeproj -scheme AtlasMobile
-          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO build
+        run: |
+          xcodebuild -project iosApp/AtlasMobile.xcodeproj -scheme AtlasMobile \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            ARCHS="$(uname -m)" CODE_SIGNING_ALLOWED=NO build

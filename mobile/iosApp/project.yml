@@ -18,7 +18,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: us.ryanshores.atlas.mobile
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Austin Atlas
-        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)"
         OTHER_LDFLAGS: "$(inherited) -framework AtlasShared"
     preBuildScripts:
       - name: Build Kotlin framework
@@ -28,7 +28,7 @@ targets:
             echo "Only the Debug framework is configured in this initial scaffold." >&2
             exit 1
           fi
-          if [ "$SDK_NAME" = "iphoneos" ]; then
+          if [ "$PLATFORM_NAME" = "iphoneos" ]; then
             ./gradlew :shared:copyDebugIosArm64FrameworkForXcode
           elif echo "$ARCHS" | grep -q x86_64; then
             ./gradlew :shared:copyDebugIosX64FrameworkForXcode
