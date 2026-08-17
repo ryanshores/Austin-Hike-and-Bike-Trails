@@ -13,7 +13,7 @@
 
 /* Begin PBXFileReference section */
 		111A95297D7BDFE741A4AB58 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasMobileApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -72,11 +72,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
-				TargetAttributes = {
-					7080EEDF3E6F4E71528E7E91 = {
-						DevelopmentTeam = "";
-					};
-				};
 			};
 			buildConfigurationList = 9A863C70EB1463208D2F8B8D /* Build configuration list for PBXProject "AtlasMobile" */;
 			developmentRegion = en;
@@ -201,14 +196,23 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				DEVELOPMENT_TEAM = 77H7V8G86J;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AtlasShared,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -220,14 +224,23 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				DEVELOPMENT_TEAM = 77H7V8G86J;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AtlasShared,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
