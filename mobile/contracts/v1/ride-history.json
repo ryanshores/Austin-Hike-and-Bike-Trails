@@ -1,0 +1,59 @@
+{
+  "version": "mobile-v1",
+  "status": "proposed",
+  "resourceBasePath": "/api/rides",
+  "authentication": {
+    "acceptedModes": ["existingCookieSession", "nativeBearerAccessToken"],
+    "browserCookieMutationsRequireSameOrigin": true,
+    "nativeBearerMutationsRequireSameOrigin": false,
+    "nativeBearerHeader": "Authorization: Bearer $accessToken"
+  },
+  "identifiers": {
+    "pattern": "^[A-Za-z0-9_-]{16,128}$",
+    "rideId": "ride_fixture_00000001",
+    "batchId": "batch_fixture_0000001"
+  },
+  "operations": [
+    {
+      "operation": "createRide",
+      "method": "POST",
+      "path": "/api/rides",
+      "request": { "id": "ride_fixture_00000001", "startedAt": 1800000000000 },
+      "response": { "status": 201, "ride": { "id": "ride_fixture_00000001", "status": "recording", "startedAt": 1800000000000 } }
+    },
+    {
+      "operation": "uploadOrderedBatch",
+      "method": "POST",
+      "path": "/api/rides/ride_fixture_00000001/batches",
+      "request": {
+        "id": "batch_fixture_0000001",
+        "points": [
+          {
+            "sequence": 0,
+            "recordedAt": 1800000000000,
+            "latitude": 30.2672,
+            "longitude": -97.7431,
+            "accuracyMeters": 12,
+            "altitudeMeters": null,
+            "speedMetersPerSecond": null,
+            "headingDegrees": null,
+            "quality": "good"
+          }
+        ]
+      },
+      "response": { "status": 201, "received": true, "acceptedPointCount": 1 }
+    },
+    {
+      "operation": "completeRide",
+      "method": "POST",
+      "path": "/api/rides/ride_fixture_00000001/complete",
+      "response": { "status": 200, "ride": { "id": "ride_fixture_00000001", "status": "completed" } }
+    }
+  ],
+  "invariants": [
+    "pointsPersistLocallyBeforeUpload",
+    "sequencesAreMonotonic",
+    "batchRetriesAreIdempotent",
+    "serverRemainsAuthoritativeForOwnershipAndValidation"
+  ]
+}

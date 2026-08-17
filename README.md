@@ -160,6 +160,14 @@ to the bound D1 database before enabling the endpoints. The same database
 stores short-lived, peppered per-IP auth rate-limit counters so limits apply
 across Worker isolates.
 
+## Native mobile architecture
+
+The iOS-first Kotlin Multiplatform plan, including the native bearer-token
+authentication boundary and cross-platform GPS fixtures, is documented in
+[`docs/mobile-architecture.md`](docs/mobile-architecture.md). The contracts in
+[`mobile/contracts/v1/`](mobile/contracts/v1/) are proposed interfaces only;
+they do not expose new runtime endpoints in the current release.
+
 ## Prerequisites
 
 - Node.js `>=22.13.0`
