@@ -1,0 +1,108 @@
+{
+  "version": "mobile-v1",
+  "status": "proposed",
+  "basePath": "/api/mobile/v1/auth",
+  "credentialPlaceholders": [
+    "$accessToken",
+    "$refreshToken",
+    "$installationCredential"
+  ],
+  "browserCompatibility": {
+    "existingAuthBasePath": "/api/auth",
+    "credentialMode": "httpOnlySameSiteCookies",
+    "stateChangingRequestsRequire": "matchingSameOriginHeader",
+    "mustRemainUnchanged": true
+  },
+  "nativeAuthentication": {
+    "accessToken": {
+      "transport": "Authorization: Bearer $accessToken",
+      "storage": "Keychain",
+      "lifetime": "shortLived"
+    },
+    "refreshToken": {
+      "transport": "JSON request body to /refresh only",
+      "storage": "Keychain",
+      "rotation": "required",
+      "mayAuthenticateResourceRequests": false
+    },
+    "installationCredential": {
+      "issuedBy": "server",
+      "storage": "Keychain",
+      "purpose": "anonymous installation restoration",
+      "mayUseDeviceFingerprint": false
+    }
+  },
+  "endpoints": [
+    {
+      "operation": "bootstrapAnonymousInstallation",
+      "method": "POST",
+      "path": "/anonymous",
+      "request": { "body": {} },
+      "response": {
+        "status": 201,
+        "body": {
+          "user": { "id": "user_fixture_00000001", "accountType": "anonymous", "email": null, "displayName": null },
+          "accessToken": "$accessToken",
+          "refreshToken": "$refreshToken",
+          "installationCredential": "$installationCredential"
+        }
+      }
+    },
+    {
+      "operation": "restoreAnonymousInstallation",
+      "method": "POST",
+      "path": "/installation/restore",
+      "request": { "body": { "installationCredential": "$installationCredential" } },
+      "response": { "status": 200, "body": { "accessToken": "$accessToken", "refreshToken": "$refreshToken" } }
+    },
+    {
+      "operation": "refresh",
+      "method": "POST",
+      "path": "/refresh",
+      "request": { "body": { "refreshToken": "$refreshToken" } },
+      "response": { "status": 200, "body": { "accessToken": "$accessToken", "refreshToken": "$refreshToken" } }
+    },
+    {
+      "operation": "registerAnonymousUser",
+      "method": "POST",
+      "path": "/register",
+      "request": { "authorization": "Bearer $accessToken", "bodyFields": ["email", "password", "displayName"] },
+      "response": {
+        "status": 200,
+        "body": {
+          "user": { "id": "user_fixture_00000001", "accountType": "registered", "email": "rider@example.test", "displayName": "Fixture Rider" },
+          "accessToken": "$accessToken",
+          "refreshToken": "$refreshToken"
+        }
+      }
+    },
+    {
+      "operation": "login",
+      "method": "POST",
+      "path": "/login",
+      "request": { "bodyFields": ["email", "password"] },
+      "response": {
+        "status": 200,
+        "body": {
+          "user": { "id": "user_fixture_00000001", "accountType": "registered", "email": "rider@example.test", "displayName": "Fixture Rider" },
+          "accessToken": "$accessToken",
+          "refreshToken": "$refreshToken"
+        }
+      }
+    },
+    {
+      "operation": "currentUser",
+      "method": "GET",
+      "path": "/me",
+      "request": { "authorization": "Bearer $accessToken" },
+      "response": { "status": 200, "body": { "user": { "id": "user_fixture_00000001", "accountType": "anonymous", "email": null, "displayName": null } } }
+    },
+    {
+      "operation": "logout",
+      "method": "POST",
+      "path": "/logout",
+      "request": { "authorization": "Bearer $accessToken" },
+      "response": { "status": 204, "body": null }
+    }
+  ]
+}

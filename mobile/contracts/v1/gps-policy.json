@@ -1,0 +1,22 @@
+{
+  "version": "mobile-v1",
+  "status": "currentPolicyBaseline",
+  "thresholds": {
+    "goodAccuracyMeters": 25,
+    "fairAccuracyMeters": 75,
+    "maxUsableAccuracyMeters": 100,
+    "maxFixAgeMilliseconds": 15000
+  },
+  "samples": [
+    { "name": "firstCoarseFixWaits", "accuracyMeters": 4000, "ageMilliseconds": 0, "hasUsableFix": false, "expectedQuality": "unusable", "expectedAction": "wait-for-accurate-fix" },
+    { "name": "goodFixStartsRide", "accuracyMeters": 12, "ageMilliseconds": 0, "hasUsableFix": false, "expectedQuality": "good", "expectedAction": "use-fix" },
+    { "name": "fairFixIsAccepted", "accuracyMeters": 75, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "fair", "expectedAction": "use-fix" },
+    { "name": "poorFixIsAcceptedButNotGuidancePrecise", "accuracyMeters": 100, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "poor", "expectedAction": "use-fix" },
+    { "name": "laterCoarseFixKeepsLast", "accuracyMeters": 4000, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "unusable", "expectedAction": "keep-last-fix" },
+    { "name": "staleFixKeepsLast", "accuracyMeters": 12, "ageMilliseconds": 15001, "hasUsableFix": true, "expectedQuality": "unusable", "expectedAction": "keep-last-fix" }
+  ],
+  "plausibleMovementSamples": [
+    { "distanceMeters": 45, "elapsedMilliseconds": 2000, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": true },
+    { "distanceMeters": 1000, "elapsedMilliseconds": 2000, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": false }
+  ]
+}

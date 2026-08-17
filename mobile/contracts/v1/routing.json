@@ -1,0 +1,41 @@
+{
+  "version": "mobile-v1",
+  "status": "currentWorkerContract",
+  "request": {
+    "method": "POST",
+    "path": "/api/routes",
+    "body": {
+      "start": { "latitude": 30.2672, "longitude": -97.7431 },
+      "destination": { "latitude": 30.285, "longitude": -97.735 },
+      "safetyPreference": "protected-or-separated"
+    }
+  },
+  "response": {
+    "route": {
+      "geometry": { "type": "LineString", "coordinates": [[-97.7431, 30.2672], [-97.735, 30.285]] },
+      "totalMiles": 2.4,
+      "totalAscentFeet": 66,
+      "totalDescentFeet": 33,
+      "mileageBySafetyClass": { "unknown": 2.4 },
+      "divergenceCount": 1,
+      "divergenceMiles": 2.4,
+      "divergences": [
+        {
+          "miles": 2.4,
+          "reason": "Unknown safety classification.",
+          "minimumSafetyClass": 0,
+          "geometry": { "type": "LineString", "coordinates": [[-97.7431, 30.2672], [-97.735, 30.285]] }
+        }
+      ],
+      "maneuvers": [
+        { "instruction": "Ride north on Congress Avenue.", "distanceMiles": 0.4, "beginShapeIndex": 0, "endShapeIndex": 1 }
+      ],
+      "versions": { "routingGraph": "fixture-graph-v1" }
+    }
+  },
+  "clientBoundary": {
+    "callsWorkerOnly": true,
+    "mayCallProviderDirectly": false,
+    "forbiddenClientVisibleFieldFragments": ["eta", "duration", "arrival", "time", "speed"]
+  }
+}
