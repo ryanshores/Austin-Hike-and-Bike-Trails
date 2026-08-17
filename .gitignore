@@ -46,6 +46,10 @@ next-env.d.ts
 .idea
 .openai
 
+# Xcode per-user project and workspace state
+**/xcuserdata/
+**/*.xcuserstate
+
 # Kotlin Multiplatform / Android build output
 /mobile/.gradle/
 /mobile/build/
