@@ -26,6 +26,7 @@ import {
 } from "./route-off-route.js";
 import { formatMiles, normalizePlannedRoute, routeErrorMessage } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
+import { ensureUser } from "./account-history-api";
 import RoutePlanner, {
   type PlannedRoute,
   type PlanningEndpointKey,
@@ -179,6 +180,8 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const [rerouteFixFresh, setRerouteFixFresh] = useState(false);
   const [rerouting, setRerouting] = useState(false);
   const [rerouteMessage, setRerouteMessage] = useState("");
+  const [showLoginReminder, setShowLoginReminder] = useState(false);
+  const [checkingIdentity, setCheckingIdentity] = useState(false);
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
@@ -680,6 +683,28 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     }
   }
 
+  async function beginRide() {
+    setCheckingIdentity(true);
+    try {
+      const { user } = await ensureUser();
+      if (user.accountType === "registered") {
+        startTracking();
+        return;
+      }
+      setShowLoginReminder(true);
+    } catch {
+      // Do not block a ride when the optional account check is unavailable.
+      setShowLoginReminder(true);
+    } finally {
+      setCheckingIdentity(false);
+    }
+  }
+
+  function continueAnonymously() {
+    setShowLoginReminder(false);
+    startTracking();
+  }
+
   function startTracking() {
     const map = mapRef.current;
     const L = leafletRef.current;
@@ -995,7 +1020,14 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
             )}
             {activeGuidance && <p>Allow precise location when you start. Only accepted GPS fixes will move the map or be saved to your private route history.</p>}
             {hasInterruptedRide && <p>Your last interrupted ride is ready to resume; queued points will upload when you reconnect.</p>}
-            <button onClick={startTracking}>{startGpsLabel}</button>
+            {showLoginReminder ? (
+              <div className="ride-login-reminder" role="dialog" aria-labelledby="ride-login-reminder-title">
+                <h2 id="ride-login-reminder-title">Save rides beyond this browser</h2>
+                <p>Sign in to keep your ride history when you change phones or browsers. You can also continue with private browser-only history.</p>
+                <Link className="ride-login-link" href="/account">Sign in</Link>
+                <button className="ride-continue-anonymously" onClick={continueAnonymously}>Continue without signing in</button>
+              </div>
+            ) : <button onClick={beginRide} disabled={checkingIdentity}>{checkingIdentity ? "Checking account…" : startGpsLabel}</button>}
             <Link href="/">Return to the atlas</Link>
           </div>
         )}

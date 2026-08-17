@@ -151,6 +151,12 @@ h2 { font-size: 22px; }
 .ride-start-card > p:not(.eyebrow) { margin: 10px 0 18px; color: var(--muted); font: 13px/1.45 Arial, sans-serif; }
 .ride-start-card button { width: 100%; min-height: 48px; border: 0; border-radius: 999px; background: var(--ink); color: #fffaf0; cursor: pointer; font: 700 14px Arial, sans-serif; }
 .ride-start-card > a { display: inline-block; margin-top: 13px; color: var(--muted); font: 12px Arial, sans-serif; }
+.ride-login-reminder { display: grid; gap: 10px; margin-top: 16px; padding: 16px; border-radius: 14px; background: var(--paper-deep); text-align: left; }
+.ride-login-reminder h2 { font-size: 18px; }
+.ride-login-reminder p { margin: 0; color: var(--muted); font: 13px/1.45 Arial, sans-serif; }
+.ride-login-link, .ride-continue-anonymously { display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 999px; padding: 0 14px; font: 700 13px Arial, sans-serif; text-decoration: none; }
+.ride-login-link { background: var(--ink); color: #fffaf0; }
+.ride-start-card .ride-continue-anonymously { min-height: 42px; border: 1px solid var(--line); background: #fffaf0; color: var(--ink); }
 .ride-first-maneuver { display: grid; gap: 5px; margin: 13px 0; padding: 13px; border-radius: 12px; background: var(--paper-deep); text-align: left; }
 .ride-first-maneuver span, .ride-first-maneuver small { color: var(--muted); font: 10px Arial, sans-serif; }
 .ride-first-maneuver strong { font: 700 14px/1.35 Arial, sans-serif; }
