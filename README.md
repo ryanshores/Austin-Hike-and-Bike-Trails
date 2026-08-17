@@ -3,6 +3,14 @@
 A responsive Austin trail atlas with a desktop planning map and a dedicated
 full-screen ride experience.
 
+## Native mobile foundation
+
+The initial Kotlin Multiplatform module, native iOS SwiftUI host, and local
+verification commands are in [`mobile/README.md`](mobile/README.md). It shares
+only the smallest native-facing Kotlin API so far; browser authentication and
+the existing web application remain unchanged until the dedicated mobile-auth
+slice lands.
+
 ## Bicycle facility edge cache
 
 The browser requests bicycle facilities from the same-origin
