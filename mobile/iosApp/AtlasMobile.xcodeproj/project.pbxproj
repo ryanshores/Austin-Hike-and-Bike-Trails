@@ -8,21 +8,45 @@
 
 /* Begin PBXBuildFile section */
 		2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111A95297D7BDFE741A4AB58 /* ContentView.swift */; };
+		60537319C7421309A586FE6E /* KeychainNativeSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */; };
+		8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */; };
 		D6A6379B232409094821BBA9 /* AtlasMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		6C91C4C3FB7A6148E5A60ABC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8D0B85E0ED1FFEEA17E971DC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7080EEDF3E6F4E71528E7E91;
+			remoteInfo = AtlasMobile;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		111A95297D7BDFE741A4AB58 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		203BA7723527883E728ED112 /* AtlasMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AtlasMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStore.swift; sourceTree = "<group>"; };
+		4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStoreTests.swift; sourceTree = "<group>"; };
+		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasMobileApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		1ED847DD1645B904F5796DF0 /* AtlasMobileTests */ = {
+			isa = PBXGroup;
+			children = (
+				4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */,
+			);
+			path = AtlasMobileTests;
+			sourceTree = "<group>";
+		};
 		5B8E8D5488E97305A00EB7B7 /* AtlasMobile */ = {
 			isa = PBXGroup;
 			children = (
 				DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */,
 				111A95297D7BDFE741A4AB58 /* ContentView.swift */,
+				241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */,
 			);
 			path = AtlasMobile;
 			sourceTree = "<group>";
@@ -31,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				CCBA70690C216A766CB979EB /* AtlasMobile.app */,
+				203BA7723527883E728ED112 /* AtlasMobileTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -39,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				5B8E8D5488E97305A00EB7B7 /* AtlasMobile */,
+				1ED847DD1645B904F5796DF0 /* AtlasMobileTests */,
 				CF4484DC613A7BAD41F0185C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +72,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0B00D5EE97F71F56F3C10F3B /* AtlasMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8D483C3521DA5C61E855AFCC /* Build configuration list for PBXNativeTarget "AtlasMobileTests" */;
+			buildPhases = (
+				0AFB3CE184E179A2B252DFE7 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6A3817118F55962DB7FC84EB /* PBXTargetDependency */,
+			);
+			name = AtlasMobileTests;
+			packageProductDependencies = (
+			);
+			productName = AtlasMobileTests;
+			productReference = 203BA7723527883E728ED112 /* AtlasMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		7080EEDF3E6F4E71528E7E91 /* AtlasMobile */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A986621FF4962AC4125ADED2 /* Build configuration list for PBXNativeTarget "AtlasMobile" */;
@@ -72,6 +116,14 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					0B00D5EE97F71F56F3C10F3B = {
+						DevelopmentTeam = 77H7V8G86J;
+					};
+					7080EEDF3E6F4E71528E7E91 = {
+						DevelopmentTeam = 77H7V8G86J;
+					};
+				};
 			};
 			buildConfigurationList = 9A863C70EB1463208D2F8B8D /* Build configuration list for PBXProject "AtlasMobile" */;
 			developmentRegion = en;
@@ -88,6 +140,7 @@
 			projectRoot = "";
 			targets = (
 				7080EEDF3E6F4E71528E7E91 /* AtlasMobile */,
+				0B00D5EE97F71F56F3C10F3B /* AtlasMobileTests */,
 			);
 		};
 /* End PBXProject section */
@@ -115,18 +168,54 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0AFB3CE184E179A2B252DFE7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				60537319C7421309A586FE6E /* KeychainNativeSessionStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF51075CB9F7DEA70186E90D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				D6A6379B232409094821BBA9 /* AtlasMobileApp.swift in Sources */,
 				2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */,
+				8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		6A3817118F55962DB7FC84EB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7080EEDF3E6F4E71528E7E91 /* AtlasMobile */;
+			targetProxy = 6C91C4C3FB7A6148E5A60ABC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		0C1E9B23EF50EFF1E611AC08 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AtlasMobile.app/AtlasMobile";
+			};
+			name = Debug;
+		};
 		1D16D6CDCCB952476DD82F9D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -193,15 +282,31 @@
 			};
 			name = Debug;
 		};
+		27D53CB7BCC9A231F045CB6D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AtlasMobile.app/AtlasMobile";
+			};
+			name = Release;
+		};
 		770EDDBE371F4EDBE25AA9D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
@@ -209,11 +314,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					AtlasShared,
-				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -225,10 +326,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
@@ -236,11 +334,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					AtlasShared,
-				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -309,6 +403,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		8D483C3521DA5C61E855AFCC /* Build configuration list for PBXNativeTarget "AtlasMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0C1E9B23EF50EFF1E611AC08 /* Debug */,
+				27D53CB7BCC9A231F045CB6D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		9A863C70EB1463208D2F8B8D /* Build configuration list for PBXProject "AtlasMobile" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
