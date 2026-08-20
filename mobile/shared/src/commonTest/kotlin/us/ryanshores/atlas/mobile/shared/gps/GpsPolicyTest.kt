@@ -113,6 +113,31 @@ class GpsPolicyTest {
     }
 
     @Test
+    fun rejectsFutureDatedFixesWithoutEstablishingOrChangingTrustedState() {
+        val futureFirst = GpsPolicy.evaluate(
+            GpsPolicyState(),
+            fix(latitude = 30.2672, longitude = -97.7431, accuracy = 10.0, timestamp = 2_001),
+            nowMilliseconds = 2_000,
+        )
+        assertEquals(GpsFixAction.WAIT_FOR_ACCURATE_FIX, futureFirst.action)
+        assertNull(futureFirst.state.lastAcceptedFix)
+
+        val accepted = GpsPolicy.evaluate(
+            GpsPolicyState(),
+            fix(latitude = 30.2672, longitude = -97.7431, accuracy = 10.0, timestamp = 2_000),
+            nowMilliseconds = 2_000,
+        )
+        val trusted = assertNotNull(accepted.state.lastAcceptedFix)
+        val futureUpdate = GpsPolicy.evaluate(
+            accepted.state,
+            fix(latitude = 30.2673, longitude = -97.7432, accuracy = 10.0, timestamp = 2_001),
+            nowMilliseconds = 2_000,
+        )
+        assertEquals(GpsFixAction.KEEP_LAST_FIX, futureUpdate.action)
+        assertSame(trusted, futureUpdate.state.lastAcceptedFix)
+    }
+
+    @Test
     fun smoothsOnlyAnAcceptedFixAndClassifiesGuidancePrecision() {
         val first = GpsPolicy.evaluate(
             GpsPolicyState(),

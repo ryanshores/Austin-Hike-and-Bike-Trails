@@ -179,7 +179,7 @@ object GpsPolicy {
 
     private fun fixAge(nowMilliseconds: Long, timestampMilliseconds: Long): Long = when {
         nowMilliseconds < 0 || timestampMilliseconds < 0 -> Long.MAX_VALUE
-        timestampMilliseconds >= nowMilliseconds -> 0
+        timestampMilliseconds > nowMilliseconds -> -1
         else -> nowMilliseconds - timestampMilliseconds
     }
 
