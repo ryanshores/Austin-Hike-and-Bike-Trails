@@ -303,7 +303,11 @@ export function createRideHandler(options) {
   if (!options.db || typeof options.jwtSecret !== "string" || options.jwtSecret.length < 32) {
     return async () => response({ error: "Ride history is unavailable" }, 503);
   }
-  const dependencies = { ...options, now: options.now ?? Date.now };
+  const dependencies = {
+    ...options,
+    logError: options.logError ?? ((message, details) => console.error(message, details)),
+    now: options.now ?? Date.now,
+  };
   return async function handleRide(request) {
     try {
       const path = new URL(request.url).pathname;
@@ -321,7 +325,9 @@ export function createRideHandler(options) {
       return match[2] === "batches" ? await uploadBatch(request, dependencies, match[1]) : await completeRide(request, dependencies, match[1]);
     } catch (error) {
       if (error instanceof HttpError) return response({ error: error.message }, error.status);
-      console.error("Ride history request failed", { error: error instanceof Error ? error.name : "UnknownError" });
+      dependencies.logError("Ride history request failed", {
+        error: error instanceof Error ? error.name : "UnknownError",
+      });
       return response({ error: "Ride history request failed" }, 500);
     }
   };

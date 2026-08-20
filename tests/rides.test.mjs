@@ -70,6 +70,15 @@ async function anonymous(instance) {
   return jar;
 }
 
+async function nativeAnonymous(instance) {
+  const response = await instance.auth(request("/api/mobile/v1/auth/anonymous", {
+    body: {},
+    origin: null,
+  }));
+  assert.equal(response.status, 201);
+  return response.json();
+}
+
 function point(sequence, recordedAt, latitude = 30.2672, longitude = -97.7431) {
   return { sequence, recordedAt, latitude, longitude, accuracyMeters: 12, altitudeMeters: null, speedMetersPerSecond: null, headingDegrees: null, quality: "good" };
 }
@@ -173,6 +182,57 @@ test("bearer access remains owner-scoped and cannot be replaced by a malformed h
   assert.equal(malformedHeader.status, 401);
   const stillPresent = instance.db.database.prepare("SELECT count(*) AS count FROM rides WHERE id = ?").get(rideId);
   assert.equal(stillPresent.count, 1);
+  instance.db.close();
+});
+
+test("a native refresh token cannot authenticate a ride request", async () => {
+  const instance = fixture();
+  const session = await nativeAnonymous(instance);
+  const rideId = "ride_test_refresh_denied_01";
+  const denied = await instance.rides(request("/api/rides", {
+    authorization: `Bearer ${session.refreshToken}`,
+    body: { id: rideId, startedAt: 1_800_000_000_000 },
+    origin: null,
+  }));
+
+  assert.equal(denied.status, 401);
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM rides WHERE id = ?").get(rideId).count,
+    0,
+  );
+  instance.db.close();
+});
+
+test("unexpected ride failures log only an error class", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const logs = [];
+  const secret = "provider-secret-raw-geometry-30.2672--97.7431";
+  const rides = createRideHandler({
+    db: {
+      prepare() {
+        throw new Error(secret);
+      },
+    },
+    jwtSecret: JWT_SECRET,
+    logError: (...entry) => logs.push(entry),
+    now: () => 1_800_000_000_000,
+  });
+  const response = await rides(request("/api/rides", {
+    authorization: `Bearer ${owner.atlas_access}`,
+    body: {
+      id: "ride_test_log_redaction_01",
+      startedAt: 1_800_000_000_000,
+      geometry: [[-97.7431, 30.2672]],
+    },
+    origin: null,
+  }));
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(logs, [["Ride history request failed", { error: "Error" }]]);
+  assert.equal(JSON.stringify(logs).includes(owner.atlas_access), false);
+  assert.equal(JSON.stringify(logs).includes(secret), false);
+  assert.doesNotMatch(JSON.stringify(logs), /30\.2672|-97\.7431/);
   instance.db.close();
 });
 
