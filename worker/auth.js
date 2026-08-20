@@ -204,6 +204,18 @@ function parseCookies(request) {
   return result;
 }
 
+function bearerAccessToken(request) {
+  const authorization = request.headers.get("authorization");
+  if (authorization === null) return null;
+  const match = /^Bearer ([A-Za-z0-9._~-]{16,4096})$/u.exec(authorization);
+  if (!match) throw new HttpError(401, "Invalid session");
+  return match[1];
+}
+
+export function requiresSameOrigin(request) {
+  return bearerAccessToken(request) === null;
+}
+
 function cookie(name, value, request, options = {}) {
   const secure = new URL(request.url).protocol === "https:";
   const parts = [
@@ -438,7 +450,7 @@ async function createSession(dependencies) {
 }
 
 export async function authenticateRequest(request, dependencies) {
-  const accessToken = parseCookies(request)[ACCESS_COOKIE];
+  const accessToken = bearerAccessToken(request) ?? parseCookies(request)[ACCESS_COOKIE];
   if (!accessToken) throw new HttpError(401, "Authentication required");
   const claims = await verifyAccessToken(
     accessToken,
