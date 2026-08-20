@@ -109,6 +109,8 @@ The non-secret provider URLs are committed in `wrangler.jsonc`:
 
 - production: `ROUTING_URL=https://routing.ryanshores.us`
 - preview: `ROUTING_URL=https://routing-staging.ryanshores.us`
+- production: `ROUTING_ENRICHMENT_URL=https://routing-enrichment.ryanshores.us`
+- preview: `ROUTING_ENRICHMENT_URL=https://routing-enrichment-staging.ryanshores.us`
 
 Set the following as encrypted secrets on each Worker, using its dedicated
 Access token:
