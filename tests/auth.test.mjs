@@ -754,6 +754,41 @@ test("native auth enforces bearer-only resources and bounded JSON requests", asy
   fixture.db.close();
 });
 
+test("unexpected native auth failures log no request credentials", async () => {
+  const logs = [];
+  const password = "correct horse battery staple";
+  const installationCredential = "installation-credential-sensitive-value";
+  const databaseErrorSecret = "database-error-with-provider-secret";
+  const handler = createAuthHandler({
+    db: {
+      prepare() {
+        throw new Error(databaseErrorSecret);
+      },
+    },
+    jwtSecret: JWT_SECRET,
+    passwordPepper: PASSWORD_PEPPER,
+    logError: (...entry) => logs.push(entry),
+  });
+  const result = await handler(nativeRequest("/api/mobile/v1/auth/login", {
+    body: {
+      email: "rider@example.com",
+      password,
+      installationCredential,
+    },
+  }));
+
+  assert.equal(result.status, 500);
+  assert.deepEqual(logs, [[
+    "Authentication request failed",
+    { error: "Error", path: "/api/mobile/v1/auth/login" },
+  ]]);
+  const serialized = JSON.stringify(logs);
+  assert.equal(serialized.includes(password), false);
+  assert.equal(serialized.includes(installationCredential), false);
+  assert.equal(serialized.includes(databaseErrorSecret), false);
+  assert.equal(serialized.includes("rider@example.com"), false);
+});
+
 test("missing secrets fail closed", async () => {
   const fixture = createFixture();
   const unavailable = createAuthHandler({ db: fixture.db });
