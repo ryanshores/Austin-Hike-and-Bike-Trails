@@ -7,9 +7,9 @@ full-screen ride experience.
 
 The initial Kotlin Multiplatform module, native iOS SwiftUI host, and local
 verification commands are in [`mobile/README.md`](mobile/README.md). It shares
-only the smallest native-facing Kotlin API so far; browser authentication and
-the existing web application remain unchanged until the dedicated mobile-auth
-slice lands.
+the native session model while SwiftUI remains the platform UI. Browser
+authentication and the existing web application remain available alongside
+the versioned native authentication API.
 
 ## Bicycle facility edge cache
 
@@ -155,7 +155,10 @@ load a third-party documentation bundle at runtime.
 
 The Worker exposes same-origin endpoints under `/api/auth/` for anonymous
 identity bootstrap, registration, login, token refresh, logout, and the current
-user. Authentication fails closed until all of these deployment bindings are
+user. Native clients use `/api/mobile/v1/auth/` for JSON credentials that are
+intended for platform secure storage and sent as bearer access tokens or
+refresh-only request bodies. Native endpoints never set browser cookies.
+Authentication fails closed until all of these deployment bindings are
 available:
 
 - D1 database binding: `DB`
@@ -173,8 +176,8 @@ across Worker isolates.
 The iOS-first Kotlin Multiplatform plan, including the native bearer-token
 authentication boundary and cross-platform GPS fixtures, is documented in
 [`docs/mobile-architecture.md`](docs/mobile-architecture.md). The contracts in
-[`mobile/contracts/v1/`](mobile/contracts/v1/) are proposed interfaces only;
-they do not expose new runtime endpoints in the current release.
+[`mobile/contracts/v1/`](mobile/contracts/v1/) define the implemented native
+authentication interface and the planned later mobile capabilities.
 
 ## Prerequisites
 

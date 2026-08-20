@@ -128,6 +128,26 @@ function request(path, { body, cookies, method = "POST", ip = "192.0.2.1" } = {}
   });
 }
 
+function nativeRequest(path, {
+  accessToken,
+  body,
+  contentType = "application/json",
+  ip = "198.51.100.1",
+  method = "POST",
+} = {}) {
+  const headers = new Headers({
+    "cf-connecting-ip": ip,
+    "user-agent": "AtlasMobile/1.0 iOS",
+  });
+  if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
+  if (body !== undefined && contentType !== null) headers.set("content-type", contentType);
+  return new Request(`${ORIGIN}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 function applyCookies(response, jar) {
   for (const value of response.headers.getSetCookie()) {
     const [pair, ...attributes] = value.split(";").map((part) => part.trim());
@@ -226,7 +246,10 @@ test("auth rate limits are shared across Worker handlers", async () => {
     now: () => 1_800_000_000_000,
   });
   const limitedAcrossHandlers = await secondWorkerHandler(
-    request("/api/auth/anonymous", { ip: "192.0.2.42" }),
+    nativeRequest("/api/mobile/v1/auth/anonymous", {
+      body: {},
+      ip: "192.0.2.42",
+    }),
   );
   assert.equal(limitedAcrossHandlers.status, 429);
   assert.equal(
@@ -559,6 +582,175 @@ test("logout revokes a session when given a rotated refresh token", async () => 
     request("/api/auth/refresh", { cookies: loginJar }),
   );
   assert.equal(revoked.status, 401);
+  fixture.db.close();
+});
+
+test("native auth bootstraps, restores, upgrades, logs in, refreshes, and logs out without cookies", async () => {
+  const fixture = createFixture();
+  const anonymous = await fixture.handler(nativeRequest("/api/mobile/v1/auth/anonymous", { body: {} }));
+  const anonymousBody = await anonymous.json();
+  assert.equal(anonymous.status, 201);
+  assert.equal(anonymousBody.user.accountType, "anonymous");
+  assert.ok(anonymousBody.accessToken);
+  assert.ok(anonymousBody.refreshToken);
+  assert.ok(anonymousBody.installationCredential);
+  assert.deepEqual(anonymous.headers.getSetCookie(), []);
+
+  const current = await fixture.handler(nativeRequest("/api/mobile/v1/auth/me", {
+    accessToken: anonymousBody.accessToken,
+    method: "GET",
+  }));
+  assert.equal(current.status, 200);
+  assert.equal((await current.json()).user.id, anonymousBody.user.id);
+
+  const restored = await fixture.handler(nativeRequest("/api/mobile/v1/auth/installation/restore", {
+    body: { installationCredential: anonymousBody.installationCredential },
+    ip: "198.51.100.2",
+  }));
+  const restoredBody = await restored.json();
+  assert.equal(restored.status, 200);
+  assert.ok(restoredBody.accessToken);
+  assert.ok(restoredBody.refreshToken);
+  assert.deepEqual(restored.headers.getSetCookie(), []);
+
+  fixture.db.database
+    .prepare("INSERT INTO rides (id, user_id, started_at) VALUES (?, ?, ?)")
+    .run("native-existing-ride", anonymousBody.user.id, 1_800_000_000_000);
+  const registered = await fixture.handler(nativeRequest("/api/mobile/v1/auth/register", {
+    accessToken: restoredBody.accessToken,
+    body: {
+      displayName: "Fixture Rider",
+      email: " Rider@Example.com ",
+      password: "correct horse battery staple",
+    },
+  }));
+  const registeredBody = await registered.json();
+  assert.equal(registered.status, 200);
+  assert.equal(registeredBody.user.id, anonymousBody.user.id);
+  assert.equal(registeredBody.user.accountType, "registered");
+  assert.equal(registeredBody.user.email, "rider@example.com");
+  assert.equal(registeredBody.user.displayName, "Fixture Rider");
+  assert.equal(registeredBody.retainedRideCount, 1);
+  assert.ok(registeredBody.accessToken);
+  assert.ok(registeredBody.refreshToken);
+  assert.deepEqual(registered.headers.getSetCookie(), []);
+
+  const cannotRestoreRegistered = await fixture.handler(nativeRequest("/api/mobile/v1/auth/installation/restore", {
+    body: { installationCredential: anonymousBody.installationCredential },
+    ip: "198.51.100.6",
+  }));
+  assert.equal(cannotRestoreRegistered.status, 401);
+
+  const oldAnonymousAccess = await fixture.handler(nativeRequest("/api/mobile/v1/auth/me", {
+    accessToken: restoredBody.accessToken,
+    method: "GET",
+  }));
+  assert.equal(oldAnonymousAccess.status, 401);
+
+  const login = await fixture.handler(nativeRequest("/api/mobile/v1/auth/login", {
+    body: { email: "rider@example.com", password: "correct horse battery staple" },
+    ip: "198.51.100.3",
+  }));
+  const loginBody = await login.json();
+  assert.equal(login.status, 200);
+  assert.equal(loginBody.user.id, anonymousBody.user.id);
+  assert.ok(loginBody.accessToken);
+  assert.ok(loginBody.refreshToken);
+  assert.deepEqual(login.headers.getSetCookie(), []);
+
+  const refreshed = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: loginBody.refreshToken },
+    ip: "198.51.100.4",
+  }));
+  const refreshedBody = await refreshed.json();
+  assert.equal(refreshed.status, 200);
+  assert.notEqual(refreshedBody.refreshToken, loginBody.refreshToken);
+  assert.ok(refreshedBody.accessToken);
+  assert.deepEqual(refreshed.headers.getSetCookie(), []);
+
+  const logout = await fixture.handler(nativeRequest("/api/mobile/v1/auth/logout", {
+    accessToken: refreshedBody.accessToken,
+  }));
+  assert.equal(logout.status, 204);
+  assert.deepEqual(logout.headers.getSetCookie(), []);
+  const revoked = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: refreshedBody.refreshToken },
+    ip: "198.51.100.5",
+  }));
+  assert.equal(revoked.status, 401);
+  fixture.db.close();
+});
+
+test("native refresh preserves concurrency grace and revokes delayed replay", async () => {
+  const start = 1_800_000_000_000;
+  const fixture = createFixture(start);
+  const anonymous = await fixture.handler(nativeRequest("/api/mobile/v1/auth/anonymous", { body: {} }));
+  const session = await anonymous.json();
+  const first = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: session.refreshToken },
+  }));
+  const rotated = await first.json();
+  assert.equal(first.status, 200);
+
+  const concurrent = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: session.refreshToken },
+    ip: "198.51.100.2",
+  }));
+  assert.equal(concurrent.status, 409);
+  assert.equal(concurrent.headers.get("retry-after"), "1");
+
+  fixture.setNow(start + 5_001);
+  const replay = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: session.refreshToken },
+    ip: "198.51.100.3",
+  }));
+  assert.equal(replay.status, 401);
+  const revokedRotation = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: rotated.refreshToken },
+    ip: "198.51.100.4",
+  }));
+  assert.equal(revokedRotation.status, 401);
+  fixture.db.close();
+});
+
+test("native auth enforces bearer-only resources and bounded JSON requests", async () => {
+  const fixture = createFixture();
+  const browser = await bootstrap(fixture);
+  const cookieOnly = await fixture.handler(request("/api/mobile/v1/auth/me", {
+    cookies: browser.jar,
+    method: "GET",
+  }));
+  assert.equal(cookieOnly.status, 401);
+  const refreshAsBearer = await fixture.handler(nativeRequest("/api/mobile/v1/auth/me", {
+    accessToken: browser.jar.atlas_refresh,
+    method: "GET",
+  }));
+  assert.equal(refreshAsBearer.status, 401);
+
+  const missingType = await fixture.handler(nativeRequest("/api/mobile/v1/auth/login", {
+    body: { email: "rider@example.com", password: "correct horse battery staple" },
+    contentType: null,
+  }));
+  assert.equal(missingType.status, 415);
+  const oversized = await fixture.handler(new Request(`${ORIGIN}/api/mobile/v1/auth/anonymous`, {
+    method: "POST",
+    headers: {
+      "cf-connecting-ip": "198.51.100.5",
+      "content-length": "4097",
+      "content-type": "application/json",
+    },
+    body: "{}",
+  }));
+  assert.equal(oversized.status, 413);
+  const streamedOversized = await fixture.handler(new Request(`${ORIGIN}/api/mobile/v1/auth/anonymous`, {
+    method: "POST",
+    headers: {
+      "cf-connecting-ip": "198.51.100.6",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ padding: "x".repeat(4097) }),
+  }));
+  assert.equal(streamedOversized.status, 413);
   fixture.db.close();
 });
 

@@ -59,8 +59,8 @@ duration wording.
 ## Native authentication boundary
 
 The existing browser endpoints remain cookie-authenticated and retain their
-same-origin mutation checks. A later, dedicated Worker slice will introduce a
-versioned native API below `/api/mobile/v1/auth/*`.
+same-origin mutation checks. Native clients use the versioned Worker API below
+`/api/mobile/v1/auth/`.
 
 Native sessions use a short-lived bearer access token and a rotating opaque
 refresh token. iOS stores both in Keychain. A randomly generated,

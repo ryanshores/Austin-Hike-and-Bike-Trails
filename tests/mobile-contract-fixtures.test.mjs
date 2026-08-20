@@ -26,11 +26,11 @@ function recursivelyFindKey(value, matcher) {
   return Object.entries(value).some(([key, child]) => matcher(key) || recursivelyFindKey(child, matcher));
 }
 
-test("proposed native authentication fixtures keep browser CSRF protections separate", () => {
+test("implemented native authentication fixtures keep browser CSRF protections separate", () => {
   const authentication = contract("authentication.json");
 
   assert.equal(authentication.version, "mobile-v1");
-  assert.equal(authentication.status, "proposed");
+  assert.equal(authentication.status, "implemented");
   assert.equal(authentication.browserCompatibility.existingAuthBasePath, "/api/auth");
   assert.equal(authentication.browserCompatibility.mustRemainUnchanged, true);
   assert.equal(authentication.browserCompatibility.stateChangingRequestsRequire, "matchingSameOriginHeader");
