@@ -20,7 +20,8 @@
 	"keep_vars": true,
 	"vars": {
 		"GEOCODER_URL": "https://geocoding.ryanshores.us",
-		"ROUTING_URL": "https://routing.ryanshores.us"
+		"ROUTING_URL": "https://routing.ryanshores.us",
+		"ROUTING_ENRICHMENT_URL": "https://routing-enrichment.ryanshores.us"
 	},
 	"d1_databases": [
 		{
@@ -55,7 +56,8 @@
 			"name": "austin-trails-preview",
 			"vars": {
 				"GEOCODER_URL": "https://geocoding-staging.ryanshores.us",
-				"ROUTING_URL": "https://routing-staging.ryanshores.us"
+				"ROUTING_URL": "https://routing-staging.ryanshores.us",
+				"ROUTING_ENRICHMENT_URL": "https://routing-enrichment-staging.ryanshores.us"
 			},
 			"images": {
 				"binding": "IMAGES"
