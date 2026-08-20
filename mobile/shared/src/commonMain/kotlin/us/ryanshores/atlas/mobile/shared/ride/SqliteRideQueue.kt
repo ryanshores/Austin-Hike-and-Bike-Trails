@@ -35,6 +35,9 @@ class SqliteRideQueue(
         return database.transactionWithResult {
             val active = checkNotNull(activeRide()) { "No active ride" }
             check(active.status == RideRecordingStatus.RECORDING) { "Ride is stopping" }
+            require(point.recordedAtMilliseconds >= active.startedAtMilliseconds - 60_000) {
+                "recordedAtMilliseconds is before the allowed recording window"
+            }
             require(
                 active.lastRecordedAtMilliseconds == null ||
                     point.recordedAtMilliseconds >= active.lastRecordedAtMilliseconds,
@@ -141,7 +144,11 @@ class SqliteRideQueue(
     )
 
     private fun requireValidId(value: String, name: String) {
-        require(value.length in 16..128 && value.all { it.isLetterOrDigit() || it == '_' || it == '-' }) {
+        require(
+            value.length in 16..128 && value.all {
+                it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-'
+            },
+        ) {
             "$name must be a valid Atlas identifier"
         }
     }

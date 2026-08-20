@@ -112,6 +112,9 @@ class SqliteRideQueueTest {
         assertFailsWith<IllegalArgumentException> {
             queue.beginRide("short", OWNER_ID, startedAtMilliseconds = 1_000)
         }
+        assertFailsWith<IllegalArgumentException> {
+            queue.beginRide("ride-00000000000é", OWNER_ID, startedAtMilliseconds = 1_000)
+        }
         queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
         assertFailsWith<IllegalArgumentException> {
             queue.append(point(recordedAt = 1_100, latitude = 91.0))
@@ -130,6 +133,36 @@ class SqliteRideQueueTest {
             )
         }
         assertTrue(queue.queuedPoints().isEmpty())
+        queue.close()
+    }
+
+    @Test
+    fun rejectsFirstPointBeforeWorkerRecordingWindow() {
+        val queue = createQueue()
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 100_000)
+
+        assertFailsWith<IllegalArgumentException> {
+            queue.append(point(recordedAt = 39_999, latitude = 30.2672))
+        }
+        assertTrue(queue.queuedPoints().isEmpty())
+        assertEquals(0, queue.activeRide()?.nextSequence)
+        assertNull(queue.activeRide()?.lastRecordedAtMilliseconds)
+
+        queue.append(point(recordedAt = 40_000, latitude = 30.2672))
+        assertEquals(1, queue.queuedPoints().size)
+        queue.close()
+    }
+
+    @Test
+    fun rejectsBatchIdentifiersOutsideWorkerSyntaxBeforeAssignment() {
+        val queue = createQueue()
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.append(point(recordedAt = 1_100, latitude = 30.2672))
+
+        assertFailsWith<IllegalArgumentException> {
+            queue.nextUploadBatch("batch-0000000000é")
+        }
+        assertNull(queue.queuedPoints().single().batchId)
         queue.close()
     }
 
