@@ -4,7 +4,7 @@ export const MAX_USABLE_ACCURACY_METERS = 100;
 export const MAX_FIX_AGE_MS = 15_000;
 
 export function locationQuality(accuracy, ageMs = 0) {
-  if (!Number.isFinite(accuracy) || !Number.isFinite(ageMs) || ageMs > MAX_FIX_AGE_MS || accuracy > MAX_USABLE_ACCURACY_METERS) {
+  if (!Number.isFinite(accuracy) || accuracy < 0 || !Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_FIX_AGE_MS || accuracy > MAX_USABLE_ACCURACY_METERS) {
     return "unusable";
   }
   if (accuracy <= GOOD_ACCURACY_METERS) return "good";

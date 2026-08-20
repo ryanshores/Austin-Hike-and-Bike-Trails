@@ -25,6 +25,8 @@ test("keeps the last accurate position when a later fix is coarse", () => {
 test("rejects invalid accuracy values", () => {
   assert.equal(locationFixAction(Number.NaN, false), "wait-for-accurate-fix");
   assert.equal(locationFixAction(Number.POSITIVE_INFINITY, true), "keep-last-fix");
+  assert.equal(locationFixAction(-1, true), "keep-last-fix");
+  assert.equal(locationFixAction(10, false, -1), "wait-for-accurate-fix");
 });
 
 test("classifies GPS quality for the ride indicator", () => {

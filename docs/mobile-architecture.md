@@ -97,10 +97,12 @@ The current browser policy is the initial KMP policy baseline:
 - Server-side ride validation remains an independent defense.
 
 The exact baseline samples and thresholds live in
-`mobile/contracts/v1/gps-policy.json`. The fixture-validation test intentionally
-executes them against `app/location-accuracy.js`; Kotlin must run the same
-fixtures once the shared module exists. Threshold changes require a separate
-documented behavior change and fixture update.
+`mobile/contracts/v1/gps-policy.json`. The fixture-validation test executes them
+against `app/location-accuracy.js` and verifies the generated Kotlin test data;
+the shared module runs that same data against `GpsPolicy`. Regenerate the Kotlin
+fixture after an intentional JSON change with
+`node scripts/generate-gps-policy-kotlin.mjs`. Threshold changes require a
+separate documented behavior change and fixture update.
 
 For iOS, Core Location is responsible for collecting raw locations and for the
 background location lifecycle. Shared Kotlin decides whether a raw sample is

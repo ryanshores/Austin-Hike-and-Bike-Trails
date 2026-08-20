@@ -12,7 +12,9 @@ import {
   locationQuality,
   MAX_FIX_AGE_MS,
   MAX_USABLE_ACCURACY_METERS,
+  smoothingWeight,
 } from "../app/location-accuracy.js";
+import { renderGpsPolicyKotlin } from "../scripts/generate-gps-policy-kotlin.mjs";
 import { SafetyPreference, summarizeRoute } from "../worker/route-safety.js";
 
 const contractsDirectory = join(dirname(fileURLToPath(import.meta.url)), "../mobile/contracts/v1");
@@ -116,4 +118,17 @@ test("GPS fixture remains aligned with the current browser safety policy", () =>
       sample.expected,
     );
   }
+
+  for (const sample of gps.smoothingSamples) {
+    assert.equal(smoothingWeight(sample.accuracyMeters), sample.expectedWeight);
+  }
+
+  const generatedKotlin = readFileSync(
+    join(
+      contractsDirectory,
+      "../../shared/src/commonTest/kotlin/us/ryanshores/atlas/mobile/shared/gps/GpsPolicyGoldenFixtures.generated.kt",
+    ),
+    "utf8",
+  );
+  assert.equal(generatedKotlin, renderGpsPolicyKotlin(gps));
 });

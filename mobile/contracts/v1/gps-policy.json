@@ -13,10 +13,19 @@
     { "name": "fairFixIsAccepted", "accuracyMeters": 75, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "fair", "expectedAction": "use-fix" },
     { "name": "poorFixIsAcceptedButNotGuidancePrecise", "accuracyMeters": 100, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "poor", "expectedAction": "use-fix" },
     { "name": "laterCoarseFixKeepsLast", "accuracyMeters": 4000, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "unusable", "expectedAction": "keep-last-fix" },
-    { "name": "staleFixKeepsLast", "accuracyMeters": 12, "ageMilliseconds": 15001, "hasUsableFix": true, "expectedQuality": "unusable", "expectedAction": "keep-last-fix" }
+    { "name": "staleFixKeepsLast", "accuracyMeters": 12, "ageMilliseconds": 15001, "hasUsableFix": true, "expectedQuality": "unusable", "expectedAction": "keep-last-fix" },
+    { "name": "negativeAccuracyKeepsLast", "accuracyMeters": -1, "ageMilliseconds": 0, "hasUsableFix": true, "expectedQuality": "unusable", "expectedAction": "keep-last-fix" },
+    { "name": "negativeAgeWaits", "accuracyMeters": 12, "ageMilliseconds": -1, "hasUsableFix": false, "expectedQuality": "unusable", "expectedAction": "wait-for-accurate-fix" }
   ],
   "plausibleMovementSamples": [
     { "distanceMeters": 45, "elapsedMilliseconds": 2000, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": true },
-    { "distanceMeters": 1000, "elapsedMilliseconds": 2000, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": false }
+    { "distanceMeters": 1000, "elapsedMilliseconds": 2000, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": false },
+    { "distanceMeters": -1, "elapsedMilliseconds": 2000, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": false },
+    { "distanceMeters": 0, "elapsedMilliseconds": 0, "previousAccuracyMeters": 10, "nextAccuracyMeters": 12, "expected": false }
+  ],
+  "smoothingSamples": [
+    { "accuracyMeters": 10, "expectedWeight": 0.82 },
+    { "accuracyMeters": 65, "expectedWeight": 0.62 },
+    { "accuracyMeters": 90, "expectedWeight": 0.45 }
   ]
 }

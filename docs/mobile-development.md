@@ -57,8 +57,11 @@ routing, geocoding, ArcGIS, sidecar, or Cloudflare Access credentials.
 
 ## GPS policy and field verification
 
-The KMP implementation must execute the samples in
-`mobile/contracts/v1/gps-policy.json` unchanged. Preserve these safety rules:
+The KMP implementation executes the samples in
+`mobile/contracts/v1/gps-policy.json` through a generated common-test fixture.
+After an intentional fixture change, run
+`node scripts/generate-gps-policy-kotlin.mjs`; the JavaScript test suite rejects
+stale generated output. Preserve these safety rules:
 
 - Wait for a usable first fix.
 - Keep the last trustworthy fix when later quality weakens.
