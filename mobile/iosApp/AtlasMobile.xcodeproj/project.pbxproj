@@ -208,7 +208,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -293,7 +293,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -314,7 +314,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -334,7 +334,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared";
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

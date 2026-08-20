@@ -23,7 +23,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Austin Atlas
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.navigation
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)"
-        OTHER_LDFLAGS: "$(inherited) -framework AtlasShared"
+        OTHER_LDFLAGS: "$(inherited) -framework AtlasShared -lsqlite3"
     preBuildScripts:
       - name: Build Kotlin framework
         script: |
@@ -49,6 +49,6 @@ targets:
       base:
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)"
         GENERATE_INFOPLIST_FILE: YES
-        OTHER_LDFLAGS: "$(inherited) -framework AtlasShared"
+        OTHER_LDFLAGS: "$(inherited) -framework AtlasShared -lsqlite3"
     dependencies:
       - target: AtlasMobile

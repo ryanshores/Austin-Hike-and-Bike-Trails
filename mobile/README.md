@@ -32,3 +32,16 @@ Keychain item. The item uses device-only, after-first-unlock accessibility so
 an actively recording ride can refresh its session while the screen is locked,
 without synchronizing credentials to another device. The adapter never writes
 credentials to user defaults or logs.
+
+## Offline ride persistence
+
+The shared module uses SQLDelight with native SQLite drivers on iOS and Android.
+`SqliteRideQueue` stores the single active ride and each accepted point in one
+transaction before upload is attempted. Point sequences never reset during an
+active ride, and an assigned upload batch keeps the same ID across retries and
+process restarts. Only explicit batch acknowledgement removes queued points;
+requesting completion retains the ride until its queue is empty.
+
+Platform hosts construct the store with `IosRideQueueStoreFactory` or
+`AndroidRideQueueStoreFactory`. Upload scheduling and lifecycle work remain
+separate adapters and are not implied by the persistence layer.
