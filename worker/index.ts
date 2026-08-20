@@ -162,7 +162,10 @@ const worker = {
       })(request);
     }
 
-    if (url.pathname.startsWith("/api/auth/")) {
+    if (
+      url.pathname.startsWith("/api/auth/") ||
+      url.pathname.startsWith("/api/mobile/v1/auth/")
+    ) {
       return createAuthHandler({
         db: env.DB,
         jwtSecret: env.JWT_SECRET,

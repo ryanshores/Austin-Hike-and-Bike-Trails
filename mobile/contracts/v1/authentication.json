@@ -1,6 +1,6 @@
 {
   "version": "mobile-v1",
-  "status": "proposed",
+  "status": "implemented",
   "basePath": "/api/mobile/v1/auth",
   "credentialPlaceholders": [
     "$accessToken",

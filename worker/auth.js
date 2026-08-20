@@ -12,6 +12,7 @@ const JWT_AUDIENCE = "austin-hike-bike-atlas-web";
 const PASSWORD_ALGORITHM = "pbkdf2-sha256";
 const PASSWORD_ITERATIONS = 100_000;
 const PASSWORD_KEY_BYTES = 32;
+const NATIVE_AUTH_MAX_BODY_BYTES = 4 * 1024;
 const encoder = new TextEncoder();
 
 export class HttpError extends Error {
@@ -292,6 +293,44 @@ async function readJson(request) {
   }
 }
 
+async function readNativeJson(request) {
+  const contentType = request.headers.get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (contentType !== "application/json") {
+    throw new HttpError(415, "Content-Type must be application/json");
+  }
+  const declaredSize = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredSize) && declaredSize > NATIVE_AUTH_MAX_BODY_BYTES) {
+    throw new HttpError(413, "Request body is too large");
+  }
+  const reader = request.body?.getReader();
+  const decoder = new TextDecoder();
+  let receivedBytes = 0;
+  let text = "";
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > NATIVE_AUTH_MAX_BODY_BYTES) {
+        await reader.cancel();
+        throw new HttpError(413, "Request body is too large");
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  }
+  try {
+    const body = JSON.parse(text);
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid body");
+    return body;
+  } catch {
+    throw new HttpError(400, "Invalid JSON body");
+  }
+}
+
 function normalizeEmail(value) {
   if (typeof value !== "string") throw new HttpError(400, "Email is required");
   const email = value.trim().toLowerCase();
@@ -307,6 +346,29 @@ function normalizeEmail(value) {
 function validatePassword(value) {
   if (typeof value !== "string" || value.length < 12 || value.length > 128) {
     throw new HttpError(400, "Password must be 12 to 128 characters");
+  }
+  return value;
+}
+
+function validateDisplayName(value) {
+  if (typeof value !== "string") throw new HttpError(400, "Display name is required");
+  const displayName = value.trim();
+  if (displayName.length < 1 || displayName.length > 80) {
+    throw new HttpError(400, "Display name must be 1 to 80 characters");
+  }
+  return displayName;
+}
+
+function validateInstallationCredential(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{32,128}$/u.test(value)) {
+    throw new HttpError(401, "Invalid installation credential");
+  }
+  return value;
+}
+
+function validateRefreshToken(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{32,128}$/u.test(value)) {
+    throw new HttpError(401, "Invalid session");
   }
   return value;
 }
@@ -449,9 +511,7 @@ async function createSession(dependencies) {
   };
 }
 
-export async function authenticateRequest(request, dependencies) {
-  const accessToken = bearerAccessToken(request) ?? parseCookies(request)[ACCESS_COOKIE];
-  if (!accessToken) throw new HttpError(401, "Authentication required");
+async function authenticateAccessToken(accessToken, dependencies) {
   const claims = await verifyAccessToken(
     accessToken,
     dependencies.jwtSecret,
@@ -474,21 +534,36 @@ export async function authenticateRequest(request, dependencies) {
   if (!user || user.token_version !== claims.tokenVersion) {
     throw new HttpError(401, "Invalid session");
   }
-  return user;
+  return { claims, user };
 }
 
-async function anonymous(request, dependencies) {
-  assertSameOrigin(request);
+export async function authenticateRequest(request, dependencies) {
+  const accessToken = bearerAccessToken(request) ?? parseCookies(request)[ACCESS_COOKIE];
+  if (!accessToken) throw new HttpError(401, "Authentication required");
+  return (await authenticateAccessToken(accessToken, dependencies)).user;
+}
+
+async function authenticateBearerSession(request, dependencies) {
+  const accessToken = bearerAccessToken(request);
+  if (!accessToken) throw new HttpError(401, "Authentication required");
+  return authenticateAccessToken(accessToken, dependencies);
+}
+
+async function anonymous(request, dependencies, native = false) {
+  if (!native) assertSameOrigin(request);
   await checkRateLimit(request, "anonymous", dependencies);
-  try {
-    const existing = await authenticateRequest(request, dependencies);
-    return response({ user: publicUser(existing) });
-  } catch (error) {
-    if (!(error instanceof HttpError) || error.status !== 401) throw error;
+  if (native) await readNativeJson(request);
+  if (!native) {
+    try {
+      const existing = await authenticateRequest(request, dependencies);
+      return response({ user: publicUser(existing) });
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 401) throw error;
+    }
   }
 
-  const cookies = parseCookies(request);
-  if (cookies[INSTALLATION_COOKIE]) {
+  const cookies = native ? {} : parseCookies(request);
+  if (!native && cookies[INSTALLATION_COOKIE]) {
     const installationHash = await sha256(cookies[INSTALLATION_COOKIE]);
     const restored = await dependencies.db
       .prepare(
@@ -587,18 +662,63 @@ async function anonymous(request, dependencies) {
     ),
     refreshToken,
   };
+  if (native) {
+    return response({
+      user: publicUser(user),
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      installationCredential: installationSecret,
+    }, 201);
+  }
   const headers = new Headers();
   appendSessionCookies(headers, request, session, installationSecret);
   return response({ user: publicUser(user) }, 201, headers);
 }
 
-async function register(request, dependencies) {
-  assertSameOrigin(request);
+async function restoreNativeInstallation(request, dependencies) {
+  await checkRateLimit(request, "anonymous", dependencies);
+  const body = await readNativeJson(request);
+  const credential = validateInstallationCredential(body.installationCredential);
+  const installationHash = await sha256(credential);
+  const restored = await dependencies.db
+    .prepare(
+      `SELECT u.id, u.account_type, u.email, u.display_name, u.token_version
+       FROM anonymous_installations AS i
+       JOIN users AS u ON u.id = i.user_id
+       WHERE i.installation_secret_hash = ?
+         AND i.first_seen_at + ? > ?
+         AND u.account_type = 'anonymous'
+         AND u.deleted_at IS NULL`,
+    )
+    .bind(
+      installationHash,
+      INSTALLATION_TTL_SECONDS * 1000,
+      dependencies.now(),
+    )
+    .first();
+  if (!restored) throw new HttpError(401, "Invalid installation credential");
+  await dependencies.db
+    .prepare("UPDATE anonymous_installations SET last_seen_at = ? WHERE installation_secret_hash = ?")
+    .bind(dependencies.now(), installationHash)
+    .run();
+  const session = await createSession({
+    ...dependencies,
+    now: dependencies.now(),
+    user: restored,
+  });
+  return response(session);
+}
+
+async function register(request, dependencies, native = false) {
+  if (!native) assertSameOrigin(request);
   await checkRateLimit(request, "register", dependencies);
-  const current = await authenticateRequest(request, dependencies);
-  const body = await readJson(request);
+  const current = native
+    ? (await authenticateBearerSession(request, dependencies)).user
+    : await authenticateRequest(request, dependencies);
+  const body = native ? await readNativeJson(request) : await readJson(request);
   const email = normalizeEmail(body.email);
   const password = validatePassword(body.password);
+  const displayName = native ? validateDisplayName(body.displayName) : current.display_name;
 
   if (current.account_type === "registered") {
     if (
@@ -612,6 +732,13 @@ async function register(request, dependencies) {
       now: dependencies.now(),
       user: current,
     });
+    if (native) {
+      return response({
+        retainedRideCount: await countRetainedRides(dependencies, current.id),
+        user: publicUser(current),
+        ...session,
+      });
+    }
     const headers = new Headers();
     appendSessionCookies(headers, request, session);
     return response({
@@ -629,6 +756,7 @@ async function register(request, dependencies) {
   const upgraded = {
     ...current,
     account_type: "registered",
+    display_name: displayName,
     email,
     password_hash: passwordRecord.passwordHash,
     password_algorithm: passwordRecord.passwordAlgorithm,
@@ -647,6 +775,7 @@ async function register(request, dependencies) {
           `UPDATE users
            SET account_type = 'registered',
                email = ?,
+               display_name = ?,
                password_hash = ?,
                password_algorithm = ?,
                password_parameters = ?,
@@ -657,6 +786,7 @@ async function register(request, dependencies) {
         )
         .bind(
           email,
+          displayName,
           passwordRecord.passwordHash,
           passwordRecord.passwordAlgorithm,
           passwordRecord.passwordParameters,
@@ -730,6 +860,14 @@ async function register(request, dependencies) {
     throw error;
   }
 
+  if (native) {
+    return response({
+      retainedRideCount: await countRetainedRides(dependencies, upgraded.id),
+      user: publicUser(upgraded),
+      accessToken: preparedSession.accessToken,
+      refreshToken: preparedSession.refreshToken,
+    });
+  }
   const headers = new Headers();
   appendSessionCookies(headers, request, {
     accessToken: preparedSession.accessToken,
@@ -745,10 +883,10 @@ async function register(request, dependencies) {
   }, 200, headers);
 }
 
-async function login(request, dependencies) {
-  assertSameOrigin(request);
+async function login(request, dependencies, native = false) {
+  if (!native) assertSameOrigin(request);
   await checkRateLimit(request, "login", dependencies);
-  const body = await readJson(request);
+  const body = native ? await readNativeJson(request) : await readJson(request);
   const email = normalizeEmail(body.email);
   const password = validatePassword(body.password);
   const user = await dependencies.db
@@ -777,6 +915,7 @@ async function login(request, dependencies) {
     now: dependencies.now(),
     user,
   });
+  if (native) return response({ user: publicUser(user), ...session });
   const headers = new Headers();
   appendSessionCookies(headers, request, session);
   headers.append(
@@ -815,10 +954,12 @@ async function rejectRefreshReuse({ db, now, oldHash, sessionId }) {
   throw new HttpError(401, "Invalid session");
 }
 
-async function refresh(request, dependencies) {
-  assertSameOrigin(request);
+async function refresh(request, dependencies, native = false) {
+  if (!native) assertSameOrigin(request);
   await checkRateLimit(request, "refresh", dependencies);
-  const oldToken = parseCookies(request)[REFRESH_COOKIE];
+  const oldToken = native
+    ? validateRefreshToken((await readNativeJson(request)).refreshToken)
+    : parseCookies(request)[REFRESH_COOKIE];
   if (!oldToken) throw new HttpError(401, "Authentication required");
   const oldHash = await sha256(oldToken);
   const now = dependencies.now();
@@ -898,6 +1039,7 @@ async function refresh(request, dependencies) {
     },
     dependencies.jwtSecret,
   );
+  if (native) return response({ accessToken, refreshToken: newToken });
   const headers = new Headers();
   appendSessionCookies(headers, request, {
     accessToken,
@@ -906,7 +1048,25 @@ async function refresh(request, dependencies) {
   return response({ user: publicUser(session) }, 200, headers);
 }
 
-async function logout(request, dependencies) {
+async function logout(request, dependencies, native = false) {
+  if (native) {
+    const { claims, user } = await authenticateBearerSession(request, dependencies);
+    await dependencies.db
+      .prepare(
+        `UPDATE auth_sessions
+         SET revoked_at = ?
+         WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(dependencies.now(), claims.jti, user.id)
+      .run();
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
   assertSameOrigin(request);
   const cookies = parseCookies(request);
   const refreshToken = cookies[REFRESH_COOKIE];
@@ -991,6 +1151,36 @@ export function createAuthHandler(options) {
   return async function handleAuth(request) {
     try {
       const path = new URL(request.url).pathname;
+      if (path === "/api/mobile/v1/auth/anonymous") {
+        method(request, "POST");
+        return await anonymous(request, dependencies, true);
+      }
+      if (path === "/api/mobile/v1/auth/installation/restore") {
+        method(request, "POST");
+        return await restoreNativeInstallation(request, dependencies);
+      }
+      if (path === "/api/mobile/v1/auth/register") {
+        method(request, "POST");
+        return await register(request, dependencies, true);
+      }
+      if (path === "/api/mobile/v1/auth/login") {
+        method(request, "POST");
+        return await login(request, dependencies, true);
+      }
+      if (path === "/api/mobile/v1/auth/refresh") {
+        method(request, "POST");
+        return await refresh(request, dependencies, true);
+      }
+      if (path === "/api/mobile/v1/auth/logout") {
+        method(request, "POST");
+        return await logout(request, dependencies, true);
+      }
+      if (path === "/api/mobile/v1/auth/me") {
+        method(request, "GET");
+        return response({
+          user: publicUser((await authenticateBearerSession(request, dependencies)).user),
+        });
+      }
       if (path === "/api/auth/anonymous") {
         method(request, "POST");
         return await anonymous(request, dependencies);
@@ -1030,7 +1220,6 @@ export function createAuthHandler(options) {
       }
       console.error("Authentication request failed", {
         error: error instanceof Error ? error.name : "UnknownError",
-        message: error instanceof Error ? error.message : "",
         path: new URL(request.url).pathname,
       });
       return response({ error: "Authentication request failed" }, 500);
