@@ -174,6 +174,7 @@ const worker = {
       return createRideHandler({
         db: env.DB,
         jwtSecret: env.JWT_SECRET,
+        rateLimiter: env.ROUTE_RATE_LIMITER,
       })(request);
     }
 
