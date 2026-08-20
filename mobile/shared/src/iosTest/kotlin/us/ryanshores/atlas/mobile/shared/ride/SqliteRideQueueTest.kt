@@ -38,6 +38,7 @@ class SqliteRideQueueTest {
             queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000),
         ).ride
         assertEquals(0, started.nextSequence)
+        assertNull(started.lastRecordedAtMilliseconds)
 
         val first = queue.append(point(recordedAt = 1_100, latitude = 30.2672))
         val second = queue.append(point(recordedAt = 1_200, latitude = 30.2673))
@@ -45,6 +46,7 @@ class SqliteRideQueueTest {
         assertEquals(1, second.sequence)
         assertEquals(listOf(first, second), queue.queuedPoints())
         assertEquals(2, queue.activeRide()?.nextSequence)
+        assertEquals(1_200, queue.activeRide()?.lastRecordedAtMilliseconds)
 
         val existing = assertIs<BeginRideResult.AlreadyActive>(
             queue.beginRide(OTHER_RIDE_ID, OTHER_OWNER_ID, startedAtMilliseconds = 2_000),
@@ -117,8 +119,41 @@ class SqliteRideQueueTest {
         assertFailsWith<IllegalArgumentException> {
             queue.append(point(recordedAt = 1_100, latitude = 30.2672, accuracy = 101.0))
         }
+        assertFailsWith<IllegalArgumentException> {
+            queue.append(
+                point(
+                    recordedAt = 1_100,
+                    latitude = 30.2672,
+                    accuracy = 12.0,
+                    quality = GpsQuality.POOR,
+                ),
+            )
+        }
         assertTrue(queue.queuedPoints().isEmpty())
         queue.close()
+    }
+
+    @Test
+    fun rejectsBackwardTimestampsAfterAcknowledgementAndRestart() {
+        val databaseName = newDatabaseName()
+        createQueue(databaseName).also { queue ->
+            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+            queue.append(point(recordedAt = 1_200, latitude = 30.2672))
+            queue.nextUploadBatch(FIRST_BATCH_ID)
+            assertEquals(1, queue.acknowledgeBatch(FIRST_BATCH_ID))
+            assertTrue(queue.queuedPoints().isEmpty())
+            queue.close()
+        }
+
+        createQueue(databaseName).also { recovered ->
+            assertEquals(1_200, recovered.activeRide()?.lastRecordedAtMilliseconds)
+            assertFailsWith<IllegalArgumentException> {
+                recovered.append(point(recordedAt = 1_199, latitude = 30.2673))
+            }
+            assertEquals(1, recovered.activeRide()?.nextSequence)
+            assertTrue(recovered.queuedPoints().isEmpty())
+            recovered.close()
+        }
     }
 
     private fun createQueue(databaseName: String = newDatabaseName()): SqliteRideQueue = SqliteRideQueue(
@@ -142,6 +177,7 @@ class SqliteRideQueueTest {
         recordedAt: Long,
         latitude: Double,
         accuracy: Double = 12.0,
+        quality: GpsQuality = GpsQuality.GOOD,
     ) = AcceptedRidePoint(
         recordedAtMilliseconds = recordedAt,
         latitude = latitude,
@@ -150,7 +186,7 @@ class SqliteRideQueueTest {
         altitudeMeters = 150.0,
         speedMetersPerSecond = 4.0,
         headingDegrees = 90.0,
-        quality = GpsQuality.GOOD,
+        quality = quality,
     )
 
     private companion object {

@@ -3,6 +3,7 @@ package us.ryanshores.atlas.mobile.shared.ride
 import app.cash.sqldelight.db.SqlDriver
 import us.ryanshores.atlas.mobile.shared.db.AtlasDatabase
 import us.ryanshores.atlas.mobile.shared.db.Queued_ride_point
+import us.ryanshores.atlas.mobile.shared.gps.GpsPolicy
 import us.ryanshores.atlas.mobile.shared.gps.GpsQuality
 
 class SqliteRideQueue(
@@ -34,6 +35,10 @@ class SqliteRideQueue(
         return database.transactionWithResult {
             val active = checkNotNull(activeRide()) { "No active ride" }
             check(active.status == RideRecordingStatus.RECORDING) { "Ride is stopping" }
+            require(
+                active.lastRecordedAtMilliseconds == null ||
+                    point.recordedAtMilliseconds >= active.lastRecordedAtMilliseconds,
+            ) { "recordedAtMilliseconds cannot move backward" }
             queries.insertPointAtNextSequence(
                 recordedAt = point.recordedAtMilliseconds,
                 latitude = point.latitude,
@@ -44,7 +49,7 @@ class SqliteRideQueue(
                 headingDegrees = point.headingDegrees,
                 quality = point.quality.wireValue,
             )
-            queries.advanceSequence()
+            queries.advanceSequence(point.recordedAtMilliseconds)
             QueuedRidePoint(active.rideId, active.nextSequence, null, point)
         }
     }
@@ -109,12 +114,14 @@ class SqliteRideQueue(
         startedAt: Long,
         status: String,
         nextSequence: Long,
+        lastRecordedAt: Long?,
     ) = ActiveRide(
         rideId = rideId,
         ownerId = ownerId,
         startedAtMilliseconds = startedAt,
         status = RideRecordingStatus.entries.single { it.wireValue == status },
         nextSequence = nextSequence,
+        lastRecordedAtMilliseconds = lastRecordedAt,
     )
 
     private fun mapQueuedPoint(row: Queued_ride_point) = QueuedRidePoint(
@@ -153,6 +160,8 @@ class SqliteRideQueue(
             point.headingDegrees == null ||
                 point.headingDegrees.isFinite() && point.headingDegrees in 0.0..<360.0,
         ) { "headingDegrees is invalid" }
-        require(point.quality != GpsQuality.UNUSABLE) { "quality must represent an accepted fix" }
+        require(point.quality == GpsPolicy.quality(point.accuracyMeters)) {
+            "quality must match accuracyMeters"
+        }
     }
 }

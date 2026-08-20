@@ -13,6 +13,7 @@ data class ActiveRide(
     val startedAtMilliseconds: Long,
     val status: RideRecordingStatus,
     val nextSequence: Long,
+    val lastRecordedAtMilliseconds: Long?,
 )
 
 data class AcceptedRidePoint(
