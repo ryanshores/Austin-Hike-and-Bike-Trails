@@ -1145,6 +1145,7 @@ export function createAuthHandler(options) {
   }
   const dependencies = {
     ...options,
+    logError: options.logError ?? ((message, details) => console.error(message, details)),
     now: options.now ?? Date.now,
     randomBytes: options.randomBytes ?? defaultRandomBytes,
   };
@@ -1218,7 +1219,7 @@ export function createAuthHandler(options) {
         if (error.retryAfter) headers.set("Retry-After", String(error.retryAfter));
         return response({ error: error.message }, error.status, headers);
       }
-      console.error("Authentication request failed", {
+      dependencies.logError("Authentication request failed", {
         error: error instanceof Error ? error.name : "UnknownError",
         path: new URL(request.url).pathname,
       });
