@@ -60,10 +60,12 @@ final class KeychainNativeSessionStore: NativeSessionStoring {
         guard session.isComplete() else {
             throw KeychainSessionError.incompleteSession
         }
+        let storedSession = try load()
+        let installationCredential = session.installationCredential ?? storedSession?.installationCredential
         let data = try JSONEncoder().encode(StoredSession(
             accessToken: session.accessToken,
             refreshToken: session.refreshToken,
-            installationCredential: session.installationCredential
+            installationCredential: installationCredential
         ))
         let attributes: [String: Any] = [
             kSecValueData as String: data,

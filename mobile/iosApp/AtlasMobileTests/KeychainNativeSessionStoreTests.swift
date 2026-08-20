@@ -28,7 +28,7 @@ final class KeychainNativeSessionStoreTests: XCTestCase {
         XCTAssertEqual(loaded.installationCredential, "installation-one")
     }
 
-    func testSaveReplacesRotatedCredentialsAtomically() throws {
+    func testSaveRotatesTokensWithoutDiscardingInstallationCredential() throws {
         try store.save(NativeSession(
             accessToken: "access-one",
             refreshToken: "refresh-one",
@@ -43,7 +43,7 @@ final class KeychainNativeSessionStoreTests: XCTestCase {
         let loaded = try XCTUnwrap(store.load())
         XCTAssertEqual(loaded.accessToken, "access-two")
         XCTAssertEqual(loaded.refreshToken, "refresh-two")
-        XCTAssertNil(loaded.installationCredential)
+        XCTAssertEqual(loaded.installationCredential, "installation-one")
     }
 
     func testClearRemovesSessionAndIsIdempotent() throws {
