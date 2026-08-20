@@ -1,4 +1,4 @@
-import { authenticateRequest, HttpError } from "./auth.js";
+import { authenticateRequest, HttpError, requiresSameOrigin } from "./auth.js";
 
 const MAX_BATCH_POINTS = 100;
 const MAX_CREATE_BYTES = 4 * 1024;
@@ -32,6 +32,21 @@ function assertSameOrigin(request) {
   if (request.headers.get("origin") !== new URL(request.url).origin) {
     throw new HttpError(403, "Invalid request origin");
   }
+}
+
+async function authenticateMutation(request, dependencies) {
+  const user = await authenticateRequest(request, dependencies);
+  if (requiresSameOrigin(request)) {
+    assertSameOrigin(request);
+    return user;
+  }
+  if (dependencies.rateLimiter) {
+    const result = await dependencies.rateLimiter.limit({
+      key: `native-ride:${user.id}`,
+    });
+    if (!result.success) throw new HttpError(429, "Too many native ride requests. Try again shortly.");
+  }
+  return user;
 }
 
 async function readJson(request, maximumBytes) {
@@ -110,8 +125,7 @@ function pointValues(point, rideId, batchId) {
 }
 
 async function createRide(request, dependencies) {
-  assertSameOrigin(request);
-  const user = await authenticateRequest(request, dependencies);
+  const user = await authenticateMutation(request, dependencies);
   const body = await readJson(request, MAX_CREATE_BYTES);
   if (!isId(body.id) || !Number.isInteger(body.startedAt) || body.startedAt > dependencies.now() + MAX_FUTURE_MS || body.startedAt < dependencies.now() - MAX_POINT_AGE_MS) {
     throw new HttpError(400, "Invalid ride start");
@@ -133,8 +147,7 @@ async function createRide(request, dependencies) {
 }
 
 async function uploadBatch(request, dependencies, rideId) {
-  assertSameOrigin(request);
-  const user = await authenticateRequest(request, dependencies);
+  const user = await authenticateMutation(request, dependencies);
   const body = await readJson(request, MAX_BATCH_BYTES);
   if (!isId(body.id) || !Array.isArray(body.points) || body.points.length < 1 || body.points.length > MAX_BATCH_POINTS) throw new HttpError(400, "Invalid ride batch");
   const ride = await dependencies.db.prepare(
@@ -190,8 +203,7 @@ async function uploadBatch(request, dependencies, rideId) {
 }
 
 async function completeRide(request, dependencies, rideId) {
-  assertSameOrigin(request);
-  const user = await authenticateRequest(request, dependencies);
+  const user = await authenticateMutation(request, dependencies);
   const ride = await dependencies.db.prepare(
     "SELECT id, accepted_point_count AS acceptedPointCount, distance_meters AS distanceMeters FROM rides WHERE id = ? AND user_id = ? AND status = 'recording' AND deleted_at IS NULL",
   ).bind(rideId, user.id).first();
@@ -279,8 +291,7 @@ async function getRide(request, dependencies, rideId) {
 }
 
 async function deleteRide(request, dependencies, rideId) {
-  assertSameOrigin(request);
-  const user = await authenticateRequest(request, dependencies);
+  const user = await authenticateMutation(request, dependencies);
   const deleted = await dependencies.db.prepare(
     "DELETE FROM rides WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
   ).bind(rideId, user.id).run();

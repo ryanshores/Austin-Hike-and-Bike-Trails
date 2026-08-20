@@ -39,14 +39,16 @@ class TestD1 {
   close() { this.database.close(); }
 }
 
-function fixture(now = 1_800_000_000_000) {
+function fixture(now = 1_800_000_000_000, options = {}) {
   const db = new TestD1();
-  const dependencies = { db, jwtSecret: JWT_SECRET, passwordPepper: PASSWORD_PEPPER, now: () => now, randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)) };
+  const dependencies = { db, jwtSecret: JWT_SECRET, passwordPepper: PASSWORD_PEPPER, now: () => now, randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)), ...options };
   return { db, auth: createAuthHandler(dependencies), rides: createRideHandler(dependencies) };
 }
 
-function request(path, { body, cookies = {}, method = "POST" } = {}) {
-  const headers = new Headers({ origin: ORIGIN, "cf-connecting-ip": "192.0.2.1" });
+function request(path, { authorization, body, cookies = {}, method = "POST", origin = ORIGIN } = {}) {
+  const headers = new Headers({ "cf-connecting-ip": "192.0.2.1" });
+  if (origin !== null) headers.set("origin", origin);
+  if (authorization !== undefined) headers.set("authorization", authorization);
   if (body !== undefined) headers.set("content-type", "application/json");
   if (Object.keys(cookies).length) headers.set("cookie", Object.entries(cookies).map(([name, value]) => `${name}=${encodeURIComponent(value)}`).join("; "));
   return new Request(`${ORIGIN}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -91,6 +93,98 @@ test("owner can create, retry, and complete an ordered ride batch", async () => 
   const completed = await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: jar }));
   assert.equal(completed.status, 200);
   assert.equal((await completed.json()).ride.status, "completed");
+  instance.db.close();
+});
+
+test("bearer access can mutate its own rides without an Origin header", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const authorization = `Bearer ${owner.atlas_access}`;
+  const rideId = "ride_test_0000000000000007";
+  const created = await instance.rides(request("/api/rides", {
+    authorization,
+    body: { id: rideId, startedAt: 1_800_000_000_000 },
+    origin: null,
+  }));
+  assert.equal(created.status, 201);
+  const batch = await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    authorization,
+    body: { id: "batch_test_000000000000007", points: [point(0, 1_800_000_000_000)] },
+    origin: null,
+  }));
+  assert.equal(batch.status, 201);
+  const completed = await instance.rides(request(`/api/rides/${rideId}/complete`, { authorization, origin: null }));
+  assert.equal(completed.status, 200);
+  const deleted = await instance.rides(request(`/api/rides/${rideId}`, { authorization, method: "DELETE", origin: null }));
+  assert.equal(deleted.status, 204);
+  instance.db.close();
+});
+
+test("native ride mutations are rate limited by authenticated owner before batch writes", async () => {
+  const keys = [];
+  const instance = fixture(1_800_000_000_000, {
+    rateLimiter: {
+      async limit({ key }) {
+        keys.push(key);
+        return { success: keys.length === 1 };
+      },
+    },
+  });
+  const owner = await anonymous(instance);
+  const user = instance.db.database.prepare("SELECT id FROM users").get();
+  const authorization = `Bearer ${owner.atlas_access}`;
+  const rideId = "ride_test_0000000000000010";
+  const created = await instance.rides(request("/api/rides", {
+    authorization,
+    body: { id: rideId, startedAt: 1_800_000_000_000 },
+    origin: null,
+  }));
+  assert.equal(created.status, 201);
+  const limited = await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    authorization,
+    body: { id: "batch_test_000000000000010", points: [point(0, 1_800_000_000_000)] },
+    origin: null,
+  }));
+  assert.equal(limited.status, 429);
+  assert.deepEqual(keys, [`native-ride:${user.id}`, `native-ride:${user.id}`]);
+  assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_points WHERE ride_id = ?").get(rideId).count, 0);
+  instance.db.close();
+});
+
+test("bearer access remains owner-scoped and cannot be replaced by a malformed header", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const stranger = await anonymous(instance);
+  const rideId = "ride_test_0000000000000008";
+  await instance.rides(request("/api/rides", { cookies: owner, body: { id: rideId, startedAt: 1_800_000_000_000 } }));
+
+  const foreignDelete = await instance.rides(request(`/api/rides/${rideId}`, {
+    authorization: `Bearer ${stranger.atlas_access}`,
+    method: "DELETE",
+    origin: null,
+  }));
+  assert.equal(foreignDelete.status, 404);
+  const malformedHeader = await instance.rides(request(`/api/rides/${rideId}`, {
+    authorization: "Bearer not-a-valid-access-token",
+    cookies: owner,
+    method: "DELETE",
+    origin: null,
+  }));
+  assert.equal(malformedHeader.status, 401);
+  const stillPresent = instance.db.database.prepare("SELECT count(*) AS count FROM rides WHERE id = ?").get(rideId);
+  assert.equal(stillPresent.count, 1);
+  instance.db.close();
+});
+
+test("cookie-authenticated ride mutations still require a same-origin request", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const response = await instance.rides(request("/api/rides", {
+    body: { id: "ride_test_0000000000000009", startedAt: 1_800_000_000_000 },
+    cookies: owner,
+    origin: null,
+  }));
+  assert.equal(response.status, 403);
   instance.db.close();
 });
 
