@@ -57,7 +57,7 @@ test("host verification requires route edge attribution with stable graph IDs", 
   assert.match(verify, /Route edge attribution/);
 });
 
-test("production and preview Workers use distinct non-secret provider URLs", async () => {
+test("production and preview Workers use distinct non-secret provider and enrichment URLs", async () => {
   const wrangler = await readFile(wranglerPath, "utf8");
 
   assert.match(wrangler, /ROUTING_URL"\s*:\s*"https:\/\/routing\.ryanshores\.us"/);
@@ -65,5 +65,14 @@ test("production and preview Workers use distinct non-secret provider URLs", asy
     wrangler,
     /ROUTING_URL"\s*:\s*"https:\/\/routing-staging\.ryanshores\.us"/,
   );
+  assert.match(
+    wrangler,
+    /ROUTING_ENRICHMENT_URL"\s*:\s*"https:\/\/routing-enrichment\.ryanshores\.us"/,
+  );
+  assert.match(
+    wrangler,
+    /ROUTING_ENRICHMENT_URL"\s*:\s*"https:\/\/routing-enrichment-staging\.ryanshores\.us"/,
+  );
   assert.doesNotMatch(wrangler, /ROUTING_ACCESS_CLIENT_(ID|SECRET)"\s*:/);
+  assert.doesNotMatch(wrangler, /ROUTING_ENRICHMENT_ACCESS_CLIENT_(ID|SECRET)"\s*:/);
 });

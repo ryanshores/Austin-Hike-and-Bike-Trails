@@ -198,9 +198,11 @@ remove dashboard-managed values.
 Add production values in **Workers & Pages → austin-trails → Settings →
 Variables and Secrets**:
 
-- plaintext variables: `GEOCODER_URL`, `ROUTING_URL`
+- plaintext variables: `GEOCODER_URL`, `ROUTING_URL`, `ROUTING_ENRICHMENT_URL`
 - encrypted secrets: `JWT_SECRET`, `PASSWORD_PEPPER`,
   `ROUTING_ACCESS_CLIENT_ID`, `ROUTING_ACCESS_CLIENT_SECRET`,
+  `ROUTING_ENRICHMENT_ACCESS_CLIENT_ID`,
+  `ROUTING_ENRICHMENT_ACCESS_CLIENT_SECRET`,
   `GEOCODER_ACCESS_CLIENT_ID`, `GEOCODER_ACCESS_CLIENT_SECRET` (when the
   corresponding provider uses Cloudflare Access)
 
