@@ -39,9 +39,9 @@ class TestD1 {
   close() { this.database.close(); }
 }
 
-function fixture(now = 1_800_000_000_000) {
+function fixture(now = 1_800_000_000_000, options = {}) {
   const db = new TestD1();
-  const dependencies = { db, jwtSecret: JWT_SECRET, passwordPepper: PASSWORD_PEPPER, now: () => now, randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)) };
+  const dependencies = { db, jwtSecret: JWT_SECRET, passwordPepper: PASSWORD_PEPPER, now: () => now, randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)), ...options };
   return { db, auth: createAuthHandler(dependencies), rides: createRideHandler(dependencies) };
 }
 
@@ -117,6 +117,37 @@ test("bearer access can mutate its own rides without an Origin header", async ()
   assert.equal(completed.status, 200);
   const deleted = await instance.rides(request(`/api/rides/${rideId}`, { authorization, method: "DELETE", origin: null }));
   assert.equal(deleted.status, 204);
+  instance.db.close();
+});
+
+test("native ride mutations are rate limited by authenticated owner before batch writes", async () => {
+  const keys = [];
+  const instance = fixture(1_800_000_000_000, {
+    rateLimiter: {
+      async limit({ key }) {
+        keys.push(key);
+        return { success: keys.length === 1 };
+      },
+    },
+  });
+  const owner = await anonymous(instance);
+  const user = instance.db.database.prepare("SELECT id FROM users").get();
+  const authorization = `Bearer ${owner.atlas_access}`;
+  const rideId = "ride_test_0000000000000010";
+  const created = await instance.rides(request("/api/rides", {
+    authorization,
+    body: { id: rideId, startedAt: 1_800_000_000_000 },
+    origin: null,
+  }));
+  assert.equal(created.status, 201);
+  const limited = await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    authorization,
+    body: { id: "batch_test_000000000000010", points: [point(0, 1_800_000_000_000)] },
+    origin: null,
+  }));
+  assert.equal(limited.status, 429);
+  assert.deepEqual(keys, [`native-ride:${user.id}`, `native-ride:${user.id}`]);
+  assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_points WHERE ride_id = ?").get(rideId).count, 0);
   instance.db.close();
 });
 
