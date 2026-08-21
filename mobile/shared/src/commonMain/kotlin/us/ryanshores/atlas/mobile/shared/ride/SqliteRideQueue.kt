@@ -24,10 +24,19 @@ class SqliteRideQueue(
         rideId: String,
         ownerId: String,
         startedAtMilliseconds: Long,
+        nowMilliseconds: Long,
     ): BeginRideResult {
         requireValidId(rideId, "rideId")
         requireValidId(ownerId, "ownerId")
         require(startedAtMilliseconds >= 0) { "startedAtMilliseconds must be nonnegative" }
+        require(nowMilliseconds >= 0) { "nowMilliseconds must be nonnegative" }
+        require(
+            if (startedAtMilliseconds > nowMilliseconds) {
+                startedAtMilliseconds - nowMilliseconds <= MAX_FUTURE_MILLISECONDS
+            } else {
+                nowMilliseconds - startedAtMilliseconds <= MAX_POINT_AGE_MILLISECONDS
+            },
+        ) { "startedAtMilliseconds is outside the allowed creation window" }
         return database.transactionWithResult {
             val existing = activeRide()
             if (existing != null) return@transactionWithResult BeginRideResult.AlreadyActive(existing)

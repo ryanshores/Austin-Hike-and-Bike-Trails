@@ -35,7 +35,7 @@ class SqliteRideQueueTest {
         val queue = createQueue()
 
         val started = assertIs<BeginRideResult.Started>(
-            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000),
+            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000),
         ).ride
         assertEquals(0, started.nextSequence)
         assertNull(started.lastRecordedAtMilliseconds)
@@ -51,7 +51,7 @@ class SqliteRideQueueTest {
         assertEquals(30.2673, queue.activeRide()?.lastLatitude)
 
         val existing = assertIs<BeginRideResult.AlreadyActive>(
-            queue.beginRide(OTHER_RIDE_ID, OTHER_OWNER_ID, startedAtMilliseconds = 2_000),
+            queue.beginRide(OTHER_RIDE_ID, OTHER_OWNER_ID, startedAtMilliseconds = 2_000, nowMilliseconds = 2_000),
         ).ride
         assertEquals(RIDE_ID, existing.rideId)
         assertEquals(OWNER_ID, existing.ownerId)
@@ -61,7 +61,7 @@ class SqliteRideQueueTest {
     @Test
     fun retriesTheSameStableBatchUntilItIsAcknowledged() {
         val queue = createQueue()
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         repeat(3) { index ->
             queue.append(point(recordedAt = 1_100L + index * 1_000, latitude = 30.2672 + index * 0.0001))
         }
@@ -87,7 +87,7 @@ class SqliteRideQueueTest {
     fun recoversRideQueueAndBatchAssignmentAfterReopeningDatabase() {
         val databaseName = newDatabaseName()
         createQueue(databaseName).also { queue ->
-            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
             queue.append(point(recordedAt = 1_100, latitude = 30.2672))
             queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = 2_000)
             queue.requestCompletion()
@@ -115,12 +115,28 @@ class SqliteRideQueueTest {
     fun rejectsInvalidIdentifiersAndUnacceptedPointData() {
         val queue = createQueue()
         assertFailsWith<IllegalArgumentException> {
-            queue.beginRide("short", OWNER_ID, startedAtMilliseconds = 1_000)
+            queue.beginRide("short", OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         }
         assertFailsWith<IllegalArgumentException> {
-            queue.beginRide("ride-00000000000é", OWNER_ID, startedAtMilliseconds = 1_000)
+            queue.beginRide("ride-00000000000é", OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         }
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        assertFailsWith<IllegalArgumentException> {
+            queue.beginRide(
+                RIDE_ID,
+                OWNER_ID,
+                startedAtMilliseconds = 999,
+                nowMilliseconds = 1_000 + MAX_POINT_AGE_MILLISECONDS,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            queue.beginRide(
+                RIDE_ID,
+                OWNER_ID,
+                startedAtMilliseconds = 1_001 + MAX_FUTURE_MILLISECONDS,
+                nowMilliseconds = 1_000,
+            )
+        }
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         assertFailsWith<IllegalArgumentException> {
             queue.append(point(recordedAt = 1_100, latitude = 91.0))
         }
@@ -144,7 +160,7 @@ class SqliteRideQueueTest {
     @Test
     fun rejectsFirstPointBeforeWorkerRecordingWindow() {
         val queue = createQueue()
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 100_000)
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 100_000, nowMilliseconds = 100_000)
 
         assertFailsWith<IllegalArgumentException> {
             queue.append(point(recordedAt = 39_999, latitude = 30.2672))
@@ -161,7 +177,7 @@ class SqliteRideQueueTest {
     @Test
     fun rejectsBatchIdentifiersOutsideWorkerSyntaxBeforeAssignment() {
         val queue = createQueue()
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         queue.append(point(recordedAt = 1_100, latitude = 30.2672))
 
         assertFailsWith<IllegalArgumentException> {
@@ -175,7 +191,7 @@ class SqliteRideQueueTest {
     fun rejectsBackwardTimestampsAfterAcknowledgementAndRestart() {
         val databaseName = newDatabaseName()
         createQueue(databaseName).also { queue ->
-            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+            queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
             queue.append(point(recordedAt = 1_200, latitude = 30.2672))
             queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = 2_000)
             assertEquals(1, queue.acknowledgeBatch(FIRST_BATCH_ID))
@@ -202,7 +218,7 @@ class SqliteRideQueueTest {
     @Test
     fun retriesAssignedBatchBeforeReportingUnassignedExpiredPoints() {
         val queue = createQueue()
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         queue.append(point(recordedAt = 1_100, latitude = 30.2672))
 
         val boundary = readyBatch(
@@ -222,7 +238,7 @@ class SqliteRideQueueTest {
         assertEquals(boundary, idempotentRetry)
 
         assertTrue(queue.clearRide(RIDE_ID))
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         queue.append(point(recordedAt = 1_100, latitude = 30.2672))
         val expired = assertIs<NextUploadBatchResult.Expired>(
             queue.nextUploadBatch(
@@ -241,7 +257,7 @@ class SqliteRideQueueTest {
     @Test
     fun waitsToAssignFutureDatedPointsUntilWorkerWindowOpens() {
         val queue = createQueue()
-        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
         queue.append(point(recordedAt = 400_001, latitude = 30.2672))
 
         val future = assertIs<NextUploadBatchResult.FutureDated>(
@@ -264,6 +280,7 @@ class SqliteRideQueueTest {
 
     private companion object {
         const val MAX_POINT_AGE_MILLISECONDS = 24L * 60 * 60 * 1_000
+        const val MAX_FUTURE_MILLISECONDS = 5L * 60 * 1_000
         const val RIDE_ID = "ride-000000000001"
         const val OTHER_RIDE_ID = "ride-000000000002"
         const val OWNER_ID = "owner-00000000001"
