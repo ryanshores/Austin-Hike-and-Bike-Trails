@@ -14,6 +14,9 @@ data class ActiveRide(
     val status: RideRecordingStatus,
     val nextSequence: Long,
     val lastRecordedAtMilliseconds: Long?,
+    val lastLatitude: Double?,
+    val lastLongitude: Double?,
+    val lastAccuracyMeters: Double?,
 )
 
 data class AcceptedRidePoint(
@@ -39,6 +42,17 @@ data class RideUploadBatch(
     val batchId: String,
     val points: List<QueuedRidePoint>,
 )
+
+sealed class NextUploadBatchResult {
+    data class Ready(val batch: RideUploadBatch) : NextUploadBatchResult()
+
+    data class Expired(
+        val rideId: String,
+        val oldestRecordedAtMilliseconds: Long,
+    ) : NextUploadBatchResult()
+
+    data object Empty : NextUploadBatchResult()
+}
 
 sealed class BeginRideResult {
     data class Started(val ride: ActiveRide) : BeginRideResult()

@@ -39,14 +39,16 @@ class SqliteRideQueueTest {
         ).ride
         assertEquals(0, started.nextSequence)
         assertNull(started.lastRecordedAtMilliseconds)
+        assertNull(started.lastLatitude)
 
         val first = queue.append(point(recordedAt = 1_100, latitude = 30.2672))
-        val second = queue.append(point(recordedAt = 1_200, latitude = 30.2673))
+        val second = queue.append(point(recordedAt = 2_100, latitude = 30.2673))
         assertEquals(0, first.sequence)
         assertEquals(1, second.sequence)
         assertEquals(listOf(first, second), queue.queuedPoints())
         assertEquals(2, queue.activeRide()?.nextSequence)
-        assertEquals(1_200, queue.activeRide()?.lastRecordedAtMilliseconds)
+        assertEquals(2_100, queue.activeRide()?.lastRecordedAtMilliseconds)
+        assertEquals(30.2673, queue.activeRide()?.lastLatitude)
 
         val existing = assertIs<BeginRideResult.AlreadyActive>(
             queue.beginRide(OTHER_RIDE_ID, OTHER_OWNER_ID, startedAtMilliseconds = 2_000),
@@ -61,22 +63,22 @@ class SqliteRideQueueTest {
         val queue = createQueue()
         queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
         repeat(3) { index ->
-            queue.append(point(recordedAt = 1_100L + index, latitude = 30.2672 + index * 0.0001))
+            queue.append(point(recordedAt = 1_100L + index * 1_000, latitude = 30.2672 + index * 0.0001))
         }
 
-        val firstAttempt = queue.nextUploadBatch(FIRST_BATCH_ID, maximumPoints = 2)
-        val retry = queue.nextUploadBatch(SECOND_BATCH_ID, maximumPoints = 2)
-        assertEquals(FIRST_BATCH_ID, firstAttempt?.batchId)
-        assertEquals(listOf(0L, 1L), firstAttempt?.points?.map { it.sequence })
+        val firstAttempt = readyBatch(queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = 5_000, maximumPoints = 2))
+        val retry = readyBatch(queue.nextUploadBatch(SECOND_BATCH_ID, nowMilliseconds = 5_000, maximumPoints = 2))
+        assertEquals(FIRST_BATCH_ID, firstAttempt.batchId)
+        assertEquals(listOf(0L, 1L), firstAttempt.points.map { it.sequence })
         assertEquals(firstAttempt, retry)
         assertEquals(2, queue.acknowledgeBatch(FIRST_BATCH_ID))
 
-        val next = queue.nextUploadBatch(SECOND_BATCH_ID, maximumPoints = 2)
-        assertEquals(SECOND_BATCH_ID, next?.batchId)
-        assertEquals(listOf(2L), next?.points?.map { it.sequence })
+        val next = readyBatch(queue.nextUploadBatch(SECOND_BATCH_ID, nowMilliseconds = 5_000, maximumPoints = 2))
+        assertEquals(SECOND_BATCH_ID, next.batchId)
+        assertEquals(listOf(2L), next.points.map { it.sequence })
         assertEquals(1, queue.acknowledgeBatch(SECOND_BATCH_ID))
 
-        val afterAcknowledgement = queue.append(point(recordedAt = 1_200, latitude = 30.2676))
+        val afterAcknowledgement = queue.append(point(recordedAt = 4_200, latitude = 30.2676))
         assertEquals(3, afterAcknowledgement.sequence)
         queue.close()
     }
@@ -87,14 +89,17 @@ class SqliteRideQueueTest {
         createQueue(databaseName).also { queue ->
             queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
             queue.append(point(recordedAt = 1_100, latitude = 30.2672))
-            queue.nextUploadBatch(FIRST_BATCH_ID)
+            queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = 2_000)
             queue.requestCompletion()
             queue.close()
         }
 
         createQueue(databaseName).also { recovered ->
             assertEquals(RideRecordingStatus.STOPPING, recovered.activeRide()?.status)
-            assertEquals(FIRST_BATCH_ID, recovered.nextUploadBatch(SECOND_BATCH_ID)?.batchId)
+            assertEquals(
+                FIRST_BATCH_ID,
+                readyBatch(recovered.nextUploadBatch(SECOND_BATCH_ID, nowMilliseconds = 2_000)).batchId,
+            )
             assertFailsWith<IllegalStateException> {
                 recovered.append(point(recordedAt = 1_200, latitude = 30.2673))
             }
@@ -160,7 +165,7 @@ class SqliteRideQueueTest {
         queue.append(point(recordedAt = 1_100, latitude = 30.2672))
 
         assertFailsWith<IllegalArgumentException> {
-            queue.nextUploadBatch("batch-0000000000é")
+            queue.nextUploadBatch("batch-0000000000é", nowMilliseconds = 2_000)
         }
         assertNull(queue.queuedPoints().single().batchId)
         queue.close()
@@ -172,7 +177,7 @@ class SqliteRideQueueTest {
         createQueue(databaseName).also { queue ->
             queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
             queue.append(point(recordedAt = 1_200, latitude = 30.2672))
-            queue.nextUploadBatch(FIRST_BATCH_ID)
+            queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = 2_000)
             assertEquals(1, queue.acknowledgeBatch(FIRST_BATCH_ID))
             assertTrue(queue.queuedPoints().isEmpty())
             queue.close()
@@ -180,13 +185,59 @@ class SqliteRideQueueTest {
 
         createQueue(databaseName).also { recovered ->
             assertEquals(1_200, recovered.activeRide()?.lastRecordedAtMilliseconds)
+            assertEquals(30.2672, recovered.activeRide()?.lastLatitude)
             assertFailsWith<IllegalArgumentException> {
                 recovered.append(point(recordedAt = 1_199, latitude = 30.2673))
             }
-            assertEquals(1, recovered.activeRide()?.nextSequence)
-            assertTrue(recovered.queuedPoints().isEmpty())
+            assertFailsWith<IllegalArgumentException> {
+                recovered.append(point(recordedAt = 2_200, latitude = 31.2672))
+            }
+            recovered.append(point(recordedAt = 2_200, latitude = 30.2673))
+            assertEquals(2, recovered.activeRide()?.nextSequence)
+            assertEquals(1, recovered.queuedPoints().size)
             recovered.close()
         }
+    }
+
+    @Test
+    fun reportsExpiredPointsWithoutMutatingTheQueue() {
+        val queue = createQueue()
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.append(point(recordedAt = 1_100, latitude = 30.2672))
+
+        val boundary = readyBatch(
+            queue.nextUploadBatch(
+                FIRST_BATCH_ID,
+                nowMilliseconds = 1_100 + MAX_POINT_AGE_MILLISECONDS,
+            ),
+        )
+        assertEquals(FIRST_BATCH_ID, boundary.batchId)
+
+        val expired = assertIs<NextUploadBatchResult.Expired>(
+            queue.nextUploadBatch(
+                SECOND_BATCH_ID,
+                nowMilliseconds = 1_101 + MAX_POINT_AGE_MILLISECONDS,
+            ),
+        )
+        assertEquals(RIDE_ID, expired.rideId)
+        assertEquals(1_100, expired.oldestRecordedAtMilliseconds)
+        assertEquals(FIRST_BATCH_ID, queue.queuedPoints().single().batchId)
+        assertTrue(queue.clearRide(RIDE_ID))
+        assertNull(queue.activeRide())
+        queue.close()
+    }
+
+    private fun readyBatch(result: NextUploadBatchResult): RideUploadBatch =
+        assertIs<NextUploadBatchResult.Ready>(result).batch
+
+    private companion object {
+        const val MAX_POINT_AGE_MILLISECONDS = 24L * 60 * 60 * 1_000
+        const val RIDE_ID = "ride-000000000001"
+        const val OTHER_RIDE_ID = "ride-000000000002"
+        const val OWNER_ID = "owner-00000000001"
+        const val OTHER_OWNER_ID = "owner-00000000002"
+        const val FIRST_BATCH_ID = "batch-00000000001"
+        const val SECOND_BATCH_ID = "batch-00000000002"
     }
 
     private fun createQueue(databaseName: String = newDatabaseName()): SqliteRideQueue = SqliteRideQueue(
@@ -222,12 +273,4 @@ class SqliteRideQueueTest {
         quality = quality,
     )
 
-    private companion object {
-        const val RIDE_ID = "ride-000000000001"
-        const val OTHER_RIDE_ID = "ride-000000000002"
-        const val OWNER_ID = "owner-00000000001"
-        const val OTHER_OWNER_ID = "owner-00000000002"
-        const val FIRST_BATCH_ID = "batch-00000000001"
-        const val SECOND_BATCH_ID = "batch-00000000002"
-    }
 }

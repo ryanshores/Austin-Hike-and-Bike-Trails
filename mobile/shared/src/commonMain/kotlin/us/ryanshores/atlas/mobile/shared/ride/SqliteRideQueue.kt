@@ -1,6 +1,12 @@
 package us.ryanshores.atlas.mobile.shared.ride
 
 import app.cash.sqldelight.db.SqlDriver
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
+import kotlin.math.sqrt
 import us.ryanshores.atlas.mobile.shared.db.AtlasDatabase
 import us.ryanshores.atlas.mobile.shared.db.Queued_ride_point
 import us.ryanshores.atlas.mobile.shared.gps.GpsPolicy
@@ -42,6 +48,17 @@ class SqliteRideQueue(
                 active.lastRecordedAtMilliseconds == null ||
                     point.recordedAtMilliseconds >= active.lastRecordedAtMilliseconds,
             ) { "recordedAtMilliseconds cannot move backward" }
+            active.lastRecordedAtMilliseconds?.let { previousRecordedAt ->
+                require(
+                    isPlausibleUploadMovement(
+                        previousRecordedAt = previousRecordedAt,
+                        previousLatitude = checkNotNull(active.lastLatitude),
+                        previousLongitude = checkNotNull(active.lastLongitude),
+                        previousAccuracyMeters = checkNotNull(active.lastAccuracyMeters),
+                        point = point,
+                    ),
+                ) { "point movement is implausible" }
+            }
             queries.insertPointAtNextSequence(
                 recordedAt = point.recordedAtMilliseconds,
                 latitude = point.latitude,
@@ -52,7 +69,12 @@ class SqliteRideQueue(
                 headingDegrees = point.headingDegrees,
                 quality = point.quality.wireValue,
             )
-            queries.advanceSequence(point.recordedAtMilliseconds)
+            queries.advanceSequence(
+                recordedAt = point.recordedAtMilliseconds,
+                latitude = point.latitude,
+                longitude = point.longitude,
+                accuracyMeters = point.accuracyMeters,
+            )
             QueuedRidePoint(active.rideId, active.nextSequence, null, point)
         }
     }
@@ -64,20 +86,28 @@ class SqliteRideQueue(
 
     fun nextUploadBatch(
         newBatchId: String,
+        nowMilliseconds: Long,
         maximumPoints: Long = 100,
-    ): RideUploadBatch? {
+    ): NextUploadBatchResult {
         requireValidId(newBatchId, "newBatchId")
+        require(nowMilliseconds >= 0) { "nowMilliseconds must be nonnegative" }
         require(maximumPoints in 1..100) { "maximumPoints must be between 1 and 100" }
         return database.transactionWithResult {
-            val active = activeRide() ?: return@transactionWithResult null
+            val active = activeRide() ?: return@transactionWithResult NextUploadBatchResult.Empty
             val first = queries.selectFirstQueuedPoint(active.rideId).executeAsOneOrNull()
-                ?: return@transactionWithResult null
+                ?: return@transactionWithResult NextUploadBatchResult.Empty
+            if (first.recorded_at < nowMilliseconds - MAX_POINT_AGE_MILLISECONDS) {
+                return@transactionWithResult NextUploadBatchResult.Expired(
+                    rideId = active.rideId,
+                    oldestRecordedAtMilliseconds = first.recorded_at,
+                )
+            }
             val batchId = first.batch_id ?: newBatchId.also {
                 queries.assignNextBatch(it, active.rideId, maximumPoints)
             }
             val points = queries.selectBatch(active.rideId, batchId).executeAsList().map(::mapQueuedPoint)
             check(points.isNotEmpty()) { "Assigned upload batch is empty" }
-            RideUploadBatch(active.rideId, batchId, points)
+            NextUploadBatchResult.Ready(RideUploadBatch(active.rideId, batchId, points))
         }
     }
 
@@ -118,6 +148,9 @@ class SqliteRideQueue(
         status: String,
         nextSequence: Long,
         lastRecordedAt: Long?,
+        lastLatitude: Double?,
+        lastLongitude: Double?,
+        lastAccuracyMeters: Double?,
     ) = ActiveRide(
         rideId = rideId,
         ownerId = ownerId,
@@ -125,6 +158,9 @@ class SqliteRideQueue(
         status = RideRecordingStatus.entries.single { it.wireValue == status },
         nextSequence = nextSequence,
         lastRecordedAtMilliseconds = lastRecordedAt,
+        lastLatitude = lastLatitude,
+        lastLongitude = lastLongitude,
+        lastAccuracyMeters = lastAccuracyMeters,
     )
 
     private fun mapQueuedPoint(row: Queued_ride_point) = QueuedRidePoint(
@@ -170,5 +206,42 @@ class SqliteRideQueue(
         require(point.quality == GpsPolicy.quality(point.accuracyMeters)) {
             "quality must match accuracyMeters"
         }
+    }
+
+    private fun isPlausibleUploadMovement(
+        previousRecordedAt: Long,
+        previousLatitude: Double,
+        previousLongitude: Double,
+        previousAccuracyMeters: Double,
+        point: AcceptedRidePoint,
+    ): Boolean {
+        val elapsedMilliseconds = point.recordedAtMilliseconds - previousRecordedAt
+        val distanceMeters = distanceMeters(previousLatitude, previousLongitude, point.latitude, point.longitude)
+        return if (elapsedMilliseconds == 0L) {
+            distanceMeters <= max(previousAccuracyMeters, point.accuracyMeters)
+        } else {
+            distanceMeters / (elapsedMilliseconds / 1_000.0) <= MAX_UPLOAD_SPEED_METERS_PER_SECOND
+        }
+    }
+
+    private fun distanceMeters(
+        firstLatitude: Double,
+        firstLongitude: Double,
+        secondLatitude: Double,
+        secondLongitude: Double,
+    ): Double {
+        val radians = PI / 180.0
+        val latitudeDelta = (secondLatitude - firstLatitude) * radians
+        val longitudeDelta = (secondLongitude - firstLongitude) * radians
+        val a = sin(latitudeDelta / 2).let { it * it } +
+            cos(firstLatitude * radians) * cos(secondLatitude * radians) *
+            sin(longitudeDelta / 2).let { it * it }
+        return EARTH_RADIUS_METERS * 2 * atan2(sqrt(a), sqrt(1 - a))
+    }
+
+    private companion object {
+        const val MAX_POINT_AGE_MILLISECONDS = 24L * 60 * 60 * 1_000
+        const val MAX_UPLOAD_SPEED_METERS_PER_SECOND = 35.0
+        const val EARTH_RADIUS_METERS = 6_371_000.0
     }
 }

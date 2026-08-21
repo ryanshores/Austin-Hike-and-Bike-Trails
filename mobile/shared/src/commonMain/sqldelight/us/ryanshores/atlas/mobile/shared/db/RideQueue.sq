@@ -7,7 +7,15 @@ CREATE TABLE active_ride (
   started_at INTEGER NOT NULL CHECK (started_at >= 0),
   status TEXT NOT NULL CHECK (status IN ('recording', 'stopping')),
   next_sequence INTEGER NOT NULL DEFAULT 0 CHECK (next_sequence >= 0),
-  last_recorded_at INTEGER CHECK (last_recorded_at IS NULL OR last_recorded_at >= 0)
+  last_recorded_at INTEGER CHECK (last_recorded_at IS NULL OR last_recorded_at >= 0),
+  last_latitude REAL CHECK (last_latitude IS NULL OR (last_latitude >= -90 AND last_latitude <= 90)),
+  last_longitude REAL CHECK (last_longitude IS NULL OR (last_longitude >= -180 AND last_longitude <= 180)),
+  last_accuracy_meters REAL CHECK (last_accuracy_meters IS NULL OR (last_accuracy_meters >= 0 AND last_accuracy_meters <= 100)),
+  CHECK (
+    (last_recorded_at IS NULL AND last_latitude IS NULL AND last_longitude IS NULL AND last_accuracy_meters IS NULL)
+    OR
+    (last_recorded_at IS NOT NULL AND last_latitude IS NOT NULL AND last_longitude IS NOT NULL AND last_accuracy_meters IS NOT NULL)
+  )
 );
 
 CREATE TABLE queued_ride_point (
@@ -29,13 +37,17 @@ CREATE INDEX queued_ride_point_batch
 ON queued_ride_point(ride_id, batch_id, sequence);
 
 selectActiveRide:
-SELECT ride_id, owner_id, started_at, status, next_sequence, last_recorded_at
+SELECT ride_id, owner_id, started_at, status, next_sequence, last_recorded_at,
+       last_latitude, last_longitude, last_accuracy_meters
 FROM active_ride
 WHERE singleton = 1;
 
 insertActiveRide:
-INSERT INTO active_ride(singleton, ride_id, owner_id, started_at, status, next_sequence, last_recorded_at)
-VALUES (1, :rideId, :ownerId, :startedAt, 'recording', 0, NULL);
+INSERT INTO active_ride(
+  singleton, ride_id, owner_id, started_at, status, next_sequence,
+  last_recorded_at, last_latitude, last_longitude, last_accuracy_meters
+)
+VALUES (1, :rideId, :ownerId, :startedAt, 'recording', 0, NULL, NULL, NULL, NULL);
 
 insertPointAtNextSequence:
 INSERT INTO queued_ride_point(
@@ -69,7 +81,10 @@ WHERE singleton = 1 AND status = 'recording';
 advanceSequence:
 UPDATE active_ride
 SET next_sequence = next_sequence + 1,
-    last_recorded_at = :recordedAt
+    last_recorded_at = :recordedAt,
+    last_latitude = :latitude,
+    last_longitude = :longitude,
+    last_accuracy_meters = :accuracyMeters
 WHERE singleton = 1 AND status = 'recording';
 
 selectQueuedPoints:
@@ -90,7 +105,7 @@ WHERE ride_id = :rideId
 ORDER BY sequence ASC;
 
 selectFirstQueuedPoint:
-SELECT ride_id, sequence, batch_id
+SELECT ride_id, sequence, batch_id, recorded_at
 FROM queued_ride_point
 WHERE ride_id = :rideId
 ORDER BY sequence ASC
