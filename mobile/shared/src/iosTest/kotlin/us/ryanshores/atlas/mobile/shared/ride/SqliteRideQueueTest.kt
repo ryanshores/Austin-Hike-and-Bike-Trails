@@ -200,7 +200,7 @@ class SqliteRideQueueTest {
     }
 
     @Test
-    fun reportsExpiredPointsWithoutMutatingTheQueue() {
+    fun retriesAssignedBatchBeforeReportingUnassignedExpiredPoints() {
         val queue = createQueue()
         queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
         queue.append(point(recordedAt = 1_100, latitude = 30.2672))
@@ -213,6 +213,17 @@ class SqliteRideQueueTest {
         )
         assertEquals(FIRST_BATCH_ID, boundary.batchId)
 
+        val idempotentRetry = readyBatch(
+            queue.nextUploadBatch(
+                SECOND_BATCH_ID,
+                nowMilliseconds = 1_101 + MAX_POINT_AGE_MILLISECONDS,
+            ),
+        )
+        assertEquals(boundary, idempotentRetry)
+
+        assertTrue(queue.clearRide(RIDE_ID))
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.append(point(recordedAt = 1_100, latitude = 30.2672))
         val expired = assertIs<NextUploadBatchResult.Expired>(
             queue.nextUploadBatch(
                 SECOND_BATCH_ID,
@@ -221,9 +232,30 @@ class SqliteRideQueueTest {
         )
         assertEquals(RIDE_ID, expired.rideId)
         assertEquals(1_100, expired.oldestRecordedAtMilliseconds)
-        assertEquals(FIRST_BATCH_ID, queue.queuedPoints().single().batchId)
+        assertNull(queue.queuedPoints().single().batchId)
         assertTrue(queue.clearRide(RIDE_ID))
         assertNull(queue.activeRide())
+        queue.close()
+    }
+
+    @Test
+    fun waitsToAssignFutureDatedPointsUntilWorkerWindowOpens() {
+        val queue = createQueue()
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000)
+        queue.append(point(recordedAt = 400_001, latitude = 30.2672))
+
+        val future = assertIs<NextUploadBatchResult.FutureDated>(
+            queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = 100_000),
+        )
+        assertEquals(RIDE_ID, future.rideId)
+        assertEquals(400_001, future.recordedAtMilliseconds)
+        assertEquals(100_001, future.retryAtMilliseconds)
+        assertNull(queue.queuedPoints().single().batchId)
+
+        val ready = readyBatch(
+            queue.nextUploadBatch(FIRST_BATCH_ID, nowMilliseconds = future.retryAtMilliseconds),
+        )
+        assertEquals(FIRST_BATCH_ID, ready.batchId)
         queue.close()
     }
 

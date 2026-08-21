@@ -96,18 +96,31 @@ class SqliteRideQueue(
             val active = activeRide() ?: return@transactionWithResult NextUploadBatchResult.Empty
             val first = queries.selectFirstQueuedPoint(active.rideId).executeAsOneOrNull()
                 ?: return@transactionWithResult NextUploadBatchResult.Empty
+            first.batch_id?.let { batchId ->
+                return@transactionWithResult readyBatch(active.rideId, batchId)
+            }
             if (first.recorded_at < nowMilliseconds - MAX_POINT_AGE_MILLISECONDS) {
                 return@transactionWithResult NextUploadBatchResult.Expired(
                     rideId = active.rideId,
                     oldestRecordedAtMilliseconds = first.recorded_at,
                 )
             }
-            val batchId = first.batch_id ?: newBatchId.also {
-                queries.assignNextBatch(it, active.rideId, maximumPoints)
+            val candidates = queries.selectNextUnassignedPoints(active.rideId, maximumPoints)
+                .executeAsList()
+                .map(::mapQueuedPoint)
+            val future = candidates.lastOrNull { queued ->
+                val recordedAt = queued.point.recordedAtMilliseconds
+                recordedAt > nowMilliseconds && recordedAt - nowMilliseconds > MAX_FUTURE_MILLISECONDS
             }
-            val points = queries.selectBatch(active.rideId, batchId).executeAsList().map(::mapQueuedPoint)
-            check(points.isNotEmpty()) { "Assigned upload batch is empty" }
-            NextUploadBatchResult.Ready(RideUploadBatch(active.rideId, batchId, points))
+            if (future != null) {
+                return@transactionWithResult NextUploadBatchResult.FutureDated(
+                    rideId = active.rideId,
+                    recordedAtMilliseconds = future.point.recordedAtMilliseconds,
+                    retryAtMilliseconds = future.point.recordedAtMilliseconds - MAX_FUTURE_MILLISECONDS,
+                )
+            }
+            queries.assignNextBatch(newBatchId, active.rideId, maximumPoints)
+            readyBatch(active.rideId, newBatchId)
         }
     }
 
@@ -179,6 +192,12 @@ class SqliteRideQueue(
         ),
     )
 
+    private fun readyBatch(rideId: String, batchId: String): NextUploadBatchResult.Ready {
+        val points = queries.selectBatch(rideId, batchId).executeAsList().map(::mapQueuedPoint)
+        check(points.isNotEmpty()) { "Assigned upload batch is empty" }
+        return NextUploadBatchResult.Ready(RideUploadBatch(rideId, batchId, points))
+    }
+
     private fun requireValidId(value: String, name: String) {
         require(
             value.length in 16..128 && value.all {
@@ -241,6 +260,7 @@ class SqliteRideQueue(
 
     private companion object {
         const val MAX_POINT_AGE_MILLISECONDS = 24L * 60 * 60 * 1_000
+        const val MAX_FUTURE_MILLISECONDS = 5L * 60 * 1_000
         const val MAX_UPLOAD_SPEED_METERS_PER_SECOND = 35.0
         const val EARTH_RADIUS_METERS = 6_371_000.0
     }

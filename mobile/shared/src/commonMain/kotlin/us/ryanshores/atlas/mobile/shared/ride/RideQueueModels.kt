@@ -51,6 +51,12 @@ sealed class NextUploadBatchResult {
         val oldestRecordedAtMilliseconds: Long,
     ) : NextUploadBatchResult()
 
+    data class FutureDated(
+        val rideId: String,
+        val recordedAtMilliseconds: Long,
+        val retryAtMilliseconds: Long,
+    ) : NextUploadBatchResult()
+
     data object Empty : NextUploadBatchResult()
 }
 

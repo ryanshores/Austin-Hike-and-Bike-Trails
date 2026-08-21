@@ -111,6 +111,24 @@ WHERE ride_id = :rideId
 ORDER BY sequence ASC
 LIMIT 1;
 
+selectNextUnassignedPoints:
+SELECT
+  ride_id,
+  sequence,
+  batch_id,
+  recorded_at,
+  latitude,
+  longitude,
+  accuracy_meters,
+  altitude_meters,
+  speed_meters_per_second,
+  heading_degrees,
+  quality
+FROM queued_ride_point
+WHERE ride_id = :rideId AND batch_id IS NULL
+ORDER BY sequence ASC
+LIMIT :maximumPoints;
+
 assignNextBatch:
 UPDATE queued_ride_point
 SET batch_id = :batchId
