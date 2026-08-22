@@ -27,19 +27,23 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     @Published private(set) var authorizationState: RideLocationAuthorizationState
     @Published private(set) var trackingState: RideLocationTrackingState = .idle
     @Published private(set) var latestDecision: GpsDecision?
+    @Published private(set) var latestPersistenceResult: PersistAcceptedFixResult?
 
     var onDecision: ((GpsDecision) -> Void)?
 
     private let locationManager: CLLocationManager
+    private let acceptedFixRecorder: AcceptedFixRecorder?
     private let nowMilliseconds: () -> Int64
     private var policyState = GpsPolicyState(lastAcceptedFix: nil)
     private var recordingRequested = false
 
     init(
         locationManager: CLLocationManager = CLLocationManager(),
+        acceptedFixRecorder: AcceptedFixRecorder? = nil,
         nowMilliseconds: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
     ) {
         self.locationManager = locationManager
+        self.acceptedFixRecorder = acceptedFixRecorder
         self.nowMilliseconds = nowMilliseconds
         authorizationState = Self.authorizationState(for: locationManager.authorizationStatus)
         super.init()
@@ -56,6 +60,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         recordingRequested = true
         policyState = GpsPolicyState(lastAcceptedFix: nil)
         latestDecision = nil
+        latestPersistenceResult = nil
         switch locationManager.authorizationStatus {
         case .authorizedAlways:
             beginLocationUpdates()
@@ -115,6 +120,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         )
         policyState = decision.state
         latestDecision = decision
+        latestPersistenceResult = acceptedFixRecorder?.persist(decision: decision)
         onDecision?(decision)
     }
 
