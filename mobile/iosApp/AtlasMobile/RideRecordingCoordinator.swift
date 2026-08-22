@@ -11,6 +11,9 @@ import Foundation
 final class RideRecordingCoordinator: ObservableObject {
     let locationAdapter: RideLocationAdapter
 
+    @Published private(set) var activeRide: ActiveRide?
+    @Published private(set) var queuedPointCount: Int64
+
     private let queue: SqliteRideQueue
     private let recoveryCoordinator: RideRecoveryCoordinator
 
@@ -26,6 +29,11 @@ final class RideRecordingCoordinator: ObservableObject {
             acceptedFixRecorder: AcceptedFixRecorder(queue: queue),
             nowMilliseconds: nowMilliseconds
         )
+        activeRide = queue.activeRide()
+        queuedPointCount = queue.queuedPointCount()
+        locationAdapter.onDecision = { [weak self] _ in
+            self?.refreshQueueState()
+        }
     }
 
     convenience init() {
@@ -39,6 +47,7 @@ final class RideRecordingCoordinator: ObservableObject {
         startedAtMilliseconds: Int64,
         nowMilliseconds: Int64
     ) -> BeginRideResult {
+        defer { refreshQueueState() }
         let existing = queue.activeRide()
         let result = queue.beginRide(
             rideId: rideId,
@@ -61,11 +70,15 @@ final class RideRecordingCoordinator: ObservableObject {
     func stopRide() -> ActiveRide? {
         guard queue.activeRide() != nil else { return nil }
         locationAdapter.stopRecording()
-        return queue.requestCompletion()
+        let ride = queue.requestCompletion()
+        refreshQueueState()
+        return ride
     }
 
     func recoverRide(sessionOwnerId: String) -> RideRecoveryState {
-        recoveryCoordinator.recover(sessionOwnerId: sessionOwnerId)
+        let state = recoveryCoordinator.recover(sessionOwnerId: sessionOwnerId)
+        refreshQueueState()
+        return state
     }
 
     /// Call only after the host has shown an explicit identity-change discard decision.
@@ -78,11 +91,13 @@ final class RideRecordingCoordinator: ObservableObject {
             return false
         }
         locationAdapter.stopRecording()
-        return recoveryCoordinator.discardForIdentityChange(
+        let discarded = recoveryCoordinator.discardForIdentityChange(
             rideId: rideId,
             previousOwnerId: previousOwnerId,
             currentOwnerId: currentOwnerId
         )
+        refreshQueueState()
+        return discarded
     }
 
     func applicationDidEnterBackground() {
@@ -109,5 +124,10 @@ final class RideRecordingCoordinator: ObservableObject {
             timestampMilliseconds: timestamp.int64Value,
             quality: GpsPolicy.shared.quality(accuracyMeters: accuracy.doubleValue, ageMilliseconds: 0)
         )
+    }
+
+    private func refreshQueueState() {
+        activeRide = queue.activeRide()
+        queuedPointCount = queue.queuedPointCount()
     }
 }
