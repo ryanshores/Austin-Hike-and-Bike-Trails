@@ -8,6 +8,7 @@ struct RideModeView: View {
     @ObservedObject private var locationAdapter: RideLocationAdapter
     @State private var mapPosition = MapCameraPosition.region(Self.austinRegion)
     @State private var showingSessionRequirement = false
+    @StateObject private var bikeFacilities = BikeFacilityOverlayStore()
 
     init(coordinator: RideRecordingCoordinator) {
         _coordinator = ObservedObject(wrappedValue: coordinator)
@@ -17,6 +18,10 @@ struct RideModeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(position: $mapPosition) {
+                ForEach(bikeFacilities.facilities) { facility in
+                    MapPolyline(coordinates: facility.coordinates)
+                        .stroke(facilityColor(facility.category), lineWidth: 2)
+                }
                 if let coordinate = trustedCoordinate {
                     MapCircle(center: coordinate, radius: max(trustedAccuracyMeters, 5))
                         .foregroundStyle(statusColor.opacity(0.16))
@@ -50,6 +55,7 @@ struct RideModeView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
             ))
         }
+        .task { await bikeFacilities.load(bounds: Self.austinRegion, baseURL: atlasBaseURL) }
     }
 
     private var statusCard: some View {
@@ -135,6 +141,15 @@ struct RideModeView: View {
     private var queueStatus: String {
         let count = coordinator.queuedPointCount
         return count == 0 ? "No accepted points queued" : "\(count) accepted \(count == 1 ? "point" : "points") queued for upload"
+    }
+
+    private var atlasBaseURL: URL? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "AtlasApiBaseURL") as? String else { return nil }
+        return URL(string: value)
+    }
+
+    private func facilityColor(_ category: BikeFacilityOverlay.Category) -> Color {
+        switch category { case .offRoad: .green; case .protectedLane: .blue; case .street: .orange }
     }
 
     private var statusColor: Color {

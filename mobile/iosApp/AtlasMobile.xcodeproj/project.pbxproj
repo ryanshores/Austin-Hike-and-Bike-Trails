@@ -13,6 +13,7 @@
 		4416FB041CE235F6B959123C /* RideLocationAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42ED8252B461D01F2FB31AED /* RideLocationAdapterTests.swift */; };
 		60537319C7421309A586FE6E /* KeychainNativeSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */; };
 		64EF412908DDD1B43ED24E30 /* RideModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563B213E33A71EB2495406C /* RideModeView.swift */; };
+		6B59DA0CA32FC9630AB5FC10 /* BikeFacilityOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C359B62CA3E6854B85EE433 /* BikeFacilityOverlay.swift */; };
 		8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */; };
 		9BFADCD92390864B34A1E52A /* RideLocationAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 153CDE7AA23F0C674D9A3838 /* RideLocationAdapter.swift */; };
 		D6A6379B232409094821BBA9 /* AtlasMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */; };
@@ -38,6 +39,7 @@
 		433219C66195467B6D18EBE2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStoreTests.swift; sourceTree = "<group>"; };
 		5563B213E33A71EB2495406C /* RideModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideModeView.swift; sourceTree = "<group>"; };
+		5C359B62CA3E6854B85EE433 /* BikeFacilityOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BikeFacilityOverlay.swift; sourceTree = "<group>"; };
 		9DFA6E4A8A88EBE9705ACBBC /* RideRecordingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideRecordingCoordinator.swift; sourceTree = "<group>"; };
 		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasMobileApp.swift; sourceTree = "<group>"; };
@@ -58,6 +60,7 @@
 			children = (
 				433219C66195467B6D18EBE2 /* Assets.xcassets */,
 				DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */,
+				5C359B62CA3E6854B85EE433 /* BikeFacilityOverlay.swift */,
 				111A95297D7BDFE741A4AB58 /* ContentView.swift */,
 				24DABC3DE1A9B0986FE9ACB4 /* Info.plist */,
 				241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */,
@@ -211,6 +214,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D6A6379B232409094821BBA9 /* AtlasMobileApp.swift in Sources */,
+				6B59DA0CA32FC9630AB5FC10 /* BikeFacilityOverlay.swift in Sources */,
 				2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */,
 				8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */,
 				9BFADCD92390864B34A1E52A /* RideLocationAdapter.swift in Sources */,
