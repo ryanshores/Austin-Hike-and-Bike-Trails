@@ -19,9 +19,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: us.ryanshores.atlas.mobile
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Austin Atlas
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.navigation
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: AtlasMobile/Info.plist
         FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)"
         OTHER_LDFLAGS: "$(inherited) -framework AtlasShared -lsqlite3"
     preBuildScripts:
