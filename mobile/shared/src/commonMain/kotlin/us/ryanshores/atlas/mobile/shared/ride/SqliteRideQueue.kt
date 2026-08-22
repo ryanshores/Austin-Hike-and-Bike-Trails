@@ -93,6 +93,11 @@ class SqliteRideQueue(
         return queries.selectQueuedPoints(active.rideId).executeAsList().map(::mapQueuedPoint)
     }
 
+    fun queuedPointCount(): Long {
+        val active = activeRide() ?: return 0
+        return queries.countQueuedPoints(active.rideId).executeAsOne()
+    }
+
     fun nextUploadBatch(
         newBatchId: String,
         nowMilliseconds: Long,

@@ -21,7 +21,7 @@ class RideRecoveryCoordinator(
         }
         return RideRecoveryState.Resumable(
             ride = active,
-            queuedPointCount = queue.queuedPoints().size,
+            queuedPointCount = queue.queuedPointCount(),
         )
     }
 
@@ -48,7 +48,7 @@ sealed class RideRecoveryState {
 
     data class Resumable(
         val ride: ActiveRide,
-        val queuedPointCount: Int,
+        val queuedPointCount: Long,
     ) : RideRecoveryState()
 
     data class IdentityChangeRequired(

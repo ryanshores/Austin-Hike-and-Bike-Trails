@@ -46,6 +46,7 @@ class SqliteRideQueueTest {
         assertEquals(0, first.sequence)
         assertEquals(1, second.sequence)
         assertEquals(listOf(first, second), queue.queuedPoints())
+        assertEquals(2L, queue.queuedPointCount())
         assertEquals(2, queue.activeRide()?.nextSequence)
         assertEquals(2_100, queue.activeRide()?.lastRecordedAtMilliseconds)
         assertEquals(30.2673, queue.activeRide()?.lastLatitude)

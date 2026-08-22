@@ -46,7 +46,7 @@ class RideRecoveryCoordinatorTest {
 
             assertEquals(RIDE_ID, recovered.ride.rideId)
             assertEquals(RideRecordingStatus.RECORDING, recovered.ride.status)
-            assertEquals(2, recovered.queuedPointCount)
+            assertEquals(2L, recovered.queuedPointCount)
             assertEquals(listOf(0L, 1L), recoveredQueue.queuedPoints().map { it.sequence })
             recoveredQueue.close()
         }
