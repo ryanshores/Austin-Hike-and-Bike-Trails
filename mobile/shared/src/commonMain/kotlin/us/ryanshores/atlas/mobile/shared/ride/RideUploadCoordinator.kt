@@ -71,7 +71,20 @@ class RideUploadCoordinator(
                 api.createRide(token, active)
             }
         ) {
-            is AuthorizedResult.Failure -> return created.result
+            is AuthorizedResult.Failure -> {
+                if (
+                    created.result.statusCode == 400 &&
+                    active.startedAtMilliseconds <
+                    nowMilliseconds - MAX_SERVER_POINT_AGE_MILLISECONDS
+                ) {
+                    return RideSyncResult.Expired(
+                        rideId = active.rideId,
+                        oldestRecordedAtMilliseconds = active.startedAtMilliseconds,
+                        uploadedPointCount = 0,
+                    )
+                }
+                return created.result
+            }
             is AuthorizedResult.Success -> if (created.value.rideId != active.rideId) {
                 return failure(RideSyncPhase.CREATE_RIDE)
             }

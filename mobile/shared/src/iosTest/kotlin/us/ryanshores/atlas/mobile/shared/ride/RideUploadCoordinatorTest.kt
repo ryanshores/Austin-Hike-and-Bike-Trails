@@ -243,6 +243,29 @@ class RideUploadCoordinatorTest {
     }
 
     @Test
+    fun reportsExpiredWhenWorkerRejectsANeverCreatedStaleRide() = runTest {
+        val queue = createQueueWithPoint()
+        val api = FakeRideApi().apply {
+            createResults.add(RideApiResult.HttpFailure(400, null))
+        }
+        val coordinator = coordinator(queue, api, FakeSessionStore(session()))
+
+        val expired = assertIs<RideSyncResult.Expired>(
+            coordinator.synchronize(
+                nowMilliseconds = 1_000 + MAX_POINT_AGE_MILLISECONDS + 1,
+                sessionOwnerId = OWNER_ID,
+            ),
+        )
+
+        assertEquals(RIDE_ID, expired.rideId)
+        assertEquals(1_000, expired.oldestRecordedAtMilliseconds)
+        assertTrue(api.uploadBatchIds.isEmpty())
+        assertNotNull(queue.activeRide())
+        assertNull(queue.queuedPoints().single().batchId)
+        queue.close()
+    }
+
+    @Test
     fun completesStoppingRideOnlyAfterQueuedPointsAreAcknowledged() = runTest {
         val queue = createQueueWithPoint()
         queue.requestCompletion()
