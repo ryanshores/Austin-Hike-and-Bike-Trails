@@ -38,6 +38,7 @@ test("implemented native authentication fixtures keep browser CSRF protections s
   assert.equal(authentication.browserCompatibility.stateChangingRequestsRequire, "matchingSameOriginHeader");
   assert.equal(authentication.nativeAuthentication.accessToken.storage, "Keychain");
   assert.equal(authentication.nativeAuthentication.refreshToken.rotation, "required");
+  assert.equal(authentication.nativeAuthentication.refreshToken.replayWindowMilliseconds, 35_000);
   assert.equal(authentication.nativeAuthentication.refreshToken.mayAuthenticateResourceRequests, false);
   assert.equal(authentication.nativeAuthentication.installationCredential.mayUseDeviceFingerprint, false);
   assert.deepEqual(authentication.credentialPlaceholders, ["$accessToken", "$refreshToken", "$installationCredential"]);
@@ -56,6 +57,11 @@ test("implemented native authentication fixtures keep browser CSRF protections s
     "currentUser",
     "logout",
   ]);
+  const restored = authentication.endpoints.find(
+    (endpoint) => endpoint.operation === "restoreAnonymousInstallation",
+  );
+  assert.equal(restored.response.body.user.id, "user_fixture_00000001");
+  assert.equal(restored.response.body.user.accountType, "anonymous");
 });
 
 test("mobile ride fixture retains ordered idempotent server-owned semantics", () => {

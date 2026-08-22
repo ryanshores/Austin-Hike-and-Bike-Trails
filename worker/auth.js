@@ -6,6 +6,7 @@ const INSTALLATION_COOKIE = "atlas_installation";
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REFRESH_CONCURRENCY_GRACE_MS = 5 * 1000;
+const NATIVE_REFRESH_REPLAY_GRACE_MS = 35 * 1000;
 const INSTALLATION_TTL_SECONDS = 90 * 24 * 60 * 60;
 const JWT_ISSUER = "austin-hike-bike-atlas";
 const JWT_AUDIENCE = "austin-hike-bike-atlas-web";
@@ -967,7 +968,7 @@ async function replayNativeRefresh({ dependencies, now, oldToken, session }) {
   if (
     session.used_at === null ||
     session.used_at > now ||
-    now - session.used_at > REFRESH_CONCURRENCY_GRACE_MS
+    now - session.used_at > NATIVE_REFRESH_REPLAY_GRACE_MS
   ) {
     return null;
   }

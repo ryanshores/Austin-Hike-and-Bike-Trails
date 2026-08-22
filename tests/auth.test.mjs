@@ -691,7 +691,7 @@ test("native auth bootstraps, restores, upgrades, logs in, refreshes, and logs o
   fixture.db.close();
 });
 
-test("native refresh replays the same rotation during grace and revokes delayed replay", async () => {
+test("native refresh replay covers the client timeout and revokes delayed replay", async () => {
   const start = 1_800_000_000_000;
   const fixture = createFixture(start);
   const anonymous = await fixture.handler(nativeRequest("/api/mobile/v1/auth/anonymous", { body: {} }));
@@ -702,6 +702,7 @@ test("native refresh replays the same rotation during grace and revokes delayed 
   const rotated = await first.json();
   assert.equal(first.status, 200);
 
+  fixture.setNow(start + 30_001);
   const concurrent = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
     body: { refreshToken: session.refreshToken },
     ip: "198.51.100.2",
@@ -711,7 +712,7 @@ test("native refresh replays the same rotation during grace and revokes delayed 
   assert.equal(concurrentRotation.refreshToken, rotated.refreshToken);
   assert.ok(concurrentRotation.accessToken);
 
-  fixture.setNow(start + 5_001);
+  fixture.setNow(start + 35_001);
   const replay = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
     body: { refreshToken: session.refreshToken },
     ip: "198.51.100.3",
