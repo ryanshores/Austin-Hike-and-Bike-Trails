@@ -45,7 +45,7 @@ final class RideRecordingCoordinator: ObservableObject {
             startedAtMilliseconds: startedAtMilliseconds,
             nowMilliseconds: nowMilliseconds
         )
-        if queue.activeRide()?.ownerId == ownerId {
+        if queue.activeRide()?.ownerId == ownerId && queue.activeRide()?.status.wireValue == "recording" {
             locationAdapter.startRecording()
         }
         return result
@@ -60,6 +60,19 @@ final class RideRecordingCoordinator: ObservableObject {
 
     func recoverRide(sessionOwnerId: String) -> RideRecoveryState {
         recoveryCoordinator.recover(sessionOwnerId: sessionOwnerId)
+    }
+
+    /// Call only after the host has shown an explicit identity-change discard decision.
+    func discardRecoveredRideForIdentityChange(
+        rideId: String,
+        previousOwnerId: String,
+        currentOwnerId: String
+    ) -> Bool {
+        recoveryCoordinator.discardForIdentityChange(
+            rideId: rideId,
+            previousOwnerId: previousOwnerId,
+            currentOwnerId: currentOwnerId
+        )
     }
 
     func applicationDidEnterBackground() {

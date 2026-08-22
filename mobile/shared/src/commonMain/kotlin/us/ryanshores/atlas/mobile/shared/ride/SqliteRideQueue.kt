@@ -4,7 +4,6 @@ import app.cash.sqldelight.db.SqlDriver
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.sin
 import kotlin.math.sqrt
 import us.ryanshores.atlas.mobile.shared.db.AtlasDatabase
@@ -263,11 +262,12 @@ class SqliteRideQueue(
     ): Boolean {
         val elapsedMilliseconds = point.recordedAtMilliseconds - previousRecordedAt
         val distanceMeters = distanceMeters(previousLatitude, previousLongitude, point.latitude, point.longitude)
-        return if (elapsedMilliseconds == 0L) {
-            distanceMeters <= max(previousAccuracyMeters, point.accuracyMeters)
-        } else {
-            distanceMeters / (elapsedMilliseconds / 1_000.0) <= MAX_UPLOAD_SPEED_METERS_PER_SECOND
-        }
+        return GpsPolicy.isPlausibleLocationChange(
+            distanceMeters = distanceMeters,
+            elapsedMilliseconds = elapsedMilliseconds,
+            previousAccuracyMeters = previousAccuracyMeters,
+            nextAccuracyMeters = point.accuracyMeters,
+        )
     }
 
     private fun distanceMeters(
@@ -288,7 +288,6 @@ class SqliteRideQueue(
     private companion object {
         const val MAX_POINT_AGE_MILLISECONDS = 24L * 60 * 60 * 1_000
         const val MAX_FUTURE_MILLISECONDS = 5L * 60 * 1_000
-        const val MAX_UPLOAD_SPEED_METERS_PER_SECOND = 35.0
         const val EARTH_RADIUS_METERS = 6_371_000.0
     }
 }
