@@ -32,6 +32,8 @@ jobs:
           else
             ./gradlew :shared:iosX64Test
           fi
+      - name: Compile shared Android target
+        run: ./gradlew :shared:compileAndroidMain
       - name: Build the SwiftUI host without signing
         run: |
           xcodebuild -project iosApp/AtlasMobile.xcodeproj -scheme AtlasMobile \

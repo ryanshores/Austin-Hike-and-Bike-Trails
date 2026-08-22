@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
+    id("app.cash.sqldelight")
     id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.kotlin.multiplatform")
 }
@@ -28,8 +29,27 @@ kotlin {
     }
 
     sourceSets {
+        commonMain.dependencies {
+            implementation("app.cash.sqldelight:runtime:2.3.2")
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
+        }
+        androidMain.dependencies {
+            implementation("app.cash.sqldelight:android-driver:2.3.2")
+        }
+        iosMain.dependencies {
+            implementation("app.cash.sqldelight:native-driver:2.3.2")
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("AtlasDatabase") {
+            packageName.set("us.ryanshores.atlas.mobile.shared.db")
+            schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
+            verifyMigrations.set(true)
         }
     }
 }
