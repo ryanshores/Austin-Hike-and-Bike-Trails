@@ -60,6 +60,19 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertEqual(adapter.trackingState, stateBeforeError)
     }
 
+    func testBackgroundLifecycleDoesNotStopAnActiveRecorder() {
+        let adapter = RideLocationAdapter()
+
+        adapter.applicationDidEnterBackground()
+
+        XCTAssertEqual(adapter.executionState, .background)
+        XCTAssertEqual(adapter.trackingState, .idle)
+
+        adapter.applicationWillEnterForeground()
+
+        XCTAssertEqual(adapter.executionState, .foreground)
+    }
+
     private func location(timestamp: TimeInterval) -> CLLocation {
         CLLocation(
             coordinate: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
