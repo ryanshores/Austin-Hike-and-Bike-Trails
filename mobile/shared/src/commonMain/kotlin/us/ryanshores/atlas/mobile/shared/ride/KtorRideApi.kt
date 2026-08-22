@@ -91,6 +91,18 @@ class KtorRideApi(
         }
     }
 
+    override suspend fun restoreAnonymousSession(
+        installationCredential: String,
+    ): RideApiResult<RefreshSessionResponse> = execute {
+        val response = client.post("$baseUrl/api/mobile/v1/auth/installation/restore") {
+            contentType(ContentType.Application.Json)
+            setBody(InstallationRestoreRequest(installationCredential))
+        }
+        response.parse<RefreshEnvelope, RefreshSessionResponse> { body ->
+            RefreshSessionResponse(body.accessToken, body.refreshToken)
+        }
+    }
+
     fun close() {
         client.close()
     }
@@ -150,6 +162,9 @@ class KtorRideApi(
 
     @Serializable
     private data class RefreshRequest(val refreshToken: String)
+
+    @Serializable
+    private data class InstallationRestoreRequest(val installationCredential: String)
 
     @Serializable
     private data class RideEnvelope(val ride: RideWire, val created: Boolean = false)

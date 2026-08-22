@@ -8,6 +8,10 @@ interface RideApi {
     suspend fun completeRide(accessToken: String, rideId: String): RideApiResult<CompleteRideResponse>
 
     suspend fun refresh(refreshToken: String): RideApiResult<RefreshSessionResponse>
+
+    suspend fun restoreAnonymousSession(
+        installationCredential: String,
+    ): RideApiResult<RefreshSessionResponse>
 }
 
 sealed class RideApiResult<out T> {

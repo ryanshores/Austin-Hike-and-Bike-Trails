@@ -32,6 +32,8 @@ class KtorRideApiTest {
                     """{"ride":{"id":"$RIDE_ID","status":"completed"}}"""
                 "/api/mobile/v1/auth/refresh" ->
                     """{"accessToken":"access-two","refreshToken":"refresh-two"}"""
+                "/api/mobile/v1/auth/installation/restore" ->
+                    """{"accessToken":"access-three","refreshToken":"refresh-three"}"""
                 else -> error("Unexpected path ${request.url.encodedPath}")
             }
             respond(
@@ -70,15 +72,22 @@ class KtorRideApiTest {
         assertIs<RideApiResult.Success<CompleteRideResponse>>(api.completeRide("access-one", RIDE_ID))
         val refreshed = assertIs<RideApiResult.Success<RefreshSessionResponse>>(api.refresh("refresh-one"))
         assertEquals("access-two", refreshed.value.accessToken)
+        val restored = assertIs<RideApiResult.Success<RefreshSessionResponse>>(
+            api.restoreAnonymousSession("installation-one"),
+        )
+        assertEquals("access-three", restored.value.accessToken)
 
-        assertEquals(4, engine.requestHistory.size)
+        assertEquals(5, engine.requestHistory.size)
         for (request in engine.requestHistory.take(3)) {
             assertEquals("Bearer access-one", request.headers[HttpHeaders.Authorization])
             assertNull(request.headers[HttpHeaders.Origin])
         }
-        val refreshRequest = engine.requestHistory.last()
+        val refreshRequest = engine.requestHistory[3]
         assertNull(refreshRequest.headers[HttpHeaders.Authorization])
         assertNull(refreshRequest.headers[HttpHeaders.Origin])
+        val restoreRequest = engine.requestHistory.last()
+        assertNull(restoreRequest.headers[HttpHeaders.Authorization])
+        assertNull(restoreRequest.headers[HttpHeaders.Origin])
 
         val createBody = jsonBody(engine.requestHistory[0])
         assertEquals(RIDE_ID, createBody["id"]?.jsonPrimitive?.content)
@@ -90,6 +99,11 @@ class KtorRideApiTest {
         assertEquals("0", point?.get("sequence")?.jsonPrimitive?.content)
         val refreshBody = jsonBody(refreshRequest)
         assertEquals("refresh-one", refreshBody["refreshToken"]?.jsonPrimitive?.content)
+        val restoreBody = jsonBody(restoreRequest)
+        assertEquals(
+            "installation-one",
+            restoreBody["installationCredential"]?.jsonPrimitive?.content,
+        )
         api.close()
     }
 

@@ -125,7 +125,21 @@ class RideUploadCoordinator(
                             api.uploadBatch(token, batch)
                         }
                     ) {
-                        is AuthorizedResult.Failure -> return uploaded.result.withUploadedCount(uploadedPointCount)
+                        is AuthorizedResult.Failure -> {
+                            if (
+                                uploaded.result.statusCode == 400 &&
+                                batch.points.first().point.recordedAtMilliseconds <
+                                nowMilliseconds - MAX_SERVER_POINT_AGE_MILLISECONDS
+                            ) {
+                                return RideSyncResult.Expired(
+                                    rideId = batch.rideId,
+                                    oldestRecordedAtMilliseconds =
+                                        batch.points.first().point.recordedAtMilliseconds,
+                                    uploadedPointCount = uploadedPointCount,
+                                )
+                            }
+                            return uploaded.result.withUploadedCount(uploadedPointCount)
+                        }
                         is AuthorizedResult.Success -> {
                             val requiredAcceptedCount = batch.points.last().sequence + 1
                             if (uploaded.value.acceptedPointCount < requiredAcceptedCount) {
@@ -205,26 +219,71 @@ class RideUploadCoordinator(
 
         context.refreshAttempted = true
         val refreshed = api.refresh(context.session.refreshToken)
-        if (refreshed !is RideApiResult.Success) {
-            return AuthorizedResult.Failure(refreshed.toFailure(RideSyncPhase.REFRESH_SESSION))
+        val recoveredFromInstallation = refreshed !is RideApiResult.Success
+        var replacement = when (refreshed) {
+            is RideApiResult.Success -> refreshed.value.toNativeSession(context.session)
+            else -> {
+                if (!refreshed.canRecoverWithInstallation()) {
+                    return AuthorizedResult.Failure(refreshed.toFailure(RideSyncPhase.REFRESH_SESSION))
+                }
+                restoreAnonymousSession(context.session)
+                    ?: return AuthorizedResult.Failure(refreshed.toFailure(RideSyncPhase.REFRESH_SESSION))
+            }
         }
-        val rotated = NativeSession(
-            accessToken = refreshed.value.accessToken,
-            refreshToken = refreshed.value.refreshToken,
-            installationCredential = context.session.installationCredential,
-        )
-        if (!rotated.isComplete()) {
-            return AuthorizedResult.Failure(failure(RideSyncPhase.REFRESH_SESSION))
+        if (!replacement.isComplete()) {
+            if (recoveredFromInstallation) {
+                return AuthorizedResult.Failure(failure(RideSyncPhase.REFRESH_SESSION))
+            }
+            replacement = restoreAnonymousSession(context.session)
+                ?: return AuthorizedResult.Failure(failure(RideSyncPhase.REFRESH_SESSION))
+            if (!replacement.isComplete()) {
+                return AuthorizedResult.Failure(failure(RideSyncPhase.REFRESH_SESSION))
+            }
         }
-        try {
-            sessionStore.save(rotated)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
+        if (!saveSession(replacement)) {
+            if (recoveredFromInstallation) {
+                return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
+            }
+            replacement = restoreAnonymousSession(context.session)
+                ?: return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
+            if (!replacement.isComplete() || !saveSession(replacement)) {
+                return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
+            }
         }
-        context.session = rotated
-        return operation(rotated.accessToken).toAuthorizedResult(phase)
+        context.session = replacement
+        return operation(replacement.accessToken).toAuthorizedResult(phase)
+    }
+
+    private suspend fun restoreAnonymousSession(previous: NativeSession): NativeSession? {
+        val installationCredential = previous.installationCredential?.takeIf(String::isNotBlank)
+            ?: return null
+        val restored = api.restoreAnonymousSession(installationCredential)
+        if (restored !is RideApiResult.Success) return null
+        return restored.value.toNativeSession(previous)
+    }
+
+    private fun RefreshSessionResponse.toNativeSession(previous: NativeSession) = NativeSession(
+        accessToken = accessToken,
+        refreshToken = refreshToken,
+        installationCredential = previous.installationCredential,
+    )
+
+    private fun RideApiResult<*>.canRecoverWithInstallation(): Boolean = when (this) {
+        RideApiResult.InvalidResponse,
+        RideApiResult.Unavailable,
+        -> true
+
+        is RideApiResult.HttpFailure -> statusCode == 401 || statusCode == 409 || statusCode >= 500
+        is RideApiResult.Success -> false
+    }
+
+    private fun saveSession(session: NativeSession): Boolean = try {
+        sessionStore.save(session)
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Throwable) {
+        false
     }
 
     private fun <T> RideApiResult<T>.toAuthorizedResult(phase: RideSyncPhase): AuthorizedResult<T> =
@@ -270,6 +329,10 @@ class RideUploadCoordinator(
     private sealed class AuthorizedResult<out T> {
         data class Success<T>(val value: T) : AuthorizedResult<T>()
         data class Failure(val result: RideSyncResult.RecoverableFailure) : AuthorizedResult<Nothing>()
+    }
+
+    private companion object {
+        const val MAX_SERVER_POINT_AGE_MILLISECONDS = 24L * 60 * 60 * 1_000
     }
 }
 
