@@ -332,7 +332,7 @@ test("attributed Valhalla graph edges use the matching D1 sidecar classification
               safetyClass: SafetyClass.BIKE_FACILITY,
               finding: SafetyFinding.NOT_IN_TRAILS_LIST,
               source: "osm",
-              reason: "not in the Atlas trails list",
+              reason: "not in the Austin Trails list",
             },
           }],
         ]);

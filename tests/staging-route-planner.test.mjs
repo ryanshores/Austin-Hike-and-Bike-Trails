@@ -20,7 +20,7 @@ const route = {
     divergenceMiles: 0.2,
     divergences: [{
       miles: 0.2,
-      reason: "not in the Atlas trails list",
+      reason: "not in the Austin Trails list",
       geometry: { type: "LineString", coordinates: [[-97.751, 30.265], [-97.755, 30.263]] },
     }],
     maneuvers: [{ instruction: "Ride west.", distanceMiles: 1.4, type: 1, beginShapeIndex: 0, endShapeIndex: 1 }],

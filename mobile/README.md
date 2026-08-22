@@ -1,4 +1,4 @@
-# Atlas Mobile
+# Austin Trails Mobile
 
 This directory is the Kotlin Multiplatform foundation for native Android and
 iOS hosts. Product features remain in the web app while the mobile contracts,

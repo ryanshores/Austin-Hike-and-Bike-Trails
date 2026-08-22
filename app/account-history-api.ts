@@ -1,4 +1,4 @@
-export type AtlasUser = {
+export type TrailsUser = {
   id: string;
   accountType: "anonymous" | "registered";
   email: string | null;
@@ -51,5 +51,5 @@ export async function ensureUser() {
       credentials: "same-origin",
     });
   }
-  return readJson<{ user: AtlasUser }>(response);
+  return readJson<{ user: TrailsUser }>(response);
 }

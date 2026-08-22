@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import AccountPanel from "./account-panel";
 
-export const metadata: Metadata = { title: "Account · Austin Hike & Bike Atlas" };
+export const metadata: Metadata = { title: "Account · Austin Trails" };
 
 export default function AccountPage() {
   return (
@@ -14,7 +14,7 @@ export default function AccountPage() {
         </div>
         <nav aria-label="Account navigation">
           <Link href="/history">History</Link>
-          <Link href="/">Atlas</Link>
+          <Link href="/">Trails</Link>
         </nav>
       </header>
       <AccountPanel />

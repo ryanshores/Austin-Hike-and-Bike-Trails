@@ -75,7 +75,7 @@ test("planner normalizes only route fields needed by the UI", () => {
       divergenceMiles: 0.4,
       divergences: [{
         miles: 0.4,
-        reason: "not in the Atlas trails list",
+        reason: "not in the Austin Trails list",
         geometry,
         minimumSafetyClass: 0,
       }],
@@ -91,7 +91,7 @@ test("planner normalizes only route fields needed by the UI", () => {
   });
 
   assert.equal(route.totalMiles, 4.26);
-  assert.equal(route.divergences[0].reason, "not in the Atlas trails list");
+  assert.equal(route.divergences[0].reason, "not in the Austin Trails list");
   assert.equal(route.maneuvers[0].instruction, "Ride north on Congress Avenue.");
   assert.equal("duration" in route, false);
   assert.equal("duration" in route.maneuvers[0], false);

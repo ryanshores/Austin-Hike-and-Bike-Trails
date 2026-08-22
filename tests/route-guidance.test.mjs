@@ -30,7 +30,7 @@ const guidance = {
     divergenceMiles: 0.2,
     divergences: [{
       miles: 0.2,
-      reason: "not in the Atlas trails list",
+      reason: "not in the Austin Trails list",
       geometry,
       minimumSafetyClass: 0,
     }],
