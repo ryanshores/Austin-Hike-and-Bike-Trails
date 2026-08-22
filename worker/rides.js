@@ -127,13 +127,21 @@ function pointValues(point, rideId, batchId) {
 async function createRide(request, dependencies) {
   const user = await authenticateMutation(request, dependencies);
   const body = await readJson(request, MAX_CREATE_BYTES);
-  if (!isId(body.id) || !Number.isInteger(body.startedAt) || body.startedAt > dependencies.now() + MAX_FUTURE_MS || body.startedAt < dependencies.now() - MAX_POINT_AGE_MS) {
+  if (!isId(body.id)) {
     throw new HttpError(400, "Invalid ride start");
   }
   const existing = await dependencies.db.prepare(
     "SELECT id, status, started_at AS startedAt FROM rides WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
   ).bind(body.id, user.id).first();
-  if (existing) return response({ ride: existing, created: false });
+  if (existing) {
+    if (!Number.isInteger(body.startedAt) || body.startedAt !== existing.startedAt) {
+      throw new HttpError(409, "Ride ID was already used");
+    }
+    return response({ ride: existing, created: false });
+  }
+  if (!Number.isInteger(body.startedAt) || body.startedAt > dependencies.now() + MAX_FUTURE_MS || body.startedAt < dependencies.now() - MAX_POINT_AGE_MS) {
+    throw new HttpError(400, "Invalid ride start");
+  }
   try {
     await dependencies.db.prepare(
       `INSERT INTO rides (id, user_id, status, started_at, distance_meters, accepted_point_count, created_at, updated_at)
@@ -205,9 +213,13 @@ async function uploadBatch(request, dependencies, rideId) {
 async function completeRide(request, dependencies, rideId) {
   const user = await authenticateMutation(request, dependencies);
   const ride = await dependencies.db.prepare(
-    "SELECT id, accepted_point_count AS acceptedPointCount, distance_meters AS distanceMeters FROM rides WHERE id = ? AND user_id = ? AND status = 'recording' AND deleted_at IS NULL",
+    `SELECT id, status, ended_at AS endedAt, accepted_point_count AS acceptedPointCount,
+            distance_meters AS distanceMeters
+     FROM rides WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
   ).bind(rideId, user.id).first();
   if (!ride) throw new HttpError(404, "Ride not found");
+  if (ride.status === "completed") return response({ ride });
+  if (ride.status !== "recording") throw new HttpError(409, "Ride could not be completed");
   const now = dependencies.now();
   const changed = await dependencies.db.prepare(
     "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",

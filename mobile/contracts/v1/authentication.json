@@ -23,6 +23,7 @@
       "transport": "JSON request body to /refresh only",
       "storage": "Keychain",
       "rotation": "required",
+      "replayWindowMilliseconds": 35000,
       "mayAuthenticateResourceRequests": false
     },
     "installationCredential": {
@@ -53,7 +54,14 @@
       "method": "POST",
       "path": "/installation/restore",
       "request": { "body": { "installationCredential": "$installationCredential" } },
-      "response": { "status": 200, "body": { "accessToken": "$accessToken", "refreshToken": "$refreshToken" } }
+      "response": {
+        "status": 200,
+        "body": {
+          "user": { "id": "user_fixture_00000001", "accountType": "anonymous", "email": null, "displayName": null },
+          "accessToken": "$accessToken",
+          "refreshToken": "$refreshToken"
+        }
+      }
     },
     {
       "operation": "refresh",

@@ -611,6 +611,7 @@ test("native auth bootstraps, restores, upgrades, logs in, refreshes, and logs o
   assert.equal(restored.status, 200);
   assert.ok(restoredBody.accessToken);
   assert.ok(restoredBody.refreshToken);
+  assert.equal(restoredBody.user.id, anonymousBody.user.id);
   assert.deepEqual(restored.headers.getSetCookie(), []);
 
   fixture.db.database
@@ -668,6 +669,15 @@ test("native auth bootstraps, restores, upgrades, logs in, refreshes, and logs o
   assert.ok(refreshedBody.accessToken);
   assert.deepEqual(refreshed.headers.getSetCookie(), []);
 
+  const recoveredRefresh = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
+    body: { refreshToken: loginBody.refreshToken },
+    ip: "198.51.100.7",
+  }));
+  const recoveredRefreshBody = await recoveredRefresh.json();
+  assert.equal(recoveredRefresh.status, 200);
+  assert.equal(recoveredRefreshBody.refreshToken, refreshedBody.refreshToken);
+  assert.ok(recoveredRefreshBody.accessToken);
+
   const logout = await fixture.handler(nativeRequest("/api/mobile/v1/auth/logout", {
     accessToken: refreshedBody.accessToken,
   }));
@@ -681,7 +691,7 @@ test("native auth bootstraps, restores, upgrades, logs in, refreshes, and logs o
   fixture.db.close();
 });
 
-test("native refresh preserves concurrency grace and revokes delayed replay", async () => {
+test("native refresh replay covers the client timeout and revokes delayed replay", async () => {
   const start = 1_800_000_000_000;
   const fixture = createFixture(start);
   const anonymous = await fixture.handler(nativeRequest("/api/mobile/v1/auth/anonymous", { body: {} }));
@@ -692,14 +702,17 @@ test("native refresh preserves concurrency grace and revokes delayed replay", as
   const rotated = await first.json();
   assert.equal(first.status, 200);
 
+  fixture.setNow(start + 30_001);
   const concurrent = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
     body: { refreshToken: session.refreshToken },
     ip: "198.51.100.2",
   }));
-  assert.equal(concurrent.status, 409);
-  assert.equal(concurrent.headers.get("retry-after"), "1");
+  const concurrentRotation = await concurrent.json();
+  assert.equal(concurrent.status, 200);
+  assert.equal(concurrentRotation.refreshToken, rotated.refreshToken);
+  assert.ok(concurrentRotation.accessToken);
 
-  fixture.setNow(start + 5_001);
+  fixture.setNow(start + 35_001);
   const replay = await fixture.handler(nativeRequest("/api/mobile/v1/auth/refresh", {
     body: { refreshToken: session.refreshToken },
     ip: "198.51.100.3",
