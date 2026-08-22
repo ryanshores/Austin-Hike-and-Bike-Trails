@@ -8,6 +8,7 @@ struct AtlasMobileApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(rideRecordingCoordinator)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

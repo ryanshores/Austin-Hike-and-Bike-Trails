@@ -40,6 +40,9 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     @Published private(set) var executionState: RideLocationExecutionState = .foreground
     @Published private(set) var trackingState: RideLocationTrackingState = .idle
     @Published private(set) var latestDecision: GpsDecision?
+    /// The only position the Ride Mode map may render as the rider's location.
+    /// It is retained when later callbacks are coarse, stale, or implausible.
+    @Published private(set) var latestTrustedFix: AcceptedLocationFix?
     @Published private(set) var latestPersistenceResult: PersistAcceptedFixResult?
 
     var onDecision: ((GpsDecision) -> Void)?
@@ -82,6 +85,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     private func beginRecording(policyState: GpsPolicyState) {
         recordingRequested = true
         self.policyState = policyState
+        latestTrustedFix = policyState.lastAcceptedFix
         latestDecision = nil
         latestPersistenceResult = nil
         switch locationManager.authorizationStatus {
@@ -153,6 +157,9 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         )
         policyState = decision.state
         latestDecision = decision
+        if let acceptedFix = decision.acceptedFix {
+            latestTrustedFix = acceptedFix
+        }
         latestPersistenceResult = acceptedFixRecorder?.persist(decision: decision)
         onDecision?(decision)
     }

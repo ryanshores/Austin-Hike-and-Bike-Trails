@@ -50,6 +50,27 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertNil(adapter.latestDecision)
     }
 
+    func testUnusableFixRetainsTheLastTrustedMapPosition() {
+        let adapter = RideLocationAdapter(nowMilliseconds: { 11_000 })
+        adapter.accept(location(timestamp: 10))
+        let trusted = adapter.latestTrustedFix
+
+        let unusable = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 30.3, longitude: -97.7),
+            altitude: 150,
+            horizontalAccuracy: 150,
+            verticalAccuracy: 8,
+            course: 90,
+            speed: 4,
+            timestamp: Date(timeIntervalSince1970: 11)
+        )
+        adapter.accept(unusable)
+
+        XCTAssertEqual(adapter.latestDecision?.action.wireValue, "keep-last-fix")
+        XCTAssertEqual(adapter.latestTrustedFix?.latitude, trusted?.latitude)
+        XCTAssertEqual(adapter.latestTrustedFix?.longitude, trusted?.longitude)
+    }
+
     func testTransientLocationErrorRetainsTheCurrentTrackingState() {
         let adapter = RideLocationAdapter()
         adapter.startRecording()
