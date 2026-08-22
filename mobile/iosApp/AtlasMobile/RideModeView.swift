@@ -58,7 +58,6 @@ struct RideModeView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
             ))
         }
-        .task { await bikeFacilities.load(bounds: Self.austinRegion, baseURL: atlasBaseURL) }
     }
 
     private var statusCard: some View {
