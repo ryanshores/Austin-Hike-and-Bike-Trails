@@ -52,7 +52,10 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     }
 
     func startRecording() {
+        guard !recordingRequested else { return }
         recordingRequested = true
+        policyState = GpsPolicyState(lastAcceptedFix: nil)
+        latestDecision = nil
         switch locationManager.authorizationStatus {
         case .authorizedAlways:
             beginLocationUpdates()
@@ -94,7 +97,9 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        trackingState = .unavailable
+        if (error as? CLError)?.code == .denied {
+            trackingState = .unavailable
+        }
     }
 
     func accept(_ location: CLLocation) {

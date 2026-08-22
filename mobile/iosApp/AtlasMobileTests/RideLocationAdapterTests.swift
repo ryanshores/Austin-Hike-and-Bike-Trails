@@ -39,4 +39,36 @@ final class RideLocationAdapterTests: XCTestCase {
 
         XCTAssertNil(adapter.latestDecision)
     }
+
+    func testStartingANewRideClearsThePreviousRideGpsState() {
+        let adapter = RideLocationAdapter(nowMilliseconds: { 10_000 })
+        adapter.accept(location(timestamp: 10))
+        XCTAssertNotNil(adapter.latestDecision)
+
+        adapter.startRecording()
+
+        XCTAssertNil(adapter.latestDecision)
+    }
+
+    func testTransientLocationErrorRetainsTheCurrentTrackingState() {
+        let adapter = RideLocationAdapter()
+        adapter.startRecording()
+        let stateBeforeError = adapter.trackingState
+
+        adapter.locationManager(CLLocationManager(), didFailWithError: CLError(.locationUnknown))
+
+        XCTAssertEqual(adapter.trackingState, stateBeforeError)
+    }
+
+    private func location(timestamp: TimeInterval) -> CLLocation {
+        CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
+            altitude: 150,
+            horizontalAccuracy: 12,
+            verticalAccuracy: 8,
+            course: 90,
+            speed: 4,
+            timestamp: Date(timeIntervalSince1970: timestamp)
+        )
+    }
 }
