@@ -8,3 +8,8 @@ struct ContentView: View {
         RideModeView(coordinator: rideRecordingCoordinator)
     }
 }
+
+//#Preview("Ride Mode") {
+//    ContentView()
+//        .environmentObject(RideRecordingCoordinator())
+//}
