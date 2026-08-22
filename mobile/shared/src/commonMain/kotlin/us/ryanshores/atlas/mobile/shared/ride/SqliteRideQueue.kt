@@ -93,6 +93,11 @@ class SqliteRideQueue(
         return queries.selectQueuedPoints(active.rideId).executeAsList().map(::mapQueuedPoint)
     }
 
+    fun queuedPointCount(): Long {
+        val active = activeRide() ?: return 0
+        return queries.countQueuedPoints(active.rideId).executeAsOne()
+    }
+
     fun nextUploadBatch(
         newBatchId: String,
         nowMilliseconds: Long,
@@ -154,6 +159,19 @@ class SqliteRideQueue(
     fun clearRide(rideId: String): Boolean {
         requireValidId(rideId, "rideId")
         return database.transactionWithResult {
+            queries.deletePointsForRide(rideId)
+            queries.deleteActiveRide(rideId).value == 1L
+        }
+    }
+
+    fun clearRideIfOwnedBy(rideId: String, ownerId: String): Boolean {
+        requireValidId(rideId, "rideId")
+        requireValidId(ownerId, "ownerId")
+        return database.transactionWithResult {
+            val active = activeRide()
+            if (active?.rideId != rideId || active.ownerId != ownerId) {
+                return@transactionWithResult false
+            }
             queries.deletePointsForRide(rideId)
             queries.deleteActiveRide(rideId).value == 1L
         }

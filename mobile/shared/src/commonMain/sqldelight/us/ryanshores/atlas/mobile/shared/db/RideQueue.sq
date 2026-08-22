@@ -104,6 +104,11 @@ FROM queued_ride_point
 WHERE ride_id = :rideId
 ORDER BY sequence ASC;
 
+countQueuedPoints:
+SELECT COUNT(*)
+FROM queued_ride_point
+WHERE ride_id = :rideId;
+
 selectFirstQueuedPoint:
 SELECT ride_id, sequence, batch_id, recorded_at
 FROM queued_ride_point
