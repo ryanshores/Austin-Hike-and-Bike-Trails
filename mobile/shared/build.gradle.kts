@@ -4,6 +4,7 @@ plugins {
     id("app.cash.sqldelight")
     id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.kotlin.multiplatform")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {
@@ -31,15 +32,24 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation("app.cash.sqldelight:runtime:2.3.2")
+            implementation("io.ktor:ktor-client-content-negotiation:3.5.1")
+            implementation("io.ktor:ktor-client-core:3.5.1")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:3.5.1")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation("io.ktor:ktor-client-mock:3.5.1")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
         }
         androidMain.dependencies {
             implementation("app.cash.sqldelight:android-driver:2.3.2")
+            implementation("io.ktor:ktor-client-okhttp:3.5.1")
         }
         iosMain.dependencies {
             implementation("app.cash.sqldelight:native-driver:2.3.2")
+            implementation("io.ktor:ktor-client-darwin:3.5.1")
         }
     }
 }

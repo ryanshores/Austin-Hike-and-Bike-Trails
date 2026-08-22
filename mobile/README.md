@@ -45,3 +45,17 @@ requesting completion retains the ride until its queue is empty.
 Platform hosts construct the store with `IosRideQueueStoreFactory` or
 `AndroidRideQueueStoreFactory`. Upload scheduling and lifecycle work remain
 separate adapters and are not implied by the persistence layer.
+
+## Ride upload coordination
+
+`RideUploadCoordinator` creates the server ride idempotently, drains stable
+ordered batches, and completes a stopping ride only after its local queue is
+empty. A failed request leaves its assigned batch untouched for the next retry.
+The coordinator rotates a Keychain-backed native session once after an access
+token rejection, persists the new credentials before retrying, and refuses to
+sync a ride whose stored owner differs from the current authenticated owner.
+
+Platform lifecycle adapters decide when to call synchronization. They should
+call it again after connectivity returns or background execution is granted;
+the shared coordinator does not claim that either operating system guarantees
+background network execution.

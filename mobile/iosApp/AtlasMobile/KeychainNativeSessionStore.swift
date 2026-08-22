@@ -2,11 +2,7 @@ import AtlasShared
 import Foundation
 import Security
 
-protocol NativeSessionStoring {
-    func load() throws -> NativeSession?
-    func save(_ session: NativeSession) throws
-    func clear() throws
-}
+protocol NativeSessionStoring: NativeSessionStore {}
 
 enum KeychainSessionError: Error, Equatable {
     case incompleteSession
@@ -28,7 +24,11 @@ final class KeychainNativeSessionStore: NativeSessionStoring {
         self.service = service
     }
 
-    func load() throws -> NativeSession? {
+    func load() throws -> NativeSessionLoadResult {
+        NativeSessionLoadResult(session: try loadIfPresent())
+    }
+
+    private func loadIfPresent() throws -> NativeSession? {
         var query = baseQuery
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -56,11 +56,11 @@ final class KeychainNativeSessionStore: NativeSessionStoring {
         )
     }
 
-    func save(_ session: NativeSession) throws {
+    func save(session: NativeSession) throws {
         guard session.isComplete() else {
             throw KeychainSessionError.incompleteSession
         }
-        let storedSession = try load()
+        let storedSession = try loadIfPresent()
         let installationCredential = session.installationCredential ?? storedSession?.installationCredential
         let data = try JSONEncoder().encode(StoredSession(
             accessToken: session.accessToken,
