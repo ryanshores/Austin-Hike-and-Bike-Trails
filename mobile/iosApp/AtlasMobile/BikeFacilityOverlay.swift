@@ -16,9 +16,9 @@ final class BikeFacilityOverlayStore: ObservableObject {
     private var loadedBounds: MKCoordinateRegion?
 
     func load(bounds: MKCoordinateRegion, baseURL: URL?) async {
-        if let loadedBounds, Self.contains(loadedBounds, bounds) { return }
         requestGeneration += 1
         let generation = requestGeneration
+        if let loadedBounds, Self.contains(loadedBounds, bounds) { return }
         guard let baseURL else { return }
         let requested = MKCoordinateRegion(
             center: bounds.center,
