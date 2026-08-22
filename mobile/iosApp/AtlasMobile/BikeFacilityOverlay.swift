@@ -12,8 +12,11 @@ struct BikeFacilityOverlay: Identifiable {
 final class BikeFacilityOverlayStore: ObservableObject {
     @Published private(set) var facilities: [BikeFacilityOverlay] = []
     @Published private(set) var message = "Bike facilities load when Atlas is configured."
+    private var requestGeneration = 0
 
     func load(bounds: MKCoordinateRegion, baseURL: URL?) async {
+        requestGeneration += 1
+        let generation = requestGeneration
         guard let baseURL else { return }
         let west = bounds.center.longitude - bounds.span.longitudeDelta / 2
         let east = bounds.center.longitude + bounds.span.longitudeDelta / 2
@@ -26,7 +29,8 @@ final class BikeFacilityOverlayStore: ObservableObject {
             let (data, response) = try await URLSession.shared.data(from: components.url!)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
             let collection = try JSONDecoder().decode(FeatureCollection.self, from: data)
-            facilities = collection.features.compactMap(BikeFacilityOverlay.init)
+            guard generation == requestGeneration else { return }
+            facilities = collection.features.flatMap(BikeFacilityOverlay.overlays)
             message = "\(facilities.count) bike facilities in view"
         } catch { message = "Bike facilities could not update." }
     }
@@ -39,17 +43,27 @@ final class BikeFacilityOverlayStore: ObservableObject {
         let lineType: String?
         enum CodingKeys: String, CodingKey { case objectId = "OBJECTID", bicycleFacility = "BICYCLE_FACILITY", lineType = "LINE_TYPE" }
     }
-    struct Geometry: Decodable { let type: String; let coordinates: [[Double]] }
+    struct Geometry: Decodable {
+        let type: String
+        let coordinates: [[[Double]]]
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            type = try c.decode(String.self, forKey: .type)
+            if let line = try? c.decode([[Double]].self, forKey: .coordinates) { coordinates = [line] }
+            else { coordinates = try c.decode([[[Double]]].self, forKey: .coordinates) }
+        }
+        enum CodingKeys: String, CodingKey { case type, coordinates }
+    }
 }
 
 private extension BikeFacilityOverlay {
-    init?(feature: BikeFacilityOverlayStore.Feature) {
-        guard feature.geometry.type == "LineString" else { return nil }
-        let coordinates = feature.geometry.coordinates.compactMap { $0.count >= 2 ? CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) : nil }
-        guard coordinates.count > 1 else { return nil }
+    static func overlays(feature: BikeFacilityOverlayStore.Feature) -> [BikeFacilityOverlay] {
+        guard feature.geometry.type == "LineString" || feature.geometry.type == "MultiLineString" else { return [] }
+        let lines = feature.geometry.coordinates.map { $0.compactMap { $0.count >= 2 ? CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) : nil } }.filter { $0.count > 1 }
+        guard !lines.isEmpty else { return [] }
         let facility = feature.properties.bicycleFacility?.lowercased() ?? ""
         let line = feature.properties.lineType?.lowercased() ?? ""
-        let category: Category = line.contains("off-street") || facility.contains("trail") || facility.contains("shared use") ? .offRoad : (facility.contains("protected") || facility.contains("buffer") || facility.contains("cycle track") ? .protectedLane : .street)
-        self.init(id: feature.properties.objectId.map(String.init) ?? UUID().uuidString, category: category, coordinates: coordinates)
+        let category: Category = line.contains("off-street") || facility.contains("trail") || facility.contains("shared use") ? .offRoad : (facility.contains("protected") || facility.contains("buffer") || facility.contains("cycle track") || facility.contains("wparking") ? .protectedLane : .street)
+        return lines.enumerated().map { index, coordinates in BikeFacilityOverlay(id: "\(feature.properties.objectId.map(String.init) ?? UUID().uuidString)-\(index)", category: category, coordinates: coordinates) }
     }
 }
