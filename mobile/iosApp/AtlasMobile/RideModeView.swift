@@ -35,6 +35,9 @@ struct RideModeView: View {
                 }
             }
             .mapStyle(.standard(elevation: .flat, emphasis: .muted))
+            .onMapCameraChange(frequency: .onEnd) { context in
+                Task { await bikeFacilities.load(bounds: context.region, baseURL: atlasBaseURL) }
+            }
             .ignoresSafeArea(edges: .top)
 
             VStack(spacing: 12) {
@@ -55,7 +58,6 @@ struct RideModeView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
             ))
         }
-        .task { await bikeFacilities.load(bounds: Self.austinRegion, baseURL: atlasBaseURL) }
     }
 
     private var statusCard: some View {

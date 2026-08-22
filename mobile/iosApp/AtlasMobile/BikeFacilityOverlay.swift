@@ -32,7 +32,13 @@ final class BikeFacilityOverlayStore: ObservableObject {
     }
 
     struct FeatureCollection: Decodable { let features: [Feature] }
-    struct Feature: Decodable { let properties: [String: String]?; let geometry: Geometry }
+    struct Feature: Decodable { let properties: Properties; let geometry: Geometry }
+    struct Properties: Decodable {
+        let objectId: Int?
+        let bicycleFacility: String?
+        let lineType: String?
+        enum CodingKeys: String, CodingKey { case objectId = "OBJECTID", bicycleFacility = "BICYCLE_FACILITY", lineType = "LINE_TYPE" }
+    }
     struct Geometry: Decodable { let type: String; let coordinates: [[Double]] }
 }
 
@@ -41,9 +47,9 @@ private extension BikeFacilityOverlay {
         guard feature.geometry.type == "LineString" else { return nil }
         let coordinates = feature.geometry.coordinates.compactMap { $0.count >= 2 ? CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) : nil }
         guard coordinates.count > 1 else { return nil }
-        let facility = feature.properties?["BICYCLE_FACILITY"]?.lowercased() ?? ""
-        let line = feature.properties?["LINE_TYPE"]?.lowercased() ?? ""
+        let facility = feature.properties.bicycleFacility?.lowercased() ?? ""
+        let line = feature.properties.lineType?.lowercased() ?? ""
         let category: Category = line.contains("off-street") || facility.contains("trail") || facility.contains("shared use") ? .offRoad : (facility.contains("protected") || facility.contains("buffer") || facility.contains("cycle track") ? .protectedLane : .street)
-        self.init(id: feature.properties?["OBJECTID"] ?? UUID().uuidString, category: category, coordinates: coordinates)
+        self.init(id: feature.properties.objectId.map(String.init) ?? UUID().uuidString, category: category, coordinates: coordinates)
     }
 }
