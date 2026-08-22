@@ -68,3 +68,18 @@ Platform lifecycle adapters decide when to call synchronization. They should
 call it again after connectivity returns or background execution is granted;
 the shared coordinator does not claim that either operating system guarantees
 background network execution.
+
+## Ride recovery and account changes
+
+`RideRecoveryCoordinator` lets a host inspect the persisted queue after an app
+or OS interruption without doing network work. For the same authenticated owner
+it returns the active ride, its recording/stopping state, and the number of
+queued points so the host can resume recording or synchronization once it has
+an execution opportunity. Offline points remain local until a later successful
+upload acknowledgement.
+
+If the persisted ride belongs to a different owner, recovery returns
+`IdentityChangeRequired` and leaves the queue unchanged. The host must present
+an explicit discard decision; only that confirmed action may call
+`discardForIdentityChange`. This prevents a sign-in change from silently
+deleting a previous owner's local ride data.

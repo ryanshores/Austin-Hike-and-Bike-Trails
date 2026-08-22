@@ -159,6 +159,19 @@ class SqliteRideQueue(
         }
     }
 
+    fun clearRideIfOwnedBy(rideId: String, ownerId: String): Boolean {
+        requireValidId(rideId, "rideId")
+        requireValidId(ownerId, "ownerId")
+        return database.transactionWithResult {
+            val active = activeRide()
+            if (active?.rideId != rideId || active.ownerId != ownerId) {
+                return@transactionWithResult false
+            }
+            queries.deletePointsForRide(rideId)
+            queries.deleteActiveRide(rideId).value == 1L
+        }
+    }
+
     fun close() {
         driver.close()
     }
