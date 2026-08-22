@@ -56,10 +56,13 @@ empty. A failed request leaves its assigned batch untouched for the next retry.
 The coordinator rotates a Keychain-backed native session once after an access
 token rejection, persists the new credentials before retrying, and refuses to
 sync a ride whose stored owner differs from the current authenticated owner.
-If an anonymous refresh rotation response is lost, it restores the same owner
-through the reusable Keychain installation credential before retrying. A
-server rejection of an assigned batch whose points have aged past the upload
-window is surfaced as expired without deleting the local points.
+Native refresh retries return the same rotation during the server's bounded
+concurrency grace, allowing anonymous and registered sessions to recover a lost
+response or failed Keychain save. If that retry cannot recover an anonymous
+session, the coordinator restores the same owner through the reusable Keychain
+installation credential. A server rejection of an assigned batch whose points
+have aged past the upload window is surfaced as expired without deleting the
+local points.
 
 Platform lifecycle adapters decide when to call synchronization. They should
 call it again after connectivity returns or background execution is granted;

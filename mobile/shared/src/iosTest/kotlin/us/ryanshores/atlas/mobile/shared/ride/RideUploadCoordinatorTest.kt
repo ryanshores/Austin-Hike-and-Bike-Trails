@@ -83,7 +83,7 @@ class RideUploadCoordinatorTest {
             coordinator.synchronize(nowMilliseconds = 2_000, sessionOwnerId = OWNER_ID),
         )
 
-        assertEquals(listOf("refresh-one"), api.refreshTokens)
+        assertEquals(listOf("refresh-one", "refresh-one"), api.refreshTokens)
         assertEquals(listOf("installation-one"), api.restorationCredentials)
         assertEquals(listOf("access-one", "access-three"), api.createAccessTokens)
         assertEquals("access-three", store.saved.single().accessToken)
@@ -92,19 +92,17 @@ class RideUploadCoordinatorTest {
     }
 
     @Test
-    fun restoresAnonymousSessionWhenRotatedCredentialsCannotBeSaved() = runTest {
+    fun replaysRefreshWhenRegisteredCredentialsCannotBeSaved() = runTest {
         val queue = createQueueWithPoint()
-        val store = FakeSessionStore(session(), saveFailuresRemaining = 1)
+        val store = FakeSessionStore(session(installationCredential = null), saveFailuresRemaining = 1)
         val api = FakeRideApi().apply {
             createResults.add(RideApiResult.HttpFailure(401, null))
             createResults.add(successfulCreate())
             refreshResults.add(
                 RideApiResult.Success(RefreshSessionResponse("access-two", "refresh-two")),
             )
-            restoreResults.add(
-                RideApiResult.Success(
-                    RestoreSessionResponse("access-three", "refresh-three", OWNER_ID),
-                ),
+            refreshResults.add(
+                RideApiResult.Success(RefreshSessionResponse("access-two", "refresh-two")),
             )
         }
         val coordinator = coordinator(queue, api, store)
@@ -113,9 +111,36 @@ class RideUploadCoordinatorTest {
             coordinator.synchronize(nowMilliseconds = 2_000, sessionOwnerId = OWNER_ID),
         )
 
-        assertEquals(listOf("installation-one"), api.restorationCredentials)
-        assertEquals(listOf("access-one", "access-three"), api.createAccessTokens)
-        assertEquals("access-three", store.saved.single().accessToken)
+        assertEquals(listOf("refresh-one", "refresh-one"), api.refreshTokens)
+        assertTrue(api.restorationCredentials.isEmpty())
+        assertEquals(listOf("access-one", "access-two"), api.createAccessTokens)
+        assertEquals("access-two", store.saved.single().accessToken)
+        assertTrue(queue.queuedPoints().isEmpty())
+        queue.close()
+    }
+
+    @Test
+    fun replaysLostRefreshResponseForARegisteredSession() = runTest {
+        val queue = createQueueWithPoint()
+        val store = FakeSessionStore(session(installationCredential = null))
+        val api = FakeRideApi().apply {
+            createResults.add(RideApiResult.HttpFailure(401, null))
+            createResults.add(successfulCreate())
+            refreshResults.add(RideApiResult.Unavailable)
+            refreshResults.add(
+                RideApiResult.Success(RefreshSessionResponse("access-two", "refresh-two")),
+            )
+        }
+        val coordinator = coordinator(queue, api, store)
+
+        assertIs<RideSyncResult.RecordingSynced>(
+            coordinator.synchronize(nowMilliseconds = 2_000, sessionOwnerId = OWNER_ID),
+        )
+
+        assertEquals(listOf("refresh-one", "refresh-one"), api.refreshTokens)
+        assertTrue(api.restorationCredentials.isEmpty())
+        assertEquals(listOf("access-one", "access-two"), api.createAccessTokens)
+        assertEquals("refresh-two", store.saved.single().refreshToken)
         assertTrue(queue.queuedPoints().isEmpty())
         queue.close()
     }
@@ -391,10 +416,12 @@ class RideUploadCoordinatorTest {
         )
     }
 
-    private fun session() = NativeSession(
+    private fun session(
+        installationCredential: String? = "installation-one",
+    ) = NativeSession(
         accessToken = "access-one",
         refreshToken = "refresh-one",
-        installationCredential = "installation-one",
+        installationCredential = installationCredential,
         ownerId = OWNER_ID,
     )
 

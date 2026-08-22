@@ -48,6 +48,15 @@ async function sha256(value) {
   );
 }
 
+async function nativeRefreshReplacementToken(refreshToken, secret) {
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    await importJwtKey(secret),
+    encoder.encode(`native-refresh-v1\u0000${refreshToken}`),
+  );
+  return base64UrlEncode(new Uint8Array(signature));
+}
+
 async function importJwtKey(secret) {
   return crypto.subtle.importKey(
     "raw",
@@ -706,7 +715,7 @@ async function restoreNativeInstallation(request, dependencies) {
     now: dependencies.now(),
     user: restored,
   });
-  return response(session);
+  return response({ user: publicUser(restored), ...session });
 }
 
 async function register(request, dependencies, native = false) {
@@ -954,6 +963,35 @@ async function rejectRefreshReuse({ db, now, oldHash, sessionId }) {
   throw new HttpError(401, "Invalid session");
 }
 
+async function replayNativeRefresh({ dependencies, now, oldToken, session }) {
+  if (
+    session.used_at === null ||
+    session.used_at > now ||
+    now - session.used_at > REFRESH_CONCURRENCY_GRACE_MS
+  ) {
+    return null;
+  }
+  const refreshToken = await nativeRefreshReplacementToken(
+    oldToken,
+    dependencies.jwtSecret,
+  );
+  if (await sha256(refreshToken) !== session.refresh_token_hash) return null;
+  const accessToken = await signAccessToken(
+    {
+      aud: JWT_AUDIENCE,
+      exp: Math.floor(now / 1000) + ACCESS_TTL_SECONDS,
+      iat: Math.floor(now / 1000),
+      iss: JWT_ISSUER,
+      jti: session.session_id,
+      sub: session.id,
+      tokenVersion: session.token_version,
+      typ: "access",
+    },
+    dependencies.jwtSecret,
+  );
+  return response({ accessToken, refreshToken });
+}
+
 async function refresh(request, dependencies, native = false) {
   if (!native) assertSameOrigin(request);
   await checkRateLimit(request, "refresh", dependencies);
@@ -980,6 +1018,15 @@ async function refresh(request, dependencies, native = false) {
     throw new HttpError(401, "Invalid session");
   }
   if (session.used_at !== null) {
+    if (native) {
+      const replayed = await replayNativeRefresh({
+        dependencies,
+        now,
+        oldToken,
+        session,
+      });
+      if (replayed) return replayed;
+    }
     return rejectRefreshReuse({
       db: dependencies.db,
       now,
@@ -991,7 +1038,9 @@ async function refresh(request, dependencies, native = false) {
     throw new HttpError(401, "Invalid session");
   }
 
-  const newToken = randomToken(dependencies.randomBytes);
+  const newToken = native
+    ? await nativeRefreshReplacementToken(oldToken, dependencies.jwtSecret)
+    : randomToken(dependencies.randomBytes);
   const newHash = await sha256(newToken);
   const results = await dependencies.db.batch([
     dependencies.db
@@ -1019,6 +1068,28 @@ async function refresh(request, dependencies, native = false) {
       .bind(now, oldHash, session.session_id),
   ]);
   if (results.some((result) => result.meta?.changes !== 1)) {
+    if (native) {
+      const current = await dependencies.db
+        .prepare(
+          `SELECT s.id AS session_id, s.refresh_token_hash, s.expires_at,
+                  s.revoked_at, t.used_at, u.id, u.token_version
+           FROM auth_refresh_tokens AS t
+           JOIN auth_sessions AS s ON s.id = t.session_id
+           JOIN users AS u ON u.id = s.user_id
+           WHERE t.token_hash = ? AND u.deleted_at IS NULL`,
+        )
+        .bind(oldHash)
+        .first();
+      if (current && current.revoked_at === null && current.expires_at > now) {
+        const replayed = await replayNativeRefresh({
+          dependencies,
+          now,
+          oldToken,
+          session: current,
+        });
+        if (replayed) return replayed;
+      }
+    }
     return rejectRefreshReuse({
       db: dependencies.db,
       now,

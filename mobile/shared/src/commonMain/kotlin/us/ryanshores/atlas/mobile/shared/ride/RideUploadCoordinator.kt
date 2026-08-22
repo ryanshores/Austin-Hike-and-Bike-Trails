@@ -221,16 +221,24 @@ class RideUploadCoordinator(
         }
 
         context.refreshAttempted = true
-        val refreshed = api.refresh(context.session.refreshToken)
-        val recoveredFromInstallation = refreshed !is RideApiResult.Success
+        val firstRefresh = api.refresh(context.session.refreshToken)
+        val refreshed = if (firstRefresh !is RideApiResult.Success && firstRefresh.canReplayRefresh()) {
+            api.refresh(context.session.refreshToken)
+        } else {
+            firstRefresh
+        }
+        var recoveredFromInstallation = false
         var replacement = when (refreshed) {
             is RideApiResult.Success -> refreshed.value.toNativeSession(context.session)
             else -> {
                 if (!refreshed.canRecoverWithInstallation()) {
                     return AuthorizedResult.Failure(refreshed.toFailure(RideSyncPhase.REFRESH_SESSION))
                 }
+                recoveredFromInstallation = true
                 restoreAnonymousSession(context.session)
-                    ?: return AuthorizedResult.Failure(refreshed.toFailure(RideSyncPhase.REFRESH_SESSION))
+                    ?: return AuthorizedResult.Failure(
+                        firstRefresh.toFailure(RideSyncPhase.REFRESH_SESSION),
+                    )
             }
         }
         if (!replacement.isComplete()) {
@@ -247,8 +255,13 @@ class RideUploadCoordinator(
             if (recoveredFromInstallation) {
                 return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
             }
-            replacement = restoreAnonymousSession(context.session)
-                ?: return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
+            val replayed = api.refresh(context.session.refreshToken)
+            replacement = if (replayed is RideApiResult.Success) {
+                replayed.value.toNativeSession(context.session)
+            } else {
+                restoreAnonymousSession(context.session)
+                    ?: return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
+            }
             if (!replacement.isComplete() || !saveSession(replacement)) {
                 return AuthorizedResult.Failure(failure(RideSyncPhase.SESSION_STORE))
             }
@@ -284,6 +297,15 @@ class RideUploadCoordinator(
         -> true
 
         is RideApiResult.HttpFailure -> statusCode == 401 || statusCode == 409 || statusCode >= 500
+        is RideApiResult.Success -> false
+    }
+
+    private fun RideApiResult<*>.canReplayRefresh(): Boolean = when (this) {
+        RideApiResult.InvalidResponse,
+        RideApiResult.Unavailable,
+        -> true
+
+        is RideApiResult.HttpFailure -> statusCode == 409 || statusCode >= 500
         is RideApiResult.Success -> false
     }
 
