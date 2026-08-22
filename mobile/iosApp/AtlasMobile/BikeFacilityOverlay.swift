@@ -13,8 +13,10 @@ final class BikeFacilityOverlayStore: ObservableObject {
     @Published private(set) var facilities: [BikeFacilityOverlay] = []
     @Published private(set) var message = "Bike facilities load when Atlas is configured."
     private var requestGeneration = 0
+    private var loadedBounds: MKCoordinateRegion?
 
     func load(bounds: MKCoordinateRegion, baseURL: URL?) async {
+        if let loadedBounds, Self.contains(loadedBounds, bounds) { return }
         requestGeneration += 1
         let generation = requestGeneration
         guard let baseURL else { return }
@@ -31,8 +33,21 @@ final class BikeFacilityOverlayStore: ObservableObject {
             let collection = try JSONDecoder().decode(FeatureCollection.self, from: data)
             guard generation == requestGeneration else { return }
             facilities = collection.features.flatMap(BikeFacilityOverlay.overlays)
+            loadedBounds = MKCoordinateRegion(
+                center: bounds.center,
+                span: MKCoordinateSpan(latitudeDelta: bounds.span.latitudeDelta * 1.5, longitudeDelta: bounds.span.longitudeDelta * 1.5)
+            )
             message = "\(facilities.count) bike facilities in view"
         } catch { message = "Bike facilities could not update." }
+    }
+
+    private static func contains(_ outer: MKCoordinateRegion, _ inner: MKCoordinateRegion) -> Bool {
+        let outerLat = outer.span.latitudeDelta / 2
+        let outerLon = outer.span.longitudeDelta / 2
+        let innerLat = inner.span.latitudeDelta / 2
+        let innerLon = inner.span.longitudeDelta / 2
+        return abs(inner.center.latitude - outer.center.latitude) + innerLat <= outerLat
+            && abs(inner.center.longitude - outer.center.longitude) + innerLon <= outerLon
     }
 
     struct FeatureCollection: Decodable { let features: [Feature] }
