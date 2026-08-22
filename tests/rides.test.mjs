@@ -101,7 +101,35 @@ test("owner can create, retry, and complete an ordered ride batch", async () => 
   assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_points WHERE ride_id = ?").get(rideId).count, 2);
   const completed = await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: jar }));
   assert.equal(completed.status, 200);
-  assert.equal((await completed.json()).ride.status, "completed");
+  const completedRide = (await completed.json()).ride;
+  assert.equal(completedRide.status, "completed");
+  const retriedCompletion = await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: jar }));
+  assert.equal(retriedCompletion.status, 200);
+  assert.deepEqual((await retriedCompletion.json()).ride, completedRide);
+  instance.db.close();
+});
+
+test("existing ride creation can be retried after its original creation window", async () => {
+  let now = 1_800_000_000_000;
+  const instance = fixture(now, { now: () => now });
+  const jar = await anonymous(instance);
+  const rideId = "ride_test_0000000000000011";
+  const body = { id: rideId, startedAt: now };
+  const created = await instance.rides(request("/api/rides", { cookies: jar, body }));
+  assert.equal(created.status, 201);
+
+  now += 24 * 60 * 60 * 1_000 + 1;
+  const refreshedSession = await instance.auth(request("/api/auth/refresh", { cookies: jar }));
+  assert.equal(refreshedSession.status, 200);
+  setCookies(refreshedSession, jar);
+  const retried = await instance.rides(request("/api/rides", { cookies: jar, body }));
+  assert.equal(retried.status, 200);
+  assert.equal((await retried.json()).created, false);
+  const conflicting = await instance.rides(request("/api/rides", {
+    cookies: jar,
+    body: { id: rideId, startedAt: body.startedAt + 1 },
+  }));
+  assert.equal(conflicting.status, 409);
   instance.db.close();
 });
 
