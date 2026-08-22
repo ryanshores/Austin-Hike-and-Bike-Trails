@@ -8,8 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111A95297D7BDFE741A4AB58 /* ContentView.swift */; };
+		4416FB041CE235F6B959123C /* RideLocationAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42ED8252B461D01F2FB31AED /* RideLocationAdapterTests.swift */; };
 		60537319C7421309A586FE6E /* KeychainNativeSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */; };
 		8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */; };
+		9BFADCD92390864B34A1E52A /* RideLocationAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 153CDE7AA23F0C674D9A3838 /* RideLocationAdapter.swift */; };
 		D6A6379B232409094821BBA9 /* AtlasMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -25,8 +27,11 @@
 
 /* Begin PBXFileReference section */
 		111A95297D7BDFE741A4AB58 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		153CDE7AA23F0C674D9A3838 /* RideLocationAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideLocationAdapter.swift; sourceTree = "<group>"; };
 		203BA7723527883E728ED112 /* AtlasMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AtlasMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStore.swift; sourceTree = "<group>"; };
+		24DABC3DE1A9B0986FE9ACB4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		42ED8252B461D01F2FB31AED /* RideLocationAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideLocationAdapterTests.swift; sourceTree = "<group>"; };
 		4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStoreTests.swift; sourceTree = "<group>"; };
 		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasMobileApp.swift; sourceTree = "<group>"; };
@@ -37,6 +42,7 @@
 			isa = PBXGroup;
 			children = (
 				4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */,
+				42ED8252B461D01F2FB31AED /* RideLocationAdapterTests.swift */,
 			);
 			path = AtlasMobileTests;
 			sourceTree = "<group>";
@@ -46,7 +52,9 @@
 			children = (
 				DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */,
 				111A95297D7BDFE741A4AB58 /* ContentView.swift */,
+				24DABC3DE1A9B0986FE9ACB4 /* Info.plist */,
 				241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */,
+				153CDE7AA23F0C674D9A3838 /* RideLocationAdapter.swift */,
 			);
 			path = AtlasMobile;
 			sourceTree = "<group>";
@@ -173,6 +181,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				60537319C7421309A586FE6E /* KeychainNativeSessionStoreTests.swift in Sources */,
+				4416FB041CE235F6B959123C /* RideLocationAdapterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -183,6 +192,7 @@
 				D6A6379B232409094821BBA9 /* AtlasMobileApp.swift in Sources */,
 				2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */,
 				8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */,
+				9BFADCD92390864B34A1E52A /* RideLocationAdapter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -307,9 +317,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AtlasMobile/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -327,9 +336,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Austin Atlas";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AtlasMobile/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
