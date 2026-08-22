@@ -13,7 +13,15 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: base,
     title,
     description,
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    icons: {
+      icon: [
+        { url: "/icons/favicon-16.png", type: "image/png", sizes: "16x16" },
+        { url: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
+      ],
+      shortcut: "/icons/favicon-32.png",
+      apple: "/icons/apple-touch-icon.png",
+    },
+    manifest: "/site.webmanifest",
     openGraph: { title, description, images: [{ url: new URL("/og.png", base), width: 1200, height: 630, alt: title }] },
     twitter: { card: "summary_large_image", title, description, images: [new URL("/og.png", base)] },
   };
