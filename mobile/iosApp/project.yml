@@ -20,6 +20,8 @@ targets:
       - path: AtlasMobile
     settings:
       base:
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "0.1"
         PRODUCT_BUNDLE_IDENTIFIER: us.ryanshores.atlas.mobile
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: AtlasMobile/Info.plist
