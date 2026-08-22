@@ -85,7 +85,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     private func beginRecording(policyState: GpsPolicyState) {
         recordingRequested = true
         self.policyState = policyState
-        latestTrustedFix = policyState.lastAcceptedFix
+        latestTrustedFix = policyState.lastAcceptedFix.flatMap { isFreshForDisplay($0) ? $0 : nil }
         latestDecision = nil
         latestPersistenceResult = nil
         switch locationManager.authorizationStatus {
@@ -168,6 +168,16 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         locationManager.allowsBackgroundLocationUpdates = true
         locationManager.startUpdatingLocation()
         trackingState = .recording
+    }
+
+    /// A persisted fix can seed jump validation after recovery, but must never recenter the map
+    /// once it falls outside the shared policy's usable-fix age.
+    private func isFreshForDisplay(_ fix: AcceptedLocationFix) -> Bool {
+        let ageMilliseconds = nowMilliseconds() - fix.timestampMilliseconds
+        return ageMilliseconds >= 0 && GpsPolicy.shared.quality(
+            accuracyMeters: fix.accuracyMeters,
+            ageMilliseconds: ageMilliseconds
+        ).wireValue != "unusable"
     }
 
     private static func authorizationState(for status: CLAuthorizationStatus) -> RideLocationAuthorizationState {

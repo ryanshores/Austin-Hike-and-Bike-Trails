@@ -71,6 +71,19 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertEqual(adapter.latestTrustedFix?.longitude, trusted?.longitude)
     }
 
+    func testStaleRecoveredFixSeedsPolicyWithoutRecenteringTheMap() {
+        var now: Int64 = 10_000
+        let adapter = RideLocationAdapter(nowMilliseconds: { now })
+        adapter.accept(location(timestamp: 10))
+        let persisted = adapter.latestTrustedFix
+        XCTAssertNotNil(persisted)
+
+        now = 30_000
+        adapter.resumeRecording(lastAcceptedFix: persisted)
+
+        XCTAssertNil(adapter.latestTrustedFix)
+    }
+
     func testTransientLocationErrorRetainsTheCurrentTrackingState() {
         let adapter = RideLocationAdapter()
         adapter.startRecording()
