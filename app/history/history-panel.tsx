@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { apiRequest, ensureUser, readJson } from "../account-history-api";
-import type { AtlasUser, RideSummary } from "../account-history-api";
+import type { TrailsUser, RideSummary } from "../account-history-api";
 import { clearLocalRideRecorder } from "../ride-recorder";
 
 type HistoryPage = { nextCursor: string | null; rides: RideSummary[] };
 
 export default function HistoryPanel() {
-  const [user, setUser] = useState<AtlasUser | null>(null);
+  const [user, setUser] = useState<TrailsUser | null>(null);
   const [rides, setRides] = useState<RideSummary[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [status, setStatus] = useState("Loading private ride history…");

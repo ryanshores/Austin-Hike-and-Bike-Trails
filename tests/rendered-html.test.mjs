@@ -22,14 +22,14 @@ async function render(pathname = "/") {
   );
 }
 
-test("server-renders the Austin trail atlas", async () => {
+test("server-renders Austin Trails", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Austin Hike &amp; Bike Atlas<\/title>/i);
-  assert.match(html, /Hike &amp; Bike Atlas/);
+  assert.match(html, /<title>Austin Trails<\/title>/i);
+  assert.match(html, /Austin Trails/);
   assert.match(html, /Interactive map of Austin hike and bike paths/);
   assert.match(html, /Open full-screen ride map/);
   assert.match(html, /Find a trail or bike route/);
@@ -72,7 +72,7 @@ test("server-renders the private account entry point", async () => {
   assert.equal(response.status, 200);
 
   const html = await response.text();
-  assert.match(html, /<title>Account · Austin Hike &amp; Bike Atlas<\/title>/i);
+  assert.match(html, /<title>Account · Austin Trails<\/title>/i);
   assert.match(html, /Your account/);
   assert.match(html, /Loading your private account/);
   assert.match(html, /href="\/history"/);
@@ -83,7 +83,7 @@ test("server-renders the private ride-history entry point", async () => {
   assert.equal(response.status, 200);
 
   const html = await response.text();
-  assert.match(html, /<title>Ride history · Austin Hike &amp; Bike Atlas<\/title>/i);
+  assert.match(html, /<title>Ride history · Austin Trails<\/title>/i);
   assert.match(html, /Your rides/);
   assert.match(html, /Loading private ride history/);
   assert.match(html, /href="\/account"/);

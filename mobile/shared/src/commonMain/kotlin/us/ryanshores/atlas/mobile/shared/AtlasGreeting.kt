@@ -5,5 +5,5 @@ package us.ryanshores.atlas.mobile.shared
  * Kotlin-to-Swift bridge before product features move into this module.
  */
 class AtlasGreeting {
-    fun message(): String = "Austin Hike & Bike Atlas"
+    fun message(): String = "Austin Trails"
 }

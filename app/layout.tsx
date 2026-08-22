@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = incoming.get("x-forwarded-host") ?? incoming.get("host") ?? "localhost:3000";
   const protocol = incoming.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const base = new URL(`${protocol}://${host}`);
-  const title = "Austin Hike & Bike Atlas";
+  const title = "Austin Trails";
   const description = "A zoomable, mobile-friendly field guide to Austin hike and bike paths, classified by route separation and safety context.";
   return {
     metadataBase: base,

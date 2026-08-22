@@ -6,8 +6,8 @@ html, body { margin: 0; min-height: 100%; max-width: 100%; overflow-x: hidden; b
 body { font-family: Georgia, "Times New Roman", serif; background-image: radial-gradient(rgba(77, 68, 45, .07) .7px, transparent .7px); background-size: 6px 6px; }
 button { font: inherit; }
 .screen-reader-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.atlas-shell { min-height: 100dvh; padding: 18px; display: grid; grid-template-rows: auto auto minmax(420px, 1fr) auto; gap: 14px; }
-.atlas-header { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 6px; }
+.trails-shell { min-height: 100dvh; padding: 18px; display: grid; grid-template-rows: auto auto minmax(420px, 1fr) auto; gap: 14px; }
+.trails-header { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 6px; }
 .eyebrow { margin: 0 0 4px; color: var(--orange); font: 700 11px/1.2 Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
 h1, h2 { margin: 0; font-weight: 500; }
 h1 { font-size: clamp(29px, 4vw, 46px); letter-spacing: -.035em; }
@@ -15,10 +15,10 @@ h2 { font-size: 22px; }
 .location-button { border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 252, 241, .8); color: var(--ink); min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none; cursor: pointer; box-shadow: 0 4px 16px rgba(40, 46, 31, .08); }
 .location-button-icon { width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 10px solid currentColor; transform: translateX(1px); }
 .location-button.tracking { background: var(--ink); color: #fffaf0; }
-.atlas-header-actions { display: flex; align-items: center; gap: 12px; }
-.atlas-account-nav, .account-history-header nav { display: flex; align-items: center; gap: 6px; }
-.atlas-account-nav a, .account-history-header nav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 11px; border-radius: 999px; color: var(--ink); text-decoration: none; font: 700 12px Arial, sans-serif; }
-.atlas-account-nav a:hover, .atlas-account-nav a:focus-visible, .account-history-header nav a:hover, .account-history-header nav a:focus-visible { background: rgba(255, 252, 241, .72); outline: 2px solid rgba(185, 93, 48, .25); outline-offset: 1px; }
+.trails-header-actions { display: flex; align-items: center; gap: 12px; }
+.trails-account-nav, .account-history-header nav { display: flex; align-items: center; gap: 6px; }
+.trails-account-nav a, .account-history-header nav a { min-height: 40px; display: inline-flex; align-items: center; padding: 0 11px; border-radius: 999px; color: var(--ink); text-decoration: none; font: 700 12px Arial, sans-serif; }
+.trails-account-nav a:hover, .trails-account-nav a:focus-visible, .account-history-header nav a:hover, .account-history-header nav a:focus-visible { background: rgba(255, 252, 241, .72); outline: 2px solid rgba(185, 93, 48, .25); outline-offset: 1px; }
 .search-panel { position: relative; z-index: 700; display: grid; grid-template-columns: auto minmax(280px, 620px); align-items: center; gap: 14px; padding: 0 6px; }
 .search-panel > label { font: 700 12px Arial, sans-serif; letter-spacing: .02em; }
 .search-field { min-height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 252, 241, .9); box-shadow: 0 6px 20px rgba(40, 46, 31, .08); }
@@ -34,7 +34,7 @@ h2 { font-size: 22px; }
 .search-results span { margin-top: 4px; color: var(--muted); font: 11px Arial, sans-serif; }
 .search-results i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
 .search-results p { margin: 0; padding: 14px; color: var(--muted); font: 12px Arial, sans-serif; }
-.atlas-planning-layout { min-width: 0; display: grid; grid-template-columns: minmax(310px, 370px) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.trails-planning-layout { min-width: 0; display: grid; grid-template-columns: minmax(310px, 370px) minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .ride-map-layout { display: contents; }
 .route-planner { min-width: 0; max-height: min(820px, calc(100dvh - 142px)); overflow-y: auto; padding: 18px; border: 1px solid var(--line); border-radius: 20px; background: rgba(250, 245, 229, .96); box-shadow: 0 12px 34px rgba(49, 53, 33, .11); scrollbar-width: thin; }
 .planner-heading, .planner-endpoint-heading, .planner-summary-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -100,7 +100,7 @@ h2 { font-size: 22px; }
 .planner-guidance { width: 100%; min-height: 46px; margin-top: 15px; border: 1px solid var(--orange); border-radius: 999px; background: var(--orange); color: #fffaf0; cursor: pointer; font: 700 12px Arial, sans-serif; }
 .planner-guidance:focus-visible { outline: 3px solid rgba(185, 93, 48, .3); outline-offset: 2px; }
 .map-frame { position: relative; overflow: hidden; border: 1px solid rgba(55, 72, 52, .3); border-radius: 22px; box-shadow: 0 16px 45px rgba(48, 54, 35, .16); background: #dce1c6; }
-.atlas-planning-layout .map-frame { min-height: 620px; }
+.trails-planning-layout .map-frame { min-height: 620px; }
 .map { position: absolute; inset: 0; }
 .map.map-picking { cursor: crosshair; }
 .map .leaflet-tile-pane { filter: sepia(.2) saturate(.72) contrast(.93) brightness(1.04); }
@@ -232,12 +232,12 @@ h2 { font-size: 22px; }
 .load-more { display: block; margin: 16px auto 0; }
 
 @media (max-width: 800px) {
-  .atlas-shell { min-height: 100dvh; padding: 10px; grid-template-rows: auto auto auto auto; gap: 8px; }
-  .atlas-header { min-height: 56px; }
-  .atlas-header { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .atlas-header-actions { width: 100%; justify-content: space-between; gap: 4px; }
-  .atlas-account-nav { gap: 0; }
-  .atlas-account-nav a { min-height: 40px; padding: 0 7px; font-size: 11px; }
+  .trails-shell { min-height: 100dvh; padding: 10px; grid-template-rows: auto auto auto auto; gap: 8px; }
+  .trails-header { min-height: 56px; }
+  .trails-header { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .trails-header-actions { width: 100%; justify-content: space-between; gap: 4px; }
+  .trails-account-nav { gap: 0; }
+  .trails-account-nav a { min-height: 40px; padding: 0 7px; font-size: 11px; }
   h1 { font-size: 28px; }
   .location-button-label { display: none; }
   .location-button { width: 44px; min-width: 44px; padding: 0; }
@@ -245,8 +245,8 @@ h2 { font-size: 22px; }
   .search-panel { display: block; padding: 0; }
   .search-panel > label { display: block; margin: 0 0 6px 3px; }
   .search-results { right: 0; width: 100%; }
-  .atlas-planning-layout { width: 100%; min-width: 0; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .atlas-planning-layout > *, .route-planner { width: 100%; min-width: 0; max-width: 100%; }
+  .trails-planning-layout { width: 100%; min-width: 0; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .trails-planning-layout > *, .route-planner { width: 100%; min-width: 0; max-width: 100%; }
   .route-planner { max-height: none; padding: 14px; border-radius: 16px; }
   .planner-heading { margin-bottom: 10px; }
   .planner-heading h2 { font-size: 21px; }
@@ -254,7 +254,7 @@ h2 { font-size: 22px; }
   .planner-endpoint-actions button { min-width: 0; padding: 0 5px; white-space: normal; }
   .planner-safety-options label span { min-width: 0; }
   .planner-safety-options { grid-template-columns: 1fr 1fr; }
-  .atlas-planning-layout .map-frame { min-height: 58dvh; }
+  .trails-planning-layout .map-frame { min-height: 58dvh; }
   .map-pick-prompt { left: 12px; right: 12px; top: auto; bottom: 16px; justify-content: space-between; transform: none; white-space: normal; }
   .legend { padding: 12px; border-radius: 15px; }
   .legend-heading { margin-bottom: 8px; }
