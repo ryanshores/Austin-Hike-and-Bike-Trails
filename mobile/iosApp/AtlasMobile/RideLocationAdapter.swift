@@ -71,8 +71,17 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
 
     func startRecording() {
         guard !recordingRequested else { return }
+        beginRecording(policyState: GpsPolicyState(lastAcceptedFix: nil))
+    }
+
+    func resumeRecording(lastAcceptedFix: AcceptedLocationFix?) {
+        guard !recordingRequested else { return }
+        beginRecording(policyState: GpsPolicyState(lastAcceptedFix: lastAcceptedFix))
+    }
+
+    private func beginRecording(policyState: GpsPolicyState) {
         recordingRequested = true
-        policyState = GpsPolicyState(lastAcceptedFix: nil)
+        self.policyState = policyState
         latestDecision = nil
         latestPersistenceResult = nil
         switch locationManager.authorizationStatus {

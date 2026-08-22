@@ -39,14 +39,20 @@ final class RideRecordingCoordinator: ObservableObject {
         startedAtMilliseconds: Int64,
         nowMilliseconds: Int64
     ) -> BeginRideResult {
+        let existing = queue.activeRide()
         let result = queue.beginRide(
             rideId: rideId,
             ownerId: ownerId,
             startedAtMilliseconds: startedAtMilliseconds,
             nowMilliseconds: nowMilliseconds
         )
-        if queue.activeRide()?.ownerId == ownerId && queue.activeRide()?.status.wireValue == "recording" {
+        guard let active = queue.activeRide(), active.ownerId == ownerId, active.status.wireValue == "recording" else {
+            return result
+        }
+        if existing == nil {
             locationAdapter.startRecording()
+        } else if existing?.rideId == rideId && existing?.ownerId == ownerId {
+            locationAdapter.resumeRecording(lastAcceptedFix: acceptedFix(from: active))
         }
         return result
     }
@@ -68,7 +74,11 @@ final class RideRecordingCoordinator: ObservableObject {
         previousOwnerId: String,
         currentOwnerId: String
     ) -> Bool {
-        recoveryCoordinator.discardForIdentityChange(
+        guard let active = queue.activeRide(), active.rideId == rideId, active.ownerId == previousOwnerId else {
+            return false
+        }
+        locationAdapter.stopRecording()
+        return recoveryCoordinator.discardForIdentityChange(
             rideId: rideId,
             previousOwnerId: previousOwnerId,
             currentOwnerId: currentOwnerId
@@ -81,5 +91,23 @@ final class RideRecordingCoordinator: ObservableObject {
 
     func applicationWillEnterForeground() {
         locationAdapter.applicationWillEnterForeground()
+    }
+
+    private func acceptedFix(from ride: ActiveRide) -> AcceptedLocationFix? {
+        guard
+            let timestamp = ride.lastRecordedAtMilliseconds,
+            let latitude = ride.lastLatitude,
+            let longitude = ride.lastLongitude,
+            let accuracy = ride.lastAccuracyMeters
+        else {
+            return nil
+        }
+        return AcceptedLocationFix(
+            latitude: latitude.doubleValue,
+            longitude: longitude.doubleValue,
+            accuracyMeters: accuracy.doubleValue,
+            timestampMilliseconds: timestamp.int64Value,
+            quality: GpsPolicy.shared.quality(accuracyMeters: accuracy.doubleValue, ageMilliseconds: 0)
+        )
     }
 }
