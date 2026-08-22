@@ -20,10 +20,14 @@ final class BikeFacilityOverlayStore: ObservableObject {
         requestGeneration += 1
         let generation = requestGeneration
         guard let baseURL else { return }
-        let west = bounds.center.longitude - bounds.span.longitudeDelta / 2
-        let east = bounds.center.longitude + bounds.span.longitudeDelta / 2
-        let south = bounds.center.latitude - bounds.span.latitudeDelta / 2
-        let north = bounds.center.latitude + bounds.span.latitudeDelta / 2
+        let requested = MKCoordinateRegion(
+            center: bounds.center,
+            span: MKCoordinateSpan(latitudeDelta: bounds.span.latitudeDelta * 1.5, longitudeDelta: bounds.span.longitudeDelta * 1.5)
+        )
+        let west = requested.center.longitude - requested.span.longitudeDelta / 2
+        let east = requested.center.longitude + requested.span.longitudeDelta / 2
+        let south = requested.center.latitude - requested.span.latitudeDelta / 2
+        let north = requested.center.latitude + requested.span.latitudeDelta / 2
         guard east - west <= 5, north - south <= 5 else { return }
         var components = URLComponents(url: baseURL.appendingPathComponent("api/bike-facilities"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "bounds", value: "\(west),\(south),\(east),\(north)")]
@@ -34,8 +38,8 @@ final class BikeFacilityOverlayStore: ObservableObject {
             guard generation == requestGeneration else { return }
             facilities = collection.features.flatMap(BikeFacilityOverlay.overlays)
             loadedBounds = MKCoordinateRegion(
-                center: bounds.center,
-                span: MKCoordinateSpan(latitudeDelta: bounds.span.latitudeDelta * 1.5, longitudeDelta: bounds.span.longitudeDelta * 1.5)
+                center: requested.center,
+                span: requested.span
             )
             message = "\(facilities.count) bike facilities in view"
         } catch { message = "Bike facilities could not update." }
