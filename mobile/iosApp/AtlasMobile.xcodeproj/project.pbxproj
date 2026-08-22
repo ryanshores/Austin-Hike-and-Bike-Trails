@@ -39,7 +39,7 @@
 		4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStoreTests.swift; sourceTree = "<group>"; };
 		5563B213E33A71EB2495406C /* RideModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideModeView.swift; sourceTree = "<group>"; };
 		9DFA6E4A8A88EBE9705ACBBC /* RideRecordingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideRecordingCoordinator.swift; sourceTree = "<group>"; };
-		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasMobileApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -234,14 +234,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AtlasShared,
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -319,14 +327,22 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AtlasShared,
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -339,14 +355,26 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				CURRENT_PROJECT_VERSION = 0.1;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AtlasMobile/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Austin Trails";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
+				MARKETING_VERSION = 0.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AtlasShared,
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -358,14 +386,26 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
+				CURRENT_PROJECT_VERSION = 0.1;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
+				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AtlasMobile/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Austin Trails";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
+				MARKETING_VERSION = 0.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AtlasShared,
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
