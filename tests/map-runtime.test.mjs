@@ -8,7 +8,7 @@ import {
   nextForwardMapBearing,
 } from "../app/map-runtime.js";
 
-test("Ride Mode uses SVG while Atlas keeps the Canvas renderer", () => {
+test("Ride Mode uses SVG while Trails keeps the Canvas renderer", () => {
   assert.equal(mapOptionsForMode(true).preferCanvas, false);
   assert.equal(mapOptionsForMode(false).preferCanvas, true);
 });

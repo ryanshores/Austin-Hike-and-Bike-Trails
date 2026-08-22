@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { apiRequest, ensureUser, readJson } from "../account-history-api";
-import type { AtlasUser } from "../account-history-api";
+import type { TrailsUser } from "../account-history-api";
 import { clearLocalRideRecorder } from "../ride-recorder";
 
-type AuthResult = { retainedRideCount?: number; user: AtlasUser };
+type AuthResult = { retainedRideCount?: number; user: TrailsUser };
 
 export default function AccountPanel() {
-  const [user, setUser] = useState<AtlasUser | null>(null);
+  const [user, setUser] = useState<TrailsUser | null>(null);
   const [status, setStatus] = useState("Loading your private account…");
   const [busy, setBusy] = useState(false);
   const [deleteStep, setDeleteStep] = useState(false);

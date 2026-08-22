@@ -230,7 +230,7 @@ class SqliteRideQueue(
                 it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-'
             },
         ) {
-            "$name must be a valid Atlas identifier"
+            "$name must be a valid Trails identifier"
         }
     }
 

@@ -53,7 +53,7 @@ const routingHealthCheck = {
 export const OPENAPI_DOCUMENT = Object.freeze({
   openapi: "3.1.0",
   info: {
-    title: "Austin Hike & Bike Atlas API",
+    title: "Austin Trails API",
     version: "1.0.0",
     description: "Same-origin operational health endpoints. Responses never expose provider URLs or credentials.",
   },

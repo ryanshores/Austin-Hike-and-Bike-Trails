@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import HistoryPanel from "./history-panel";
 
-export const metadata: Metadata = { title: "Ride history · Austin Hike & Bike Atlas" };
+export const metadata: Metadata = { title: "Ride history · Austin Trails" };
 
 export default function HistoryPage() {
   return (
@@ -14,7 +14,7 @@ export default function HistoryPage() {
         </div>
         <nav aria-label="History navigation">
           <Link href="/account">Account</Link>
-          <Link href="/">Atlas</Link>
+          <Link href="/">Trails</Link>
         </nav>
       </header>
       <HistoryPanel />

@@ -14,7 +14,7 @@ test("stock-provider safety warnings render alongside maneuver guidance", () => 
       safetyWarning: {
         active: true,
         distanceMiles: 0,
-        reason: "not in the Atlas trails list",
+        reason: "not in the Austin Trails list",
       },
     },
     totalMiles: 3,
@@ -22,6 +22,6 @@ test("stock-provider safety warnings render alongside maneuver guidance", () => 
 
   assert.match(html, /Turn right on Manor Road\./);
   assert.match(html, /Lower-safety section now/);
-  assert.match(html, /not in the Atlas trails list/);
+  assert.match(html, /not in the Austin Trails list/);
   assert.match(html, /2\.1 mi remaining to Mueller Lake Park/);
 });

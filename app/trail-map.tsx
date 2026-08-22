@@ -38,7 +38,7 @@ type Category = "offRoadBike" | "protectedBike" | "streetBike" | "offRoadHike";
 type Orientation = "north" | "forward";
 type TrailProperties = Record<string, string | number | null> & { category?: Category };
 type TrailFeature = Feature<LineString | MultiLineString, TrailProperties>;
-type MapMode = "atlas" | "ride";
+type MapMode = "trails" | "ride";
 type SearchRecord = { category: Category; detail: string; label: string; latitude: number; longitude: number };
 type DiagnosticSample = {
   accepted: boolean;
@@ -128,7 +128,7 @@ function searchRecordsForFeatures(features: TrailFeature[]) {
   });
 }
 
-export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
+export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
   const isRide = mode === "ride";
   const mapNode = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -224,7 +224,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         layer.addTo(map);
       });
       try {
-        const savedLayers = JSON.parse(localStorage.getItem("atlas-route-layers") ?? "{}") as Partial<Record<Category, boolean>>;
+        const savedLayers = JSON.parse(localStorage.getItem("trails-route-layers") ?? "{}") as Partial<Record<Category, boolean>>;
         setEnabled((current) => {
           const next = { ...current, ...savedLayers };
           (Object.keys(categories) as Category[]).forEach((category) => {
@@ -543,7 +543,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     setEnabled((current) => {
       const updated = { ...current, [category]: next };
       try {
-        localStorage.setItem("atlas-route-layers", JSON.stringify(updated));
+        localStorage.setItem("trails-route-layers", JSON.stringify(updated));
       } catch {
         // Layer preferences are optional.
       }
@@ -900,7 +900,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `austin-atlas-gps-${new Date().toISOString().replaceAll(":", "-")}.json`;
+    anchor.download = `austin-trails-gps-${new Date().toISOString().replaceAll(":", "-")}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -924,15 +924,15 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
   const startGpsLabel = `${hasInterruptedRide ? "Resume" : "Start"} GPS${activeGuidance ? " guidance" : ""}`;
 
   return (
-    <main className={isRide ? "ride-shell" : "atlas-shell"}>
+    <main className={isRide ? "ride-shell" : "trails-shell"}>
       {!isRide && (
-        <header className="atlas-header">
+        <header className="trails-header">
           <div>
             <p className="eyebrow">Field guide · Austin, Texas</p>
-            <h1>Hike & Bike Atlas</h1>
+            <h1>Austin Trails</h1>
           </div>
-          <div className="atlas-header-actions">
-            <nav className="atlas-account-nav" aria-label="Private account and history">
+          <div className="trails-header-actions">
+            <nav className="trails-account-nav" aria-label="Private account and history">
               <Link href="/history">History</Link>
               <Link href="/account">Account</Link>
             </nav>
@@ -971,7 +971,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         </section>
       )}
 
-      <div className={isRide ? "ride-map-layout" : "atlas-planning-layout"}>
+      <div className={isRide ? "ride-map-layout" : "trails-planning-layout"}>
         {!isRide && (
           <RoutePlanner
             activeMapTarget={activeMapTarget}
@@ -988,7 +988,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
         <div ref={mapNode} className={activeMapTarget ? "map map-picking" : "map"} />
         {isRide && (
           <div className="ride-topbar">
-            <Link href="/" className="ride-exit" aria-label="Exit ride mode">← <span>Atlas</span></Link>
+            <Link href="/" className="ride-exit" aria-label="Exit ride mode">← <span>Trails</span></Link>
             <div className={`gps-badge ${gpsQuality}`} aria-live="polite">
               <span className="stamp-dot" />{status}
             </div>
@@ -1027,7 +1027,7 @@ export default function TrailMap({ mode = "atlas" }: { mode?: MapMode }) {
                 <button className="ride-continue-anonymously" onClick={continueAnonymously}>Continue without signing in</button>
               </div>
             ) : <button onClick={beginRide} disabled={checkingIdentity}>{checkingIdentity ? "Checking account…" : startGpsLabel}</button>}
-            <Link href="/">Return to the atlas</Link>
+            <Link href="/">Return to Trails</Link>
           </div>
         )}
         {isRide && tracking && activeGuidance && (

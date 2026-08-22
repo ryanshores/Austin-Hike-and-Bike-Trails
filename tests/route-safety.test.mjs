@@ -165,7 +165,7 @@ test("adjacent below-threshold edges become one divergence with merged geometry"
   assert.equal(summary.divergences[0].edgeCount, 2);
   assert.deepEqual(summary.divergences[0].geometry.coordinates, [[0, 0], [1, 0], [2, 0]]);
   assert.match(summary.divergences[0].reason, /unprotected bike lane/);
-  assert.match(summary.divergences[0].reason, /not in the Atlas trails list/);
+  assert.match(summary.divergences[0].reason, /not in the Austin Trails list/);
 });
 
 test("distance, climbing, descent, and mileage by class aggregate deterministically", () => {

@@ -236,7 +236,7 @@ export function classifyRouteEdge({
     finding,
     source: "osm",
     reason: finding === SafetyFinding.NOT_IN_TRAILS_LIST
-      ? "not in the Atlas trails list"
+      ? "not in the Austin Trails list"
       : CLASS_NAMES[osmClass],
   };
 }
@@ -253,7 +253,7 @@ export function meetsSafetyPreference(edge, preference) {
 
 function edgeReason(edge) {
   if (edge.finding === SafetyFinding.BICYCLE_PROHIBITED) return "bicycles are prohibited";
-  if (edge.finding === SafetyFinding.NOT_IN_TRAILS_LIST) return "not in the Atlas trails list";
+  if (edge.finding === SafetyFinding.NOT_IN_TRAILS_LIST) return "not in the Austin Trails list";
   if (edge.finding === SafetyFinding.UNKNOWN) return "safety data is unknown";
   return edge.reason || CLASS_NAMES[edge.safetyClass] || "known less-safe connection";
 }

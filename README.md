@@ -1,6 +1,6 @@
-# Austin Hike & Bike Atlas
+# Austin Trails
 
-A responsive Austin trail atlas with a desktop planning map and a dedicated
+A responsive Austin trail guide with a desktop planning map and a dedicated
 full-screen ride experience.
 
 ## Native mobile foundation
@@ -77,7 +77,7 @@ requests, attribution, and caching. A self-hosted or contracted provider is
 required when traffic outgrows those terms.
 
 Stock Valhalla provides route geometry, maneuvers, and elevation, but not the
-City/OSM edge enrichment needed for an Atlas safety claim. Such routes are
+City/OSM edge enrichment needed for an Austin Trails safety claim. Such routes are
 conservatively classified as `unknown`; a strict safety preference therefore
 shows the route as a divergence. A routing provider may return enriched
 `candidates[].edges[]` with City fields and OSM tags, which the Worker passes

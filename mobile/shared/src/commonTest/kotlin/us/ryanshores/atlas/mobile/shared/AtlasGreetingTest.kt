@@ -6,6 +6,6 @@ import kotlin.test.assertEquals
 class AtlasGreetingTest {
     @Test
     fun exposesTheProductNameToNativeHosts() {
-        assertEquals("Austin Hike & Bike Atlas", AtlasGreeting().message())
+        assertEquals("Austin Trails", AtlasGreeting().message())
     }
 }
