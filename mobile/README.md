@@ -31,7 +31,9 @@ The iOS host stores the complete native session as one generic-password
 Keychain item. The item uses device-only, after-first-unlock accessibility so
 an actively recording ride can refresh its session while the screen is locked,
 without synchronizing credentials to another device. The adapter never writes
-credentials to user defaults or logs.
+credentials to user defaults or logs. Each stored session includes its owner;
+an installation credential is retained across token rotation only while that
+owner remains unchanged.
 
 ## Offline ride persistence
 

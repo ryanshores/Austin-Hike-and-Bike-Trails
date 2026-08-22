@@ -33,7 +33,7 @@ class KtorRideApiTest {
                 "/api/mobile/v1/auth/refresh" ->
                     """{"accessToken":"access-two","refreshToken":"refresh-two"}"""
                 "/api/mobile/v1/auth/installation/restore" ->
-                    """{"accessToken":"access-three","refreshToken":"refresh-three"}"""
+                    """{"accessToken":"access-three","refreshToken":"refresh-three","user":{"id":"$OWNER_ID"}}"""
                 else -> error("Unexpected path ${request.url.encodedPath}")
             }
             respond(
@@ -72,10 +72,11 @@ class KtorRideApiTest {
         assertIs<RideApiResult.Success<CompleteRideResponse>>(api.completeRide("access-one", RIDE_ID))
         val refreshed = assertIs<RideApiResult.Success<RefreshSessionResponse>>(api.refresh("refresh-one"))
         assertEquals("access-two", refreshed.value.accessToken)
-        val restored = assertIs<RideApiResult.Success<RefreshSessionResponse>>(
+        val restored = assertIs<RideApiResult.Success<RestoreSessionResponse>>(
             api.restoreAnonymousSession("installation-one"),
         )
         assertEquals("access-three", restored.value.accessToken)
+        assertEquals(OWNER_ID, restored.value.ownerId)
 
         assertEquals(5, engine.requestHistory.size)
         for (request in engine.requestHistory.take(3)) {

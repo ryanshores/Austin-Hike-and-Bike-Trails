@@ -93,13 +93,13 @@ class KtorRideApi(
 
     override suspend fun restoreAnonymousSession(
         installationCredential: String,
-    ): RideApiResult<RefreshSessionResponse> = execute {
+    ): RideApiResult<RestoreSessionResponse> = execute {
         val response = client.post("$baseUrl/api/mobile/v1/auth/installation/restore") {
             contentType(ContentType.Application.Json)
             setBody(InstallationRestoreRequest(installationCredential))
         }
-        response.parse<RefreshEnvelope, RefreshSessionResponse> { body ->
-            RefreshSessionResponse(body.accessToken, body.refreshToken)
+        response.parse<RestoreEnvelope, RestoreSessionResponse> { body ->
+            RestoreSessionResponse(body.accessToken, body.refreshToken, body.user.id)
         }
     }
 
@@ -180,4 +180,14 @@ class KtorRideApi(
 
     @Serializable
     private data class RefreshEnvelope(val accessToken: String, val refreshToken: String)
+
+    @Serializable
+    private data class RestoreEnvelope(
+        val accessToken: String,
+        val refreshToken: String,
+        val user: RestoreUser,
+    )
+
+    @Serializable
+    private data class RestoreUser(val id: String)
 }

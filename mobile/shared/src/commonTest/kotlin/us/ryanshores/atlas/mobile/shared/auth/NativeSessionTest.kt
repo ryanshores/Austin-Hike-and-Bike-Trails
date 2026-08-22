@@ -7,8 +7,9 @@ import kotlin.test.assertTrue
 class NativeSessionTest {
     @Test
     fun requiresBothRotatingSessionCredentials() {
-        assertTrue(NativeSession("access", "refresh", "installation").isComplete())
-        assertFalse(NativeSession("", "refresh", null).isComplete())
-        assertFalse(NativeSession("access", "", null).isComplete())
+        assertTrue(NativeSession("access", "refresh", "installation", "owner").isComplete())
+        assertFalse(NativeSession("", "refresh", null, "owner").isComplete())
+        assertFalse(NativeSession("access", "", null, "owner").isComplete())
+        assertFalse(NativeSession("access", "refresh", null, "").isComplete())
     }
 }

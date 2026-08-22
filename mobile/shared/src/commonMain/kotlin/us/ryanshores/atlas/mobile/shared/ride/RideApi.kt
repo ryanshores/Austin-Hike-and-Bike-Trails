@@ -11,7 +11,7 @@ interface RideApi {
 
     suspend fun restoreAnonymousSession(
         installationCredential: String,
-    ): RideApiResult<RefreshSessionResponse>
+    ): RideApiResult<RestoreSessionResponse>
 }
 
 sealed class RideApiResult<out T> {
@@ -43,4 +43,10 @@ data class CompleteRideResponse(
 data class RefreshSessionResponse(
     val accessToken: String,
     val refreshToken: String,
+)
+
+data class RestoreSessionResponse(
+    val accessToken: String,
+    val refreshToken: String,
+    val ownerId: String,
 )

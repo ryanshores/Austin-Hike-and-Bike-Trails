@@ -10,6 +10,8 @@ class NativeSession(
     val accessToken: String,
     val refreshToken: String,
     val installationCredential: String?,
+    val ownerId: String,
 ) {
-    fun isComplete(): Boolean = accessToken.isNotBlank() && refreshToken.isNotBlank()
+    fun isComplete(): Boolean =
+        accessToken.isNotBlank() && refreshToken.isNotBlank() && ownerId.isNotBlank()
 }

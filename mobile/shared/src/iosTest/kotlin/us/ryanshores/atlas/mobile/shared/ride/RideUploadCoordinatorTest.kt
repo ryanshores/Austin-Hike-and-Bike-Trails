@@ -72,7 +72,9 @@ class RideUploadCoordinatorTest {
             createResults.add(successfulCreate())
             refreshResults.add(RideApiResult.Unavailable)
             restoreResults.add(
-                RideApiResult.Success(RefreshSessionResponse("access-three", "refresh-three")),
+                RideApiResult.Success(
+                    RestoreSessionResponse("access-three", "refresh-three", OWNER_ID),
+                ),
             )
         }
         val coordinator = coordinator(queue, api, store)
@@ -100,7 +102,9 @@ class RideUploadCoordinatorTest {
                 RideApiResult.Success(RefreshSessionResponse("access-two", "refresh-two")),
             )
             restoreResults.add(
-                RideApiResult.Success(RefreshSessionResponse("access-three", "refresh-three")),
+                RideApiResult.Success(
+                    RestoreSessionResponse("access-three", "refresh-three", OWNER_ID),
+                ),
             )
         }
         val coordinator = coordinator(queue, api, store)
@@ -133,6 +137,32 @@ class RideUploadCoordinatorTest {
         assertEquals(429, failed.statusCode)
         assertEquals(3, failed.retryAfterSeconds)
         assertTrue(api.restorationCredentials.isEmpty())
+        queue.close()
+    }
+
+    @Test
+    fun refusesInstallationRecoveryForADifferentOwner() = runTest {
+        val queue = createQueueWithPoint()
+        val store = FakeSessionStore(session())
+        val api = FakeRideApi().apply {
+            createResults.add(RideApiResult.HttpFailure(401, null))
+            refreshResults.add(RideApiResult.Unavailable)
+            restoreResults.add(
+                RideApiResult.Success(
+                    RestoreSessionResponse("access-other", "refresh-other", OTHER_OWNER_ID),
+                ),
+            )
+        }
+        val coordinator = coordinator(queue, api, store)
+
+        val failed = assertIs<RideSyncResult.RecoverableFailure>(
+            coordinator.synchronize(nowMilliseconds = 2_000, sessionOwnerId = OWNER_ID),
+        )
+
+        assertEquals(RideSyncPhase.REFRESH_SESSION, failed.phase)
+        assertEquals(listOf("access-one"), api.createAccessTokens)
+        assertTrue(store.saved.isEmpty())
+        assertNull(queue.queuedPoints().single().batchId)
         queue.close()
     }
 
@@ -291,6 +321,31 @@ class RideUploadCoordinatorTest {
         queue.close()
     }
 
+    @Test
+    fun refusesStoredSessionForADifferentOwnerBeforeNetworkUse() = runTest {
+        val queue = createQueueWithPoint()
+        val api = FakeRideApi()
+        val store = FakeSessionStore(
+            NativeSession(
+                accessToken = "access-other",
+                refreshToken = "refresh-other",
+                installationCredential = "installation-other",
+                ownerId = OTHER_OWNER_ID,
+            ),
+        )
+        val coordinator = coordinator(queue, api, store)
+
+        val mismatch = assertIs<RideSyncResult.IdentityMismatch>(
+            coordinator.synchronize(nowMilliseconds = 2_000, sessionOwnerId = OWNER_ID),
+        )
+
+        assertEquals(OWNER_ID, mismatch.activeOwnerId)
+        assertEquals(OTHER_OWNER_ID, mismatch.sessionOwnerId)
+        assertTrue(api.createAccessTokens.isEmpty())
+        assertNull(queue.queuedPoints().single().batchId)
+        queue.close()
+    }
+
     private fun coordinator(
         queue: SqliteRideQueue,
         api: FakeRideApi,
@@ -340,6 +395,7 @@ class RideUploadCoordinatorTest {
         accessToken = "access-one",
         refreshToken = "refresh-one",
         installationCredential = "installation-one",
+        ownerId = OWNER_ID,
     )
 
     private class FakeSessionStore(
@@ -370,7 +426,7 @@ class RideUploadCoordinatorTest {
         val uploadResults = ArrayDeque<RideApiResult<UploadBatchResponse>>()
         val completeResults = ArrayDeque<RideApiResult<CompleteRideResponse>>()
         val refreshResults = ArrayDeque<RideApiResult<RefreshSessionResponse>>()
-        val restoreResults = ArrayDeque<RideApiResult<RefreshSessionResponse>>()
+        val restoreResults = ArrayDeque<RideApiResult<RestoreSessionResponse>>()
         val createAccessTokens = mutableListOf<String>()
         val uploadAccessTokens = mutableListOf<String>()
         val completeAccessTokens = mutableListOf<String>()
@@ -417,7 +473,7 @@ class RideUploadCoordinatorTest {
 
         override suspend fun restoreAnonymousSession(
             installationCredential: String,
-        ): RideApiResult<RefreshSessionResponse> {
+        ): RideApiResult<RestoreSessionResponse> {
             restorationCredentials.add(installationCredential)
             return restoreResults.removeFirstOrNull() ?: RideApiResult.HttpFailure(401, null)
         }

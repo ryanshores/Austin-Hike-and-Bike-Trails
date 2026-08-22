@@ -19,25 +19,29 @@ final class KeychainNativeSessionStoreTests: XCTestCase {
         try store.save(session: NativeSession(
             accessToken: "access-one",
             refreshToken: "refresh-one",
-            installationCredential: "installation-one"
+            installationCredential: "installation-one",
+            ownerId: "owner-one"
         ))
 
         let loaded = try XCTUnwrap(store.load().session)
         XCTAssertEqual(loaded.accessToken, "access-one")
         XCTAssertEqual(loaded.refreshToken, "refresh-one")
         XCTAssertEqual(loaded.installationCredential, "installation-one")
+        XCTAssertEqual(loaded.ownerId, "owner-one")
     }
 
     func testSaveRotatesTokensWithoutDiscardingInstallationCredential() throws {
         try store.save(session: NativeSession(
             accessToken: "access-one",
             refreshToken: "refresh-one",
-            installationCredential: "installation-one"
+            installationCredential: "installation-one",
+            ownerId: "owner-one"
         ))
         try store.save(session: NativeSession(
             accessToken: "access-two",
             refreshToken: "refresh-two",
-            installationCredential: nil
+            installationCredential: nil,
+            ownerId: "owner-one"
         ))
 
         let loaded = try XCTUnwrap(store.load().session)
@@ -46,11 +50,31 @@ final class KeychainNativeSessionStoreTests: XCTestCase {
         XCTAssertEqual(loaded.installationCredential, "installation-one")
     }
 
+    func testSaveDoesNotCarryInstallationCredentialAcrossOwners() throws {
+        try store.save(session: NativeSession(
+            accessToken: "access-one",
+            refreshToken: "refresh-one",
+            installationCredential: "installation-one",
+            ownerId: "owner-one"
+        ))
+        try store.save(session: NativeSession(
+            accessToken: "access-two",
+            refreshToken: "refresh-two",
+            installationCredential: nil,
+            ownerId: "owner-two"
+        ))
+
+        let loaded = try XCTUnwrap(store.load().session)
+        XCTAssertEqual(loaded.ownerId, "owner-two")
+        XCTAssertNil(loaded.installationCredential)
+    }
+
     func testClearRemovesSessionAndIsIdempotent() throws {
         try store.save(session: NativeSession(
             accessToken: "access",
             refreshToken: "refresh",
-            installationCredential: nil
+            installationCredential: nil,
+            ownerId: "owner-one"
         ))
 
         try store.clear()
@@ -62,7 +86,8 @@ final class KeychainNativeSessionStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.save(session: NativeSession(
             accessToken: "",
             refreshToken: "refresh",
-            installationCredential: nil
+            installationCredential: nil,
+            ownerId: "owner-one"
         ))) { error in
             XCTAssertEqual(error as? KeychainSessionError, .incompleteSession)
         }

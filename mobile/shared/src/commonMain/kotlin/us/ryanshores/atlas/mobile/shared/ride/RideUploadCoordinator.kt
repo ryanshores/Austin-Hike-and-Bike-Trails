@@ -61,6 +61,9 @@ class RideUploadCoordinator(
             return failure(RideSyncPhase.SESSION_STORE)
         }
         if (session == null || !session.isComplete()) return RideSyncResult.AuthenticationRequired
+        if (session.ownerId != sessionOwnerId) {
+            return RideSyncResult.IdentityMismatch(active.ownerId, session.ownerId)
+        }
         val context = SessionContext(session)
 
         when (
@@ -259,13 +262,20 @@ class RideUploadCoordinator(
             ?: return null
         val restored = api.restoreAnonymousSession(installationCredential)
         if (restored !is RideApiResult.Success) return null
-        return restored.value.toNativeSession(previous)
+        if (restored.value.ownerId != previous.ownerId) return null
+        return NativeSession(
+            accessToken = restored.value.accessToken,
+            refreshToken = restored.value.refreshToken,
+            installationCredential = previous.installationCredential,
+            ownerId = restored.value.ownerId,
+        )
     }
 
     private fun RefreshSessionResponse.toNativeSession(previous: NativeSession) = NativeSession(
         accessToken = accessToken,
         refreshToken = refreshToken,
         installationCredential = previous.installationCredential,
+        ownerId = previous.ownerId,
     )
 
     private fun RideApiResult<*>.canRecoverWithInstallation(): Boolean = when (this) {

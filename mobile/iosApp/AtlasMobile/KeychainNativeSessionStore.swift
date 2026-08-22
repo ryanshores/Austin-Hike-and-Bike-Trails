@@ -15,10 +15,11 @@ final class KeychainNativeSessionStore: NativeSessionStoring {
         let accessToken: String
         let refreshToken: String
         let installationCredential: String?
+        let ownerId: String
     }
 
     private let service: String
-    private let account = "native-session-v1"
+    private let account = "native-session-v2"
 
     init(service: String = "\(Bundle.main.bundleIdentifier ?? "us.ryanshores.atlas.mobile").native-session") {
         self.service = service
@@ -45,14 +46,16 @@ final class KeychainNativeSessionStore: NativeSessionStoring {
             let data = result as? Data,
             let stored = try? JSONDecoder().decode(StoredSession.self, from: data),
             !stored.accessToken.isEmpty,
-            !stored.refreshToken.isEmpty
+            !stored.refreshToken.isEmpty,
+            !stored.ownerId.isEmpty
         else {
             throw KeychainSessionError.invalidStoredSession
         }
         return NativeSession(
             accessToken: stored.accessToken,
             refreshToken: stored.refreshToken,
-            installationCredential: stored.installationCredential
+            installationCredential: stored.installationCredential,
+            ownerId: stored.ownerId
         )
     }
 
@@ -61,11 +64,13 @@ final class KeychainNativeSessionStore: NativeSessionStoring {
             throw KeychainSessionError.incompleteSession
         }
         let storedSession = try loadIfPresent()
-        let installationCredential = session.installationCredential ?? storedSession?.installationCredential
+        let installationCredential = session.installationCredential
+            ?? (storedSession?.ownerId == session.ownerId ? storedSession?.installationCredential : nil)
         let data = try JSONEncoder().encode(StoredSession(
             accessToken: session.accessToken,
             refreshToken: session.refreshToken,
-            installationCredential: installationCredential
+            installationCredential: installationCredential,
+            ownerId: session.ownerId
         ))
         let attributes: [String: Any] = [
             kSecValueData as String: data,
