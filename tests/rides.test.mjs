@@ -109,6 +109,24 @@ test("owner can create, retry, and complete an ordered ride batch", async () => 
   instance.db.close();
 });
 
+test("ride ingestion accepts the shared GPS policy minimum movement allowance", async () => {
+  const instance = fixture();
+  const jar = await anonymous(instance);
+  const rideId = "ride_test_0000000000000010";
+  const created = await instance.rides(request("/api/rides", { cookies: jar, body: { id: rideId, startedAt: 1_800_000_000_000 } }));
+  assert.equal(created.status, 201);
+
+  const received = await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    cookies: jar,
+    body: {
+      id: "batch_test_000000000000011",
+      points: [point(0, 1_800_000_000_000), point(1, 1_800_000_001_000, 30.26783, -97.7431)],
+    },
+  }));
+  assert.equal(received.status, 201);
+  instance.db.close();
+});
+
 test("existing ride creation can be retried after its original creation window", async () => {
   let now = 1_800_000_000_000;
   const instance = fixture(now, { now: () => now });

@@ -5,7 +5,8 @@ const MAX_CREATE_BYTES = 4 * 1024;
 const MAX_BATCH_BYTES = 64 * 1024;
 const MAX_POINT_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_MS = 5 * 60 * 1000;
-const MAX_CYCLING_SPEED_MPS = 35;
+const MAX_CYCLING_SPEED_MPS = 22;
+const MINIMUM_JUMP_ALLOWANCE_METERS = 80;
 
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -113,9 +114,11 @@ function distanceMeters(left, right) {
 
 function validatePlausibleMovement(previous, point) {
   if (!previous) return;
-  const elapsedSeconds = (point.recordedAt - previous.recordedAt) / 1000;
+  const elapsedMilliseconds = point.recordedAt - previous.recordedAt;
   const distance = distanceMeters(previous, point);
-  if (elapsedSeconds === 0 ? distance > Math.max(previous.accuracyMeters, point.accuracyMeters) : distance / elapsedSeconds > MAX_CYCLING_SPEED_MPS) {
+  const accuracyAllowance = Math.max(0, previous.accuracyMeters) + Math.max(0, point.accuracyMeters);
+  const cyclingAllowance = (elapsedMilliseconds / 1000) * MAX_CYCLING_SPEED_MPS;
+  if (elapsedMilliseconds <= 0 || distance > Math.max(MINIMUM_JUMP_ALLOWANCE_METERS, accuracyAllowance + cyclingAllowance)) {
     throw new HttpError(400, "Point movement is implausible");
   }
 }

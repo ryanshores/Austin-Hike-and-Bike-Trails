@@ -217,6 +217,18 @@ class SqliteRideQueueTest {
     }
 
     @Test
+    fun acceptsMovementWithinTheSharedGpsPolicyMinimumAllowance() {
+        val queue = createQueue()
+        queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)
+        queue.append(point(recordedAt = 1_100, latitude = 30.2672))
+
+        queue.append(point(recordedAt = 2_100, latitude = 30.26765))
+
+        assertEquals(2L, queue.queuedPointCount())
+        queue.close()
+    }
+
+    @Test
     fun retriesAssignedBatchBeforeReportingUnassignedExpiredPoints() {
         val queue = createQueue()
         queue.beginRide(RIDE_ID, OWNER_ID, startedAtMilliseconds = 1_000, nowMilliseconds = 1_000)

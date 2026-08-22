@@ -17,6 +17,17 @@ enum RideLocationTrackingState: Equatable {
     case unavailable
 }
 
+enum RideLocationPrecisionState: Equatable {
+    case precise
+    case reduced
+    case unavailable
+}
+
+enum RideLocationExecutionState: Equatable {
+    case foreground
+    case background
+}
+
 /// iOS-only location boundary for an explicitly started ride.
 ///
 /// The adapter owns Core Location configuration and turns each callback into a
@@ -25,23 +36,30 @@ enum RideLocationTrackingState: Equatable {
 @MainActor
 final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDelegate, ObservableObject {
     @Published private(set) var authorizationState: RideLocationAuthorizationState
+    @Published private(set) var precisionState: RideLocationPrecisionState
+    @Published private(set) var executionState: RideLocationExecutionState = .foreground
     @Published private(set) var trackingState: RideLocationTrackingState = .idle
     @Published private(set) var latestDecision: GpsDecision?
+    @Published private(set) var latestPersistenceResult: PersistAcceptedFixResult?
 
     var onDecision: ((GpsDecision) -> Void)?
 
     private let locationManager: CLLocationManager
+    private let acceptedFixRecorder: AcceptedFixRecorder?
     private let nowMilliseconds: () -> Int64
     private var policyState = GpsPolicyState(lastAcceptedFix: nil)
     private var recordingRequested = false
 
     init(
         locationManager: CLLocationManager = CLLocationManager(),
+        acceptedFixRecorder: AcceptedFixRecorder? = nil,
         nowMilliseconds: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
     ) {
         self.locationManager = locationManager
+        self.acceptedFixRecorder = acceptedFixRecorder
         self.nowMilliseconds = nowMilliseconds
         authorizationState = Self.authorizationState(for: locationManager.authorizationStatus)
+        precisionState = Self.precisionState(for: locationManager)
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
@@ -53,9 +71,19 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
 
     func startRecording() {
         guard !recordingRequested else { return }
+        beginRecording(policyState: GpsPolicyState(lastAcceptedFix: nil))
+    }
+
+    func resumeRecording(lastAcceptedFix: AcceptedLocationFix?) {
+        guard !recordingRequested else { return }
+        beginRecording(policyState: GpsPolicyState(lastAcceptedFix: lastAcceptedFix))
+    }
+
+    private func beginRecording(policyState: GpsPolicyState) {
         recordingRequested = true
-        policyState = GpsPolicyState(lastAcceptedFix: nil)
+        self.policyState = policyState
         latestDecision = nil
+        latestPersistenceResult = nil
         switch locationManager.authorizationStatus {
         case .authorizedAlways:
             beginLocationUpdates()
@@ -77,8 +105,18 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         trackingState = .stopped
     }
 
+    /// Keep Core Location active while recording; the background location capability permits this.
+    func applicationDidEnterBackground() {
+        executionState = .background
+    }
+
+    func applicationWillEnterForeground() {
+        executionState = .foreground
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationState = Self.authorizationState(for: manager.authorizationStatus)
+        precisionState = Self.precisionState(for: manager)
         guard recordingRequested else { return }
         if manager.authorizationStatus == .authorizedAlways {
             beginLocationUpdates()
@@ -115,6 +153,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         )
         policyState = decision.state
         latestDecision = decision
+        latestPersistenceResult = acceptedFixRecorder?.persist(decision: decision)
         onDecision?(decision)
     }
 
@@ -137,5 +176,12 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         @unknown default:
             .unavailable
         }
+    }
+
+    private static func precisionState(for manager: CLLocationManager) -> RideLocationPrecisionState {
+        guard manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse else {
+            return .unavailable
+        }
+        return manager.accuracyAuthorization == .fullAccuracy ? .precise : .reduced
     }
 }
