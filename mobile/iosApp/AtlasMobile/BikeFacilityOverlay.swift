@@ -13,16 +13,42 @@ final class BikeFacilityOverlayStore: ObservableObject {
     @Published private(set) var facilities: [BikeFacilityOverlay] = []
     @Published private(set) var message = "Bike facilities load when Atlas is configured."
     private var requestGeneration = 0
+    private var loadedBounds: MKCoordinateRegion?
+    private var inFlightBounds: MKCoordinateRegion?
+    private var inFlightGeneration: Int?
 
     func load(bounds: MKCoordinateRegion, baseURL: URL?) async {
+        if let loadedBounds, Self.contains(loadedBounds, bounds) {
+            requestGeneration += 1
+            inFlightBounds = nil
+            inFlightGeneration = nil
+            return
+        }
+        if let inFlightBounds, Self.contains(inFlightBounds, bounds) { return }
         requestGeneration += 1
         let generation = requestGeneration
         guard let baseURL else { return }
-        let west = bounds.center.longitude - bounds.span.longitudeDelta / 2
-        let east = bounds.center.longitude + bounds.span.longitudeDelta / 2
-        let south = bounds.center.latitude - bounds.span.latitudeDelta / 2
-        let north = bounds.center.latitude + bounds.span.latitudeDelta / 2
-        guard east - west <= 5, north - south <= 5 else { return }
+        let requested = MKCoordinateRegion(
+            center: bounds.center,
+            span: MKCoordinateSpan(latitudeDelta: bounds.span.latitudeDelta * 1.5, longitudeDelta: bounds.span.longitudeDelta * 1.5)
+        )
+        let west = requested.center.longitude - requested.span.longitudeDelta / 2
+        let east = requested.center.longitude + requested.span.longitudeDelta / 2
+        let south = requested.center.latitude - requested.span.latitudeDelta / 2
+        let north = requested.center.latitude + requested.span.latitudeDelta / 2
+        guard east - west <= 5, north - south <= 5 else {
+            inFlightBounds = nil
+            inFlightGeneration = nil
+            return
+        }
+        inFlightBounds = requested
+        inFlightGeneration = generation
+        defer {
+            if inFlightGeneration == generation {
+                inFlightBounds = nil
+                inFlightGeneration = nil
+            }
+        }
         var components = URLComponents(url: baseURL.appendingPathComponent("api/bike-facilities"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "bounds", value: "\(west),\(south),\(east),\(north)")]
         do {
@@ -31,8 +57,21 @@ final class BikeFacilityOverlayStore: ObservableObject {
             let collection = try JSONDecoder().decode(FeatureCollection.self, from: data)
             guard generation == requestGeneration else { return }
             facilities = collection.features.flatMap(BikeFacilityOverlay.overlays)
+            loadedBounds = MKCoordinateRegion(
+                center: requested.center,
+                span: requested.span
+            )
             message = "\(facilities.count) bike facilities in view"
         } catch { message = "Bike facilities could not update." }
+    }
+
+    private static func contains(_ outer: MKCoordinateRegion, _ inner: MKCoordinateRegion) -> Bool {
+        let outerLat = outer.span.latitudeDelta / 2
+        let outerLon = outer.span.longitudeDelta / 2
+        let innerLat = inner.span.latitudeDelta / 2
+        let innerLon = inner.span.longitudeDelta / 2
+        return abs(inner.center.latitude - outer.center.latitude) + innerLat <= outerLat
+            && abs(inner.center.longitude - outer.center.longitude) + innerLon <= outerLon
     }
 
     struct FeatureCollection: Decodable { let features: [Feature] }

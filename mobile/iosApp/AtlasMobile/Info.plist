@@ -22,10 +22,15 @@
 	<string>Austin Trails uses your location while recording an active ride, including when the screen is locked.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Austin Trails uses your location to record an active ride.</string>
-	<key>UIBackgroundModes</key>
+    <key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
-	</array>
+    </array>
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIImageName</key>
+        <string>LaunchScreen</string>
+    </dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
