@@ -36,7 +36,11 @@ final class BikeFacilityOverlayStore: ObservableObject {
         let east = requested.center.longitude + requested.span.longitudeDelta / 2
         let south = requested.center.latitude - requested.span.latitudeDelta / 2
         let north = requested.center.latitude + requested.span.latitudeDelta / 2
-        guard east - west <= 5, north - south <= 5 else { return }
+        guard east - west <= 5, north - south <= 5 else {
+            inFlightBounds = nil
+            inFlightGeneration = nil
+            return
+        }
         inFlightBounds = requested
         inFlightGeneration = generation
         defer {
