@@ -15,10 +15,13 @@ final class BikeFacilityOverlayStore: ObservableObject {
     private var requestGeneration = 0
     private var loadedBounds: MKCoordinateRegion?
     private var inFlightBounds: MKCoordinateRegion?
+    private var inFlightGeneration: Int?
 
     func load(bounds: MKCoordinateRegion, baseURL: URL?) async {
         if let loadedBounds, Self.contains(loadedBounds, bounds) {
             requestGeneration += 1
+            inFlightBounds = nil
+            inFlightGeneration = nil
             return
         }
         if let inFlightBounds, Self.contains(inFlightBounds, bounds) { return }
@@ -35,7 +38,13 @@ final class BikeFacilityOverlayStore: ObservableObject {
         let north = requested.center.latitude + requested.span.latitudeDelta / 2
         guard east - west <= 5, north - south <= 5 else { return }
         inFlightBounds = requested
-        defer { inFlightBounds = nil }
+        inFlightGeneration = generation
+        defer {
+            if inFlightGeneration == generation {
+                inFlightBounds = nil
+                inFlightGeneration = nil
+            }
+        }
         var components = URLComponents(url: baseURL.appendingPathComponent("api/bike-facilities"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "bounds", value: "\(west),\(south),\(east),\(north)")]
         do {
