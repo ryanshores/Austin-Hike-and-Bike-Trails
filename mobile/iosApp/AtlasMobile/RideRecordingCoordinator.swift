@@ -81,6 +81,13 @@ final class RideRecordingCoordinator: ObservableObject {
         return state
     }
 
+    /// Resume a persisted recording only when it belongs to the verified current session.
+    func resumeActiveRide(sessionOwnerId: String) {
+        guard let active = queue.activeRide(), active.ownerId == sessionOwnerId, active.status.wireValue == "recording" else { return }
+        locationAdapter.resumeRecording(lastAcceptedFix: acceptedFix(from: active))
+        refreshQueueState()
+    }
+
     /// Call only after the host has shown an explicit identity-change discard decision.
     func discardRecoveredRideForIdentityChange(
         rideId: String,

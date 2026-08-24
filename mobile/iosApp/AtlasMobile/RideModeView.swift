@@ -47,7 +47,12 @@ struct RideModeView: View {
             }
             .padding()
         }
-        .task { await nativeSessionHost.prepare() }
+        .task {
+            await nativeSessionHost.prepare()
+            if let session = nativeSessionHost.session {
+                coordinator.resumeActiveRide(sessionOwnerId: session.ownerId)
+            }
+        }
         .onChange(of: trustedTimestamp) { _, _ in
             guard let coordinate = trustedCoordinate else { return }
             mapPosition = .region(MKCoordinateRegion(
