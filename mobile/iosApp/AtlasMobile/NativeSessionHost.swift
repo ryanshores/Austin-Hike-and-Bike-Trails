@@ -17,7 +17,16 @@ final class NativeSessionHost: ObservableObject {
     }
 
     func prepare() async {
-        if let stored = try? store.load().session { session = stored; state = .ready; return }
+        do {
+            if let stored = try store.load().session {
+                session = stored
+                state = .ready
+                return
+            }
+        } catch {
+            state = .unavailable
+            return
+        }
         guard let baseURL else { state = .unavailable; return }
         do {
             var request = URLRequest(url: baseURL.appendingPathComponent("api/mobile/v1/auth/anonymous"))

@@ -13,6 +13,7 @@ final class RideRecordingCoordinator: ObservableObject {
 
     @Published private(set) var activeRide: ActiveRide?
     @Published private(set) var queuedPointCount: Int64
+    @Published private(set) var identityChangeRide: ActiveRide?
 
     private let queue: SqliteRideQueue
     private let recoveryCoordinator: RideRecoveryCoordinator
@@ -83,7 +84,12 @@ final class RideRecordingCoordinator: ObservableObject {
 
     /// Resume a persisted recording only when it belongs to the verified current session.
     func resumeActiveRide(sessionOwnerId: String) {
-        guard let active = queue.activeRide(), active.ownerId == sessionOwnerId, active.status.wireValue == "recording" else { return }
+        guard let active = queue.activeRide() else { return }
+        guard active.ownerId == sessionOwnerId else {
+            identityChangeRide = active
+            return
+        }
+        guard active.status.wireValue == "recording" else { return }
         locationAdapter.resumeRecording(lastAcceptedFix: acceptedFix(from: active))
         refreshQueueState()
     }
@@ -106,6 +112,14 @@ final class RideRecordingCoordinator: ObservableObject {
         refreshQueueState()
         return discarded
     }
+
+    func discardIdentityMismatchedRide(currentOwnerId: String) {
+        guard let ride = identityChangeRide else { return }
+        _ = discardRecoveredRideForIdentityChange(rideId: ride.rideId, previousOwnerId: ride.ownerId, currentOwnerId: currentOwnerId)
+        identityChangeRide = nil
+    }
+
+    func dismissIdentityChangeNotice() { identityChangeRide = nil }
 
     func applicationDidEnterBackground() {
         locationAdapter.applicationDidEnterBackground()

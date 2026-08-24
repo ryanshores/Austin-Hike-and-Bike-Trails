@@ -53,6 +53,19 @@ struct RideModeView: View {
                 coordinator.resumeActiveRide(sessionOwnerId: session.ownerId)
             }
         }
+        .alert("Discard interrupted ride?", isPresented: Binding(
+            get: { coordinator.identityChangeRide != nil },
+            set: { if !$0 { coordinator.dismissIdentityChangeNotice() } }
+        )) {
+            Button("Discard ride", role: .destructive) {
+                if let owner = nativeSessionHost.session?.ownerId {
+                    coordinator.discardIdentityMismatchedRide(currentOwnerId: owner)
+                }
+            }
+            Button("Keep ride", role: .cancel) {}
+        } message: {
+            Text("This interrupted ride belongs to a different account. Keeping it preserves its local points until that account is restored.")
+        }
         .onChange(of: trustedTimestamp) { _, _ in
             guard let coordinate = trustedCoordinate else { return }
             mapPosition = .region(MKCoordinateRegion(
