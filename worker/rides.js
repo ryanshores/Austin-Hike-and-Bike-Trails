@@ -1,4 +1,5 @@
 import { authenticateRequest, HttpError, requiresSameOrigin } from "./auth.js";
+import { heatCellContributions } from "./heatmap.js";
 
 const MAX_BATCH_POINTS = 100;
 const MAX_CREATE_BYTES = 4 * 1024;
@@ -224,10 +225,31 @@ async function completeRide(request, dependencies, rideId) {
   if (ride.status === "completed") return response({ ride });
   if (ride.status !== "recording") throw new HttpError(409, "Ride could not be completed");
   const now = dependencies.now();
-  const changed = await dependencies.db.prepare(
-    "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",
-  ).bind(now, now, rideId, user.id).run();
-  if (changed.meta?.changes !== 1) throw new HttpError(409, "Ride could not be completed");
+  const points = await dependencies.db.prepare(
+    `SELECT latitude, longitude
+       FROM ride_points WHERE ride_id = ? ORDER BY sequence ASC`,
+  ).bind(rideId).all();
+  const contributions = heatCellContributions(points.results ?? [], now);
+  const changed = await dependencies.db.batch([
+    dependencies.db.prepare(
+      "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",
+    ).bind(now, now, rideId, user.id),
+    ...contributions.map((contribution) => dependencies.db.prepare(
+      `INSERT INTO ride_heat_cell_contributions
+        (ride_id, user_id, resolution, cell_id, bucket_start, latitude, longitude, distance_meters)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      rideId,
+      user.id,
+      contribution.resolution,
+      contribution.cellId,
+      contribution.bucketStart,
+      contribution.latitude,
+      contribution.longitude,
+      contribution.distanceMeters,
+    )),
+  ]);
+  if (changed[0]?.meta?.changes !== 1) throw new HttpError(409, "Ride could not be completed");
   return response({ ride: { ...ride, status: "completed", endedAt: now } });
 }
 

@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createAuthHandler } from "../worker/auth.js";
+import { createHeatmapHandler, geohash, heatCellContributions, resolutionForZoom } from "../worker/heatmap.js";
 import { createRideHandler } from "../worker/rides.js";
 
 const JWT_SECRET = "test-jwt-secret-that-is-at-least-32-bytes";
@@ -42,7 +43,12 @@ class TestD1 {
 function fixture(now = 1_800_000_000_000, options = {}) {
   const db = new TestD1();
   const dependencies = { db, jwtSecret: JWT_SECRET, passwordPepper: PASSWORD_PEPPER, now: () => now, randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)), ...options };
-  return { db, auth: createAuthHandler(dependencies), rides: createRideHandler(dependencies) };
+  return {
+    db,
+    auth: createAuthHandler(dependencies),
+    rides: createRideHandler(dependencies),
+    heatmap: createHeatmapHandler(dependencies),
+  };
 }
 
 function request(path, { authorization, body, cookies = {}, method = "POST", origin = ORIGIN } = {}) {
@@ -103,10 +109,96 @@ test("owner can create, retry, and complete an ordered ride batch", async () => 
   assert.equal(completed.status, 200);
   const completedRide = (await completed.json()).ride;
   assert.equal(completedRide.status, "completed");
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    3,
+  );
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cells").get().count,
+    3,
+  );
   const retriedCompletion = await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: jar }));
   assert.equal(retriedCompletion.status, 200);
   assert.deepEqual((await retriedCompletion.json()).ride, completedRide);
   instance.db.close();
+});
+
+test("private heatmap reads owner-scoped derived cells without returning route points", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const stranger = await anonymous(instance);
+  const rideId = "ride_test_heatmap_000000001";
+  await instance.rides(request("/api/rides", {
+    cookies: owner,
+    body: { id: rideId, startedAt: 1_800_000_000_000 },
+  }));
+  await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    cookies: owner,
+    body: {
+      id: "batch_test_heatmap_0000001",
+      points: [
+        point(0, 1_800_000_000_000),
+        point(1, 1_800_000_001_000, 30.2673, -97.7432),
+      ],
+    },
+  }));
+  await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: owner }));
+
+  const path = "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d";
+  const unauthenticated = await instance.heatmap(request(path, { method: "GET" }));
+  assert.equal(unauthenticated.status, 401);
+  const response = await instance.heatmap(request(path, { method: "GET", cookies: owner }));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const body = await response.json();
+  assert.deepEqual(Object.keys(body).sort(), ["cells", "range", "resolution", "scope"]);
+  assert.equal(body.scope, "mine");
+  assert.equal(body.resolution, 7);
+  assert.equal(body.cells.length, 1);
+  assert.deepEqual(Object.keys(body.cells[0]).sort(), ["cellId", "distanceMeters", "latitude", "longitude", "rideCount"]);
+  assert.equal(body.cells[0].rideCount, 1);
+  assert.ok(body.cells[0].distanceMeters > 0);
+
+  const foreign = await instance.heatmap(request(path, { method: "GET", cookies: stranger }));
+  assert.equal(foreign.status, 200);
+  assert.deepEqual((await foreign.json()).cells, []);
+  instance.db.close();
+});
+
+test("private heatmap requires a bounded viewport, a supported range, and scope=mine", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  for (const path of [
+    "/api/heatmap?scope=community&bounds=-97.75,30.26,-97.73,30.28&zoom=15",
+    "/api/heatmap?scope=mine&bounds=-120,20,-90,50&zoom=15",
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=7d",
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=23",
+  ]) {
+    const response = await instance.heatmap(request(path, { method: "GET", cookies: owner }));
+    assert.equal(response.status, 400, path);
+  }
+  const method = await instance.heatmap(request("/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15", {
+    method: "POST",
+    cookies: owner,
+    body: {},
+  }));
+  assert.equal(method.status, 405);
+  instance.db.close();
+});
+
+test("heatmap segment aggregation uses distance and only one contribution per ride cell", () => {
+  const points = [
+    { latitude: 30.2672, longitude: -97.7431 },
+    { latitude: 30.2673, longitude: -97.7432 },
+    { latitude: 30.2674, longitude: -97.7433 },
+  ];
+  const contributions = heatCellContributions(points, 1_800_000_000_000);
+  assert.equal(resolutionForZoom(12), 5);
+  assert.equal(resolutionForZoom(13), 6);
+  assert.equal(resolutionForZoom(15), 7);
+  assert.equal(geohash(30.26725, -97.74315, 7), geohash(30.26725, -97.74315, 7));
+  assert.ok(contributions.length >= 3 && contributions.length <= 6);
+  for (const contribution of contributions) assert.ok(contribution.distanceMeters > 0);
 });
 
 test("ride ingestion accepts the shared GPS policy minimum movement allowance", async () => {
@@ -203,6 +295,7 @@ test("native ride mutations are rate limited by authenticated owner before batch
   assert.equal(limited.status, 429);
   assert.deepEqual(keys, [`native-ride:${user.id}`, `native-ride:${user.id}`]);
   assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_points WHERE ride_id = ?").get(rideId).count, 0);
+  assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cells").get().count, 0);
   instance.db.close();
 });
 
@@ -335,6 +428,7 @@ test("private history reads and deletes only the authenticated owner's rides", a
   const deleted = await instance.rides(request(`/api/rides/${rideId}`, { method: "DELETE", cookies: owner }));
   assert.equal(deleted.status, 204);
   assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_points WHERE ride_id = ?").get(rideId).count, 0);
+  assert.equal(instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cells").get().count, 0);
   const missing = await instance.rides(request(`/api/rides/${rideId}`, { method: "GET", cookies: owner }));
   assert.equal(missing.status, 404);
   instance.db.close();
