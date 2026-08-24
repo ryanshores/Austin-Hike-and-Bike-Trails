@@ -12,6 +12,11 @@ settings:
     STRING_CATALOG_GENERATE_SYMBOLS: YES
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
+  configs:
+    Debug:
+      ATLAS_API_BASE_URL: https://austin-trails-preview.ryan-shores.workers.dev
+    Release:
+      ATLAS_API_BASE_URL: https://austin-trails.ryan-shores.workers.dev
 targets:
   AtlasMobile:
     type: application

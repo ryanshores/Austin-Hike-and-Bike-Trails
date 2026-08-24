@@ -5,7 +5,7 @@
     <key>CFBundleDisplayName</key>
     <string>Austin Trails</string>
     <key>AtlasApiBaseURL</key>
-    <string>https://austin-trails.ryan-shores.workers.dev</string>
+    <string>$(ATLAS_API_BASE_URL)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

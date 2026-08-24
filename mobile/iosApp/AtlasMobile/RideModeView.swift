@@ -86,16 +86,24 @@ struct RideModeView: View {
     private var controls: some View {
         HStack(spacing: 12) {
             if coordinator.activeRide == nil {
-                Button {
-                    guard let session = nativeSessionHost.session else { return }
-                    let now = Int64(Date().timeIntervalSince1970 * 1_000)
-                    _ = coordinator.startRide(rideId: UUID().uuidString, ownerId: session.ownerId, startedAtMilliseconds: now, nowMilliseconds: now)
-                } label: {
-                    Label("Start ride", systemImage: "record.circle")
+                if nativeSessionHost.state == .unavailable {
+                    Button { Task { await nativeSessionHost.prepare() } } label: {
+                        Label("Reconnect", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                } else {
+                    Button {
+                        guard let session = nativeSessionHost.session else { return }
+                        let now = Int64(Date().timeIntervalSince1970 * 1_000)
+                        _ = coordinator.startRide(rideId: UUID().uuidString, ownerId: session.ownerId, startedAtMilliseconds: now, nowMilliseconds: now)
+                    } label: {
+                        Label("Start ride", systemImage: "record.circle")
+                    }
+                    .disabled(nativeSessionHost.state != .ready)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                .disabled(nativeSessionHost.state != .ready)
             } else {
                 Button {
                     coordinator.stopRide()
