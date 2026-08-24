@@ -43,6 +43,8 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     /// The only position the Ride Mode map may render as the rider's location.
     /// It is retained when later callbacks are coarse, stale, or implausible.
     @Published private(set) var latestTrustedFix: AcceptedLocationFix?
+    /// Heading paired with the last accepted location; rejected callbacks never alter it.
+    @Published private(set) var latestTrustedHeadingDegrees: CLLocationDirection?
     @Published private(set) var latestPersistenceResult: PersistAcceptedFixResult?
 
     var onDecision: ((GpsDecision) -> Void)?
@@ -86,6 +88,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         recordingRequested = true
         self.policyState = policyState
         latestTrustedFix = policyState.lastAcceptedFix.flatMap { isFreshForDisplay($0) ? $0 : nil }
+        latestTrustedHeadingDegrees = nil
         latestDecision = nil
         latestPersistenceResult = nil
         switch locationManager.authorizationStatus {
@@ -159,6 +162,9 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         latestDecision = decision
         if let acceptedFix = decision.acceptedFix {
             latestTrustedFix = acceptedFix
+            latestTrustedHeadingDegrees = location.course.isFinite && location.course >= 0
+                ? location.course
+                : nil
         }
         latestPersistenceResult = acceptedFixRecorder?.persist(decision: decision)
         onDecision?(decision)

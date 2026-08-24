@@ -22,6 +22,7 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertTrue(adapter.latestDecision?.accepted ?? false)
         XCTAssertEqual(adapter.latestDecision?.acceptedFix?.latitude, 30.2672)
         XCTAssertEqual(adapter.latestDecision?.acceptedFix?.longitude, -97.7431)
+        XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
     }
 
     func testDoesNotAcceptLocationCallbacksUntilRecordingWasExplicitlyStarted() {
@@ -70,6 +71,7 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertEqual(adapter.latestDecision?.action.wireValue, "keep-last-fix")
         XCTAssertEqual(adapter.latestTrustedFix?.latitude, trusted?.latitude)
         XCTAssertEqual(adapter.latestTrustedFix?.longitude, trusted?.longitude)
+        XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
     }
 
     func testStaleRecoveredFixSeedsPolicyWithoutRecenteringTheMap() {
