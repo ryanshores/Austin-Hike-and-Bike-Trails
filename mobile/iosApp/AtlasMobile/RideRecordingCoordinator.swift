@@ -14,6 +14,7 @@ final class RideRecordingCoordinator: ObservableObject {
     @Published private(set) var activeRide: ActiveRide?
     @Published private(set) var queuedPointCount: Int64
     @Published private(set) var identityChangeRide: ActiveRide?
+    @Published private(set) var identityBlockedRide: ActiveRide?
 
     private let queue: SqliteRideQueue
     private let recoveryCoordinator: RideRecoveryCoordinator
@@ -69,6 +70,7 @@ final class RideRecordingCoordinator: ObservableObject {
 
     @discardableResult
     func stopRide() -> ActiveRide? {
+        guard identityBlockedRide == nil else { return nil }
         guard queue.activeRide() != nil else { return nil }
         locationAdapter.stopRecording()
         let ride = queue.requestCompletion()
@@ -84,11 +86,18 @@ final class RideRecordingCoordinator: ObservableObject {
 
     /// Resume a persisted recording only when it belongs to the verified current session.
     func resumeActiveRide(sessionOwnerId: String) {
-        guard let active = queue.activeRide() else { return }
-        guard active.ownerId == sessionOwnerId else {
-            identityChangeRide = active
+        guard let active = queue.activeRide() else {
+            identityChangeRide = nil
+            identityBlockedRide = nil
             return
         }
+        guard active.ownerId == sessionOwnerId else {
+            identityChangeRide = active
+            identityBlockedRide = active
+            return
+        }
+        identityChangeRide = nil
+        identityBlockedRide = nil
         guard active.status.wireValue == "recording" else { return }
         locationAdapter.resumeRecording(lastAcceptedFix: acceptedFix(from: active))
         refreshQueueState()
@@ -115,8 +124,10 @@ final class RideRecordingCoordinator: ObservableObject {
 
     func discardIdentityMismatchedRide(currentOwnerId: String) {
         guard let ride = identityChangeRide else { return }
-        _ = discardRecoveredRideForIdentityChange(rideId: ride.rideId, previousOwnerId: ride.ownerId, currentOwnerId: currentOwnerId)
-        identityChangeRide = nil
+        if discardRecoveredRideForIdentityChange(rideId: ride.rideId, previousOwnerId: ride.ownerId, currentOwnerId: currentOwnerId) {
+            identityChangeRide = nil
+            identityBlockedRide = nil
+        }
     }
 
     func dismissIdentityChangeNotice() { identityChangeRide = nil }

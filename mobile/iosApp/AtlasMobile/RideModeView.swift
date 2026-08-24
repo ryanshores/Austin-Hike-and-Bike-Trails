@@ -98,7 +98,12 @@ struct RideModeView: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            if coordinator.activeRide == nil {
+            if coordinator.identityBlockedRide != nil {
+                Label("Restore the previous account to continue this ride", systemImage: "lock.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else if coordinator.activeRide == nil {
                 if nativeSessionHost.state == .unavailable {
                     Button { Task { await nativeSessionHost.prepare() } } label: {
                         Label("Reconnect", systemImage: "arrow.clockwise")

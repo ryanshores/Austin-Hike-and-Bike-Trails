@@ -1,3 +1,4 @@
+import AtlasShared
 import CoreLocation
 import XCTest
 @testable import AtlasMobile
@@ -105,6 +106,24 @@ final class RideLocationAdapterTests: XCTestCase {
         adapter.applicationWillEnterForeground()
 
         XCTAssertEqual(adapter.executionState, .foreground)
+    }
+
+    func testIdentityMismatchedRecoveredRideCannotBeStopped() {
+        let queue = IosRideQueueStoreFactory(databaseName: "ride-coordinator-\(UUID().uuidString).db").create()
+        defer { queue.close() }
+        let coordinator = RideRecordingCoordinator(queue: queue, nowMilliseconds: { 10_000 })
+        _ = queue.beginRide(
+            rideId: "ride-one",
+            ownerId: "owner-one",
+            startedAtMilliseconds: 10_000,
+            nowMilliseconds: 10_000
+        )
+
+        coordinator.resumeActiveRide(sessionOwnerId: "owner-two")
+
+        XCTAssertNotNil(coordinator.identityBlockedRide)
+        XCTAssertNil(coordinator.stopRide())
+        XCTAssertEqual(queue.activeRide()?.status.wireValue, "recording")
     }
 
     private func location(timestamp: TimeInterval) -> CLLocation {
