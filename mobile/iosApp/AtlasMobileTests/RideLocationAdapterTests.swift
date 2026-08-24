@@ -113,13 +113,13 @@ final class RideLocationAdapterTests: XCTestCase {
         defer { queue.close() }
         let coordinator = RideRecordingCoordinator(queue: queue, nowMilliseconds: { 10_000 })
         _ = queue.beginRide(
-            rideId: "ride-one",
-            ownerId: "owner-one",
+            rideId: "ride-000000000001",
+            ownerId: "owner-00000000001",
             startedAtMilliseconds: 10_000,
             nowMilliseconds: 10_000
         )
 
-        coordinator.resumeActiveRide(sessionOwnerId: "owner-two")
+        coordinator.resumeActiveRide(sessionOwnerId: "owner-00000000002")
 
         XCTAssertNotNil(coordinator.identityBlockedRide)
         XCTAssertNil(coordinator.stopRide())

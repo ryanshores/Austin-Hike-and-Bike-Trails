@@ -31,7 +31,17 @@ final class NativeSessionHost: ObservableObject {
                         return
                     }
                 } catch let error as NativeSessionHostError where error.statusCode != nil {
-                    // A rejected credential cannot become valid through retry; remove it before bootstrapping.
+                    do {
+                        if let restored = try await restoreAnonymousInstallation(stored) {
+                            try apply(restored)
+                            return
+                        }
+                    } catch let error as NativeSessionHostError where error.statusCode != nil {
+                        // The installation credential is no longer valid, so bootstrap a new identity below.
+                    } catch {
+                        state = .unavailable
+                        return
+                    }
                 } catch {
                     state = .unavailable
                     return
@@ -57,8 +67,15 @@ final class NativeSessionHost: ObservableObject {
                 body: LoginRequest(email: email, password: password),
                 expectedStatus: 200
             )
-            let previousInstallationCredential = session?.installationCredential
-                ?? (try store.load().session?.installationCredential)
+            let previous: NativeSession?
+            if let session {
+                previous = session
+            } else {
+                previous = try store.load().session
+            }
+            let previousInstallationCredential = previous?.ownerId == wire.user.id
+                ? previous?.installationCredential
+                : nil
             try apply(NativeSession(
                 accessToken: wire.accessToken,
                 refreshToken: wire.refreshToken,
@@ -102,6 +119,7 @@ final class NativeSessionHost: ObservableObject {
             } catch let error as NativeSessionHostError where error.statusCode == 401 {
                 guard let refreshed = try await refresh(active) else { throw error }
                 active = refreshed
+                session = refreshed
                 try await sendNoContent(path: "logout", accessToken: active.accessToken)
             }
             try store.clear()
@@ -156,10 +174,27 @@ final class NativeSessionHost: ObservableObject {
         )
     }
 
+    private func restoreAnonymousInstallation(_ current: NativeSession) async throws -> NativeSession? {
+        guard let installationCredential = current.installationCredential else { return nil }
+        let wire: RestoreEnvelope = try await send(
+            path: "installation/restore",
+            method: "POST",
+            body: RestoreRequest(installationCredential: installationCredential),
+            expectedStatus: 200
+        )
+        return NativeSession(
+            accessToken: wire.accessToken,
+            refreshToken: wire.refreshToken,
+            installationCredential: installationCredential,
+            ownerId: wire.user.id
+        )
+    }
+
     private func fetchCurrentUser(accessToken: String) async throws -> NativeUser {
         let envelope: CurrentUserEnvelope = try await send(
             path: "me",
             method: "GET",
+            body: Optional<EmptyRequest>.none,
             accessToken: accessToken,
             expectedStatus: 200
         )
@@ -224,8 +259,10 @@ final class NativeSessionHost: ObservableObject {
     private struct EmptyRequest: Encodable {}
     private struct LoginRequest: Encodable { let email: String; let password: String }
     private struct RefreshRequest: Encodable { let refreshToken: String }
+    private struct RestoreRequest: Encodable { let installationCredential: String }
     private struct CurrentUserEnvelope: Decodable { let user: NativeUser }
     private struct RefreshEnvelope: Decodable { let accessToken: String; let refreshToken: String }
+    private struct RestoreEnvelope: Decodable { let user: NativeUser; let accessToken: String; let refreshToken: String }
     private struct SessionEnvelope: Decodable { let user: NativeUser; let accessToken: String; let refreshToken: String }
     private struct AnonymousSession: Decodable { let user: NativeUser; let accessToken: String; let refreshToken: String; let installationCredential: String }
 
@@ -236,6 +273,7 @@ final class NativeSessionHost: ObservableObject {
     }
 }
 
+@MainActor
 protocol NativeSessionRequesting {
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
