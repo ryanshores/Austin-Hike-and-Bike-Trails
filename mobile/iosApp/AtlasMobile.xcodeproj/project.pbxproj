@@ -10,6 +10,7 @@
 		2CEF39F7FD19620FD2F23F29 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 433219C66195467B6D18EBE2 /* Assets.xcassets */; };
 		2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111A95297D7BDFE741A4AB58 /* ContentView.swift */; };
 		301B8D3E39C91727659911F2 /* RideRecordingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DFA6E4A8A88EBE9705ACBBC /* RideRecordingCoordinator.swift */; };
+		3101FBE2257089C33564E9F3 /* NativeSessionHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118A7D0BF080DAF5A9EE7A49 /* NativeSessionHost.swift */; };
 		4416FB041CE235F6B959123C /* RideLocationAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42ED8252B461D01F2FB31AED /* RideLocationAdapterTests.swift */; };
 		60537319C7421309A586FE6E /* KeychainNativeSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFAE21D88D66640543BF627 /* KeychainNativeSessionStoreTests.swift */; };
 		64EF412908DDD1B43ED24E30 /* RideModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5563B213E33A71EB2495406C /* RideModeView.swift */; };
@@ -31,6 +32,7 @@
 
 /* Begin PBXFileReference section */
 		111A95297D7BDFE741A4AB58 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		118A7D0BF080DAF5A9EE7A49 /* NativeSessionHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSessionHost.swift; sourceTree = "<group>"; };
 		153CDE7AA23F0C674D9A3838 /* RideLocationAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideLocationAdapter.swift; sourceTree = "<group>"; };
 		203BA7723527883E728ED112 /* AtlasMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AtlasMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainNativeSessionStore.swift; sourceTree = "<group>"; };
@@ -41,7 +43,7 @@
 		5563B213E33A71EB2495406C /* RideModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideModeView.swift; sourceTree = "<group>"; };
 		5C359B62CA3E6854B85EE433 /* BikeFacilityOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BikeFacilityOverlay.swift; sourceTree = "<group>"; };
 		9DFA6E4A8A88EBE9705ACBBC /* RideRecordingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideRecordingCoordinator.swift; sourceTree = "<group>"; };
-		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCBA70690C216A766CB979EB /* AtlasMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AtlasMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA733C25A57C7D5B15A11EAA /* AtlasMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasMobileApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -64,6 +66,7 @@
 				111A95297D7BDFE741A4AB58 /* ContentView.swift */,
 				24DABC3DE1A9B0986FE9ACB4 /* Info.plist */,
 				241A36E502B1312A1059D80F /* KeychainNativeSessionStore.swift */,
+				118A7D0BF080DAF5A9EE7A49 /* NativeSessionHost.swift */,
 				153CDE7AA23F0C674D9A3838 /* RideLocationAdapter.swift */,
 				5563B213E33A71EB2495406C /* RideModeView.swift */,
 				9DFA6E4A8A88EBE9705ACBBC /* RideRecordingCoordinator.swift */,
@@ -217,6 +220,7 @@
 				6B59DA0CA32FC9630AB5FC10 /* BikeFacilityOverlay.swift in Sources */,
 				2D83AB665FB67BD38C5B1C1D /* ContentView.swift in Sources */,
 				8B342B0F00A1EE875B5E41FE /* KeychainNativeSessionStore.swift in Sources */,
+				3101FBE2257089C33564E9F3 /* NativeSessionHost.swift in Sources */,
 				9BFADCD92390864B34A1E52A /* RideLocationAdapter.swift in Sources */,
 				64EF412908DDD1B43ED24E30 /* RideModeView.swift in Sources */,
 				301B8D3E39C91727659911F2 /* RideRecordingCoordinator.swift in Sources */,
@@ -238,22 +242,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					AtlasShared,
-					"-lsqlite3",
-				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -333,22 +329,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					AtlasShared,
-					"-lsqlite3",
-				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.AtlasMobileTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -362,25 +350,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 0.1;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AtlasMobile/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Austin Trails";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					AtlasShared,
-					"-lsqlite3",
-				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -393,25 +371,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 0.1;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)",
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(PLATFORM_NAME)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AtlasMobile/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Austin Trails";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.navigation";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-framework",
-					AtlasShared,
-					"-lsqlite3",
-				);
+				OTHER_LDFLAGS = "$(inherited) -framework AtlasShared -lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = us.ryanshores.atlas.mobile;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

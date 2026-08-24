@@ -1,4 +1,5 @@
 import CoreLocation
+import AtlasShared
 import MapKit
 import SwiftUI
 
@@ -6,8 +7,8 @@ import SwiftUI
 struct RideModeView: View {
     @ObservedObject private var coordinator: RideRecordingCoordinator
     @ObservedObject private var locationAdapter: RideLocationAdapter
+    @EnvironmentObject private var nativeSessionHost: NativeSessionHost
     @State private var mapPosition = MapCameraPosition.region(Self.austinRegion)
-    @State private var showingSessionRequirement = false
     @StateObject private var bikeFacilities = BikeFacilityOverlayStore()
 
     init(coordinator: RideRecordingCoordinator) {
@@ -46,11 +47,7 @@ struct RideModeView: View {
             }
             .padding()
         }
-        .alert("Native session required", isPresented: $showingSessionRequirement) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Ride recording will be available after the native session host supplies a verified owner. The app will not create an unowned ride.")
-        }
+        .task { await nativeSessionHost.prepare() }
         .onChange(of: trustedTimestamp) { _, _ in
             guard let coordinate = trustedCoordinate else { return }
             mapPosition = .region(MKCoordinateRegion(
@@ -85,12 +82,15 @@ struct RideModeView: View {
         HStack(spacing: 12) {
             if coordinator.activeRide == nil {
                 Button {
-                    showingSessionRequirement = true
+                    guard let session = nativeSessionHost.session else { return }
+                    let now = Int64(Date().timeIntervalSince1970 * 1_000)
+                    _ = coordinator.startRide(rideId: UUID().uuidString, ownerId: session.ownerId, startedAtMilliseconds: now, nowMilliseconds: now)
                 } label: {
                     Label("Start ride", systemImage: "record.circle")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
+                .disabled(nativeSessionHost.state != .ready)
             } else {
                 Button {
                     coordinator.stopRide()

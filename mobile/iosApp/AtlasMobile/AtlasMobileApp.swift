@@ -4,11 +4,13 @@ import SwiftUI
 struct AtlasMobileApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var rideRecordingCoordinator = RideRecordingCoordinator()
+    @StateObject private var nativeSessionHost = NativeSessionHost()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(rideRecordingCoordinator)
+                .environmentObject(nativeSessionHost)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
