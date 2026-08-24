@@ -21,6 +21,16 @@ class KtorRideApi(
 ) : RideApi {
     private val baseUrl = normalizeBaseUrl(baseUrl)
 
+    override suspend fun createAnonymousSession(): RideApiResult<AnonymousSessionResponse> = execute {
+        val response = client.post("$baseUrl/api/mobile/v1/auth/anonymous") {
+            contentType(ContentType.Application.Json)
+            setBody(EmptyRequest())
+        }
+        response.parse<AnonymousEnvelope, AnonymousSessionResponse> { body ->
+            AnonymousSessionResponse(body.accessToken, body.refreshToken, body.installationCredential, body.user.id)
+        }
+    }
+
     override suspend fun createRide(
         accessToken: String,
         ride: ActiveRide,
@@ -165,6 +175,17 @@ class KtorRideApi(
 
     @Serializable
     private data class InstallationRestoreRequest(val installationCredential: String)
+
+    @Serializable
+    private class EmptyRequest
+
+    @Serializable
+    private data class AnonymousEnvelope(
+        val accessToken: String,
+        val refreshToken: String,
+        val installationCredential: String,
+        val user: RestoreUser,
+    )
 
     @Serializable
     private data class RideEnvelope(val ride: RideWire, val created: Boolean = false)

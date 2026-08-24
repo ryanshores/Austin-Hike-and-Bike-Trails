@@ -1,4 +1,5 @@
 import CoreLocation
+import AtlasShared
 import MapKit
 import SwiftUI
 
@@ -6,8 +7,8 @@ import SwiftUI
 struct RideModeView: View {
     @ObservedObject private var coordinator: RideRecordingCoordinator
     @ObservedObject private var locationAdapter: RideLocationAdapter
+    @EnvironmentObject private var nativeSessionHost: NativeSessionHost
     @State private var mapPosition = MapCameraPosition.region(Self.austinRegion)
-    @State private var showingSessionRequirement = false
     @StateObject private var bikeFacilities = BikeFacilityOverlayStore()
 
     init(coordinator: RideRecordingCoordinator) {
@@ -46,10 +47,24 @@ struct RideModeView: View {
             }
             .padding()
         }
-        .alert("Native session required", isPresented: $showingSessionRequirement) {
-            Button("OK", role: .cancel) {}
+        .task {
+            await nativeSessionHost.prepare()
+            if let session = nativeSessionHost.session {
+                coordinator.resumeActiveRide(sessionOwnerId: session.ownerId)
+            }
+        }
+        .alert("Discard interrupted ride?", isPresented: Binding(
+            get: { coordinator.identityChangeRide != nil },
+            set: { if !$0 { coordinator.dismissIdentityChangeNotice() } }
+        )) {
+            Button("Discard ride", role: .destructive) {
+                if let owner = nativeSessionHost.session?.ownerId {
+                    coordinator.discardIdentityMismatchedRide(currentOwnerId: owner)
+                }
+            }
+            Button("Keep ride", role: .cancel) {}
         } message: {
-            Text("Ride recording will be available after the native session host supplies a verified owner. The app will not create an unowned ride.")
+            Text("This interrupted ride belongs to a different account. Keeping it preserves its local points until that account is restored.")
         }
         .onChange(of: trustedTimestamp) { _, _ in
             guard let coordinate = trustedCoordinate else { return }
@@ -83,14 +98,30 @@ struct RideModeView: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            if coordinator.activeRide == nil {
-                Button {
-                    showingSessionRequirement = true
-                } label: {
-                    Label("Start ride", systemImage: "record.circle")
+            if coordinator.identityBlockedRide != nil {
+                Label("Restore the previous account to continue this ride", systemImage: "lock.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else if coordinator.activeRide == nil {
+                if nativeSessionHost.state == .unavailable {
+                    Button { Task { await nativeSessionHost.prepare() } } label: {
+                        Label("Reconnect", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                } else {
+                    Button {
+                        guard let session = nativeSessionHost.session else { return }
+                        let now = Int64(Date().timeIntervalSince1970 * 1_000)
+                        _ = coordinator.startRide(rideId: UUID().uuidString, ownerId: session.ownerId, startedAtMilliseconds: now, nowMilliseconds: now)
+                    } label: {
+                        Label("Start ride", systemImage: "record.circle")
+                    }
+                    .disabled(nativeSessionHost.state != .ready)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
             } else {
                 Button {
                     coordinator.stopRide()

@@ -1,6 +1,8 @@
 package us.ryanshores.atlas.mobile.shared.ride
 
 interface RideApi {
+    suspend fun createAnonymousSession(): RideApiResult<AnonymousSessionResponse> = RideApiResult.Unavailable
+
     suspend fun createRide(accessToken: String, ride: ActiveRide): RideApiResult<CreateRideResponse>
 
     suspend fun uploadBatch(accessToken: String, batch: RideUploadBatch): RideApiResult<UploadBatchResponse>
@@ -48,5 +50,12 @@ data class RefreshSessionResponse(
 data class RestoreSessionResponse(
     val accessToken: String,
     val refreshToken: String,
+    val ownerId: String,
+)
+
+data class AnonymousSessionResponse(
+    val accessToken: String,
+    val refreshToken: String,
+    val installationCredential: String,
     val ownerId: String,
 )
