@@ -11,6 +11,7 @@ const SUPPORTED_RANGES = new Map([
 ]);
 const MAX_VIEWPORT_DEGREES = 10;
 const MAX_CELLS = 1_000;
+const MAX_BACKFILL_STATEMENTS = 100;
 const HEATMAP_RESOLUTIONS = [5, 6, 7];
 
 function response(body, status = 200) {
@@ -75,6 +76,34 @@ export function geohash(latitude, longitude, precision) {
   return value;
 }
 
+export function geohashCenter(cellId) {
+  let latitudeMin = -90;
+  let latitudeMax = 90;
+  let longitudeMin = -180;
+  let longitudeMax = 180;
+  let even = true;
+
+  for (const character of cellId) {
+    const value = GEOHASH_ALPHABET.indexOf(character);
+    if (value === -1) throw new TypeError("Invalid geohash cell");
+    for (let bit = 16; bit >= 1; bit /= 2) {
+      const midpointValue = even
+        ? (longitudeMin + longitudeMax) / 2
+        : (latitudeMin + latitudeMax) / 2;
+      if (value & bit) {
+        if (even) longitudeMin = midpointValue;
+        else latitudeMin = midpointValue;
+      } else if (even) longitudeMax = midpointValue;
+      else latitudeMax = midpointValue;
+      even = !even;
+    }
+  }
+  return {
+    latitude: (latitudeMin + latitudeMax) / 2,
+    longitude: (longitudeMin + longitudeMax) / 2,
+  };
+}
+
 export function resolutionForZoom(zoom) {
   if (zoom <= 12) return 5;
   if (zoom <= 14) return 6;
@@ -90,6 +119,7 @@ export function heatCellContributions(points, completedAt) {
     const center = midpoint(points[index - 1], points[index]);
     for (const resolution of HEATMAP_RESOLUTIONS) {
       const cellId = geohash(center.latitude, center.longitude, resolution);
+      const cellCenter = geohashCenter(cellId);
       const key = `${resolution}:${cellId}`;
       const existing = contributions.get(key);
       if (existing) {
@@ -99,14 +129,64 @@ export function heatCellContributions(points, completedAt) {
           resolution,
           cellId,
           bucketStart,
-          latitude: center.latitude,
-          longitude: center.longitude,
+          latitude: cellCenter.latitude,
+          longitude: cellCenter.longitude,
           distanceMeters: distance,
         });
       }
     }
   }
   return [...contributions.values()];
+}
+
+function contributionStatements(db, userId, rideId, points, completedAt) {
+  return heatCellContributions(points, completedAt).map((contribution) => db.prepare(
+    `INSERT OR IGNORE INTO ride_heat_cell_contributions
+      (ride_id, user_id, resolution, cell_id, bucket_start, latitude, longitude, distance_meters)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    rideId,
+    userId,
+    contribution.resolution,
+    contribution.cellId,
+    contribution.bucketStart,
+    contribution.latitude,
+    contribution.longitude,
+    contribution.distanceMeters,
+  ));
+}
+
+export function heatCellContributionStatements(db, userId, rideId, points, completedAt) {
+  return contributionStatements(db, userId, rideId, points, completedAt);
+}
+
+async function backfillCompletedRides(db, userId) {
+  const points = await db.prepare(
+    `SELECT rides.id AS rideId, rides.ended_at AS endedAt,
+            ride_points.latitude, ride_points.longitude
+       FROM rides
+       JOIN ride_points ON ride_points.ride_id = rides.id
+      WHERE rides.user_id = ? AND rides.status = 'completed'
+        AND rides.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM ride_heat_cell_contributions
+           WHERE ride_heat_cell_contributions.ride_id = rides.id
+        )
+      ORDER BY rides.id ASC, ride_points.sequence ASC`,
+  ).bind(userId).all();
+  const rides = new Map();
+  for (const point of points.results ?? []) {
+    const ride = rides.get(point.rideId) ?? { endedAt: point.endedAt, points: [] };
+    ride.points.push(point);
+    rides.set(point.rideId, ride);
+  }
+  const statements = [];
+  for (const [rideId, ride] of rides) {
+    statements.push(...contributionStatements(db, userId, rideId, ride.points, ride.endedAt));
+  }
+  for (let index = 0; index < statements.length; index += MAX_BACKFILL_STATEMENTS) {
+    await db.batch(statements.slice(index, index + MAX_BACKFILL_STATEMENTS));
+  }
 }
 
 function parseBounds(value) {
@@ -144,15 +224,16 @@ function parseParameters(request, now) {
 async function getHeatmap(request, dependencies) {
   const user = await authenticateRequest(request, dependencies);
   const parameters = parseParameters(request, dependencies.now());
+  await backfillCompletedRides(dependencies.db, user.id);
   const cells = await dependencies.db.prepare(
-    `SELECT cell_id AS cellId, latitude, longitude,
+    `SELECT cell_id AS cellId,
             SUM(ride_count) AS rideCount, SUM(distance_meters) AS distanceMeters
        FROM ride_heat_cells
       WHERE user_id = ? AND resolution = ?
         AND latitude BETWEEN ? AND ?
         AND longitude BETWEEN ? AND ?
         AND (? IS NULL OR bucket_start >= ?)
-      GROUP BY cell_id, latitude, longitude
+      GROUP BY cell_id
       ORDER BY distanceMeters DESC, cellId ASC
       LIMIT ?`,
   ).bind(
@@ -166,7 +247,10 @@ async function getHeatmap(request, dependencies) {
     parameters.since,
     MAX_CELLS + 1,
   ).all();
-  const records = cells.results ?? [];
+  const records = (cells.results ?? []).map((cell) => ({
+    ...cell,
+    ...geohashCenter(cell.cellId),
+  }));
   if (records.length > MAX_CELLS) {
     throw new HttpError(422, "Heatmap viewport is too dense; zoom in");
   }

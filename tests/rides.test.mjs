@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createAuthHandler } from "../worker/auth.js";
-import { createHeatmapHandler, geohash, heatCellContributions, resolutionForZoom } from "../worker/heatmap.js";
+import { createHeatmapHandler, geohash, geohashCenter, heatCellContributions, resolutionForZoom } from "../worker/heatmap.js";
 import { createRideHandler } from "../worker/rides.js";
 
 const JWT_SECRET = "test-jwt-secret-that-is-at-least-32-bytes";
@@ -162,6 +162,66 @@ test("private heatmap reads owner-scoped derived cells without returning route p
   const foreign = await instance.heatmap(request(path, { method: "GET", cookies: stranger }));
   assert.equal(foreign.status, 200);
   assert.deepEqual((await foreign.json()).cells, []);
+  instance.db.close();
+});
+
+test("private heatmap backfills completed rides that predate heatmap contributions", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const rideId = "ride_test_heatmap_backfill01";
+  await instance.rides(request("/api/rides", {
+    cookies: owner,
+    body: { id: rideId, startedAt: 1_800_000_000_000 },
+  }));
+  await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    cookies: owner,
+    body: {
+      id: "batch_test_heatmap_backfill1",
+      points: [point(0, 1_800_000_000_000), point(1, 1_800_000_001_000, 30.2673, -97.7432)],
+    },
+  }));
+  instance.db.database.prepare(
+    "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ?",
+  ).run(1_800_000_002_000, 1_800_000_002_000, rideId);
+
+  const response = await instance.heatmap(request(
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
+    { method: "GET", cookies: owner },
+  ));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).cells.length, 1);
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    3,
+  );
+  instance.db.close();
+});
+
+test("private heatmap combines daily rows with the same cell ID", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const userId = instance.db.database.prepare("SELECT id FROM users").get().id;
+  const cellId = geohash(30.2672, -97.7431, 7);
+  const insert = instance.db.database.prepare(
+    `INSERT INTO ride_heat_cells
+      (user_id, resolution, cell_id, bucket_start, latitude, longitude, ride_count, distance_meters)
+     VALUES (?, 7, ?, ?, ?, ?, ?, ?)`,
+  );
+  insert.run(userId, cellId, 1_799_900_800_000, 30.2672, -97.7431, 1, 10);
+  insert.run(userId, cellId, 1_799_987_200_000, 30.2673, -97.7432, 2, 20);
+
+  const response = await instance.heatmap(request(
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
+    { method: "GET", cookies: owner },
+  ));
+  assert.equal(response.status, 200);
+  const cells = (await response.json()).cells;
+  assert.deepEqual(cells, [{
+    cellId,
+    ...geohashCenter(cellId),
+    rideCount: 3,
+    distanceMeters: 30,
+  }]);
   instance.db.close();
 });
 
