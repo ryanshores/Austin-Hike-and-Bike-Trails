@@ -1,0 +1,1 @@
+ALTER TABLE `rides` ADD `heatmap_backfilled_at` integer;

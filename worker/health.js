@@ -1,6 +1,6 @@
 import { providerEndpoint, requestAllowed, sharedGeocoderRateLimitKey } from "./api-utils.js";
 
-export const EXPECTED_D1_MIGRATION = "0003_live-routing-enrichment.sql";
+export const EXPECTED_D1_MIGRATION = "0006_resumable_ride_completion.sql";
 export const HEALTH_CHECK_TIMEOUT_MS = 3_000;
 
 function healthResponse(value, status) {

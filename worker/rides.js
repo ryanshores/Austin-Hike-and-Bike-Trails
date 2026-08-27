@@ -1,6 +1,8 @@
 import { authenticateRequest, HttpError, requiresSameOrigin } from "./auth.js";
+import { heatCellContributions, heatCellContributionStatements } from "./heatmap.js";
 
 const MAX_BATCH_POINTS = 100;
+const MAX_HEATMAP_CONTRIBUTIONS_PER_REQUEST = 50;
 const MAX_CREATE_BYTES = 4 * 1024;
 const MAX_BATCH_BYTES = 64 * 1024;
 const MAX_POINT_AGE_MS = 24 * 60 * 60 * 1000;
@@ -8,13 +10,14 @@ const MAX_FUTURE_MS = 5 * 60 * 1000;
 const MAX_CYCLING_SPEED_MPS = 22;
 const MINIMUM_JUMP_ALLOWANCE_METERS = 80;
 
-function response(body, status = 200) {
+function response(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "Cache-Control": "no-store",
       "Content-Type": "application/json; charset=utf-8",
       "X-Content-Type-Options": "nosniff",
+      ...headers,
     },
   });
 }
@@ -162,7 +165,7 @@ async function uploadBatch(request, dependencies, rideId) {
   const body = await readJson(request, MAX_BATCH_BYTES);
   if (!isId(body.id) || !Array.isArray(body.points) || body.points.length < 1 || body.points.length > MAX_BATCH_POINTS) throw new HttpError(400, "Invalid ride batch");
   const ride = await dependencies.db.prepare(
-    "SELECT id, started_at AS startedAt, accepted_point_count AS acceptedPointCount, distance_meters AS distanceMeters FROM rides WHERE id = ? AND user_id = ? AND status = 'recording' AND deleted_at IS NULL",
+    "SELECT id, started_at AS startedAt, accepted_point_count AS acceptedPointCount, distance_meters AS distanceMeters FROM rides WHERE id = ? AND user_id = ? AND status = 'recording' AND completion_started_at IS NULL AND deleted_at IS NULL",
   ).bind(rideId, user.id).first();
   if (!ride) throw new HttpError(404, "Ride not found");
   const existing = await dependencies.db.prepare(
@@ -216,18 +219,44 @@ async function uploadBatch(request, dependencies, rideId) {
 async function completeRide(request, dependencies, rideId) {
   const user = await authenticateMutation(request, dependencies);
   const ride = await dependencies.db.prepare(
-    `SELECT id, status, ended_at AS endedAt, accepted_point_count AS acceptedPointCount,
+    `SELECT id, status, ended_at AS endedAt, completion_started_at AS completionStartedAt, accepted_point_count AS acceptedPointCount,
             distance_meters AS distanceMeters
      FROM rides WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
   ).bind(rideId, user.id).first();
   if (!ride) throw new HttpError(404, "Ride not found");
   if (ride.status === "completed") return response({ ride });
   if (ride.status !== "recording") throw new HttpError(409, "Ride could not be completed");
-  const now = dependencies.now();
-  const changed = await dependencies.db.prepare(
-    "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",
-  ).bind(now, now, rideId, user.id).run();
-  if (changed.meta?.changes !== 1) throw new HttpError(409, "Ride could not be completed");
+  const now = ride.completionStartedAt ?? dependencies.now();
+  const points = await dependencies.db.prepare(
+    `SELECT latitude, longitude
+       FROM ride_points WHERE ride_id = ? ORDER BY sequence ASC`,
+  ).bind(rideId).all();
+  const contributions = heatCellContributions(points.results ?? [], now);
+  const existing = await dependencies.db.prepare(
+    `SELECT resolution, cell_id AS cellId, bucket_start AS bucketStart
+       FROM ride_heat_cell_contributions WHERE ride_id = ?`,
+  ).bind(rideId).all();
+  const existingKeys = new Set((existing.results ?? []).map((contribution) => (
+    `${contribution.resolution}:${contribution.cellId}:${contribution.bucketStart}`
+  )));
+  const missing = contributions.filter((_, index) => !existingKeys.has(
+    `${contributions[index].resolution}:${contributions[index].cellId}:${contributions[index].bucketStart}`,
+  ));
+  const pending = missing.length > MAX_HEATMAP_CONTRIBUTIONS_PER_REQUEST;
+  const changed = await dependencies.db.batch([
+    dependencies.db.prepare(
+      pending
+        ? "UPDATE rides SET completion_started_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'"
+        : "UPDATE rides SET status = 'completed', ended_at = ?, heatmap_backfilled_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",
+    ).bind(...(pending ? [now, now, rideId, user.id] : [now, now, now, rideId, user.id])),
+    ...heatCellContributionStatements(dependencies.db, user.id, rideId, points.results ?? [], now)
+      .filter((_, index) => !existingKeys.has(
+        `${contributions[index].resolution}:${contributions[index].cellId}:${contributions[index].bucketStart}`,
+      ))
+      .slice(0, MAX_HEATMAP_CONTRIBUTIONS_PER_REQUEST),
+  ]);
+  if (changed[0]?.meta?.changes !== 1) throw new HttpError(409, "Ride could not be completed");
+  if (pending) return response({ ride: { ...ride, completionPending: true }, completed: false }, 202, { "Retry-After": "1" });
   return response({ ride: { ...ride, status: "completed", endedAt: now } });
 }
 
