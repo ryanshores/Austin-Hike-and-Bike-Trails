@@ -126,6 +126,7 @@ export const rides = sqliteTable(
     title: text("title"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
     endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+    heatmapBackfilledAt: integer("heatmap_backfilled_at", { mode: "timestamp_ms" }),
     distanceMeters: real("distance_meters").notNull().default(0),
     acceptedPointCount: integer("accepted_point_count").notNull().default(0),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),

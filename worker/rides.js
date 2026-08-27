@@ -232,8 +232,8 @@ async function completeRide(request, dependencies, rideId) {
   const contributions = heatCellContributionStatements(dependencies.db, user.id, rideId, points.results ?? [], now);
   const changed = await dependencies.db.batch([
     dependencies.db.prepare(
-      "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",
-    ).bind(now, now, rideId, user.id),
+      "UPDATE rides SET status = 'completed', ended_at = ?, heatmap_backfilled_at = ?, updated_at = ? WHERE id = ? AND user_id = ? AND status = 'recording'",
+    ).bind(now, now, now, rideId, user.id),
     ...contributions,
   ]);
   if (changed[0]?.meta?.changes !== 1) throw new HttpError(409, "Ride could not be completed");

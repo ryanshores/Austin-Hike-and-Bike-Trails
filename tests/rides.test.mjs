@@ -12,6 +12,7 @@ import { createRideHandler } from "../worker/rides.js";
 const JWT_SECRET = "test-jwt-secret-that-is-at-least-32-bytes";
 const PASSWORD_PEPPER = "test-password-pepper-at-least-32-bytes";
 const ORIGIN = "https://atlas.test";
+const DAY_MS = 24 * 60 * 60 * 1_000;
 const migrationsDirectory = fileURLToPath(new URL("../drizzle/", import.meta.url));
 
 class Statement {
@@ -194,6 +195,51 @@ test("private heatmap backfills completed rides that predate heatmap contributio
     instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
     3,
   );
+  assert.equal(
+    instance.db.database.prepare("SELECT heatmap_backfilled_at AS heatmapBackfilledAt FROM rides WHERE id = ?").get(rideId).heatmapBackfilledAt,
+    1_800_000_002_000,
+  );
+  instance.db.close();
+});
+
+test("private heatmap retries incomplete contribution backfills before marking a ride complete", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const userId = instance.db.database.prepare("SELECT id FROM users").get().id;
+  const rideId = "ride_test_heatmap_retry0001";
+  const completedAt = 1_800_000_002_000;
+  const points = [point(0, 1_800_000_000_000), point(1, 1_800_000_001_000, 30.2673, -97.7432)];
+  await instance.rides(request("/api/rides", {
+    cookies: owner,
+    body: { id: rideId, startedAt: points[0].recordedAt },
+  }));
+  await instance.rides(request(`/api/rides/${rideId}/batches`, {
+    cookies: owner,
+    body: { id: "batch_test_heatmap_retry01", points },
+  }));
+  instance.db.database.prepare(
+    "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ?",
+  ).run(completedAt, completedAt, rideId);
+  const contribution = heatCellContributions(points, completedAt)[0];
+  instance.db.database.prepare(
+    `INSERT INTO ride_heat_cell_contributions
+      (ride_id, user_id, resolution, cell_id, bucket_start, latitude, longitude, distance_meters)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(rideId, userId, contribution.resolution, contribution.cellId, contribution.bucketStart, contribution.latitude, contribution.longitude, contribution.distanceMeters);
+
+  const response = await instance.heatmap(request(
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
+    { method: "GET", cookies: owner },
+  ));
+  assert.equal(response.status, 200);
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    3,
+  );
+  assert.equal(
+    instance.db.database.prepare("SELECT heatmap_backfilled_at AS heatmapBackfilledAt FROM rides WHERE id = ?").get(rideId).heatmapBackfilledAt,
+    completedAt,
+  );
   instance.db.close();
 });
 
@@ -222,6 +268,27 @@ test("private heatmap combines daily rows with the same cell ID", async () => {
     rideCount: 3,
     distanceMeters: 30,
   }]);
+  instance.db.close();
+});
+
+test("private heatmap includes the full oldest daily bucket in a range", async () => {
+  const now = 2_000 * DAY_MS + 12 * 60 * 60 * 1_000;
+  const instance = fixture(now);
+  const owner = await anonymous(instance);
+  const userId = instance.db.database.prepare("SELECT id FROM users").get().id;
+  const cellId = geohash(30.2672, -97.7431, 7);
+  instance.db.database.prepare(
+    `INSERT INTO ride_heat_cells
+      (user_id, resolution, cell_id, bucket_start, latitude, longitude, ride_count, distance_meters)
+     VALUES (?, 7, ?, ?, ?, ?, 1, 10)`,
+  ).run(userId, cellId, 1_970 * DAY_MS, 30.2672, -97.7431);
+
+  const response = await instance.heatmap(request(
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=30d",
+    { method: "GET", cookies: owner },
+  ));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).cells.length, 1);
   instance.db.close();
 });
 

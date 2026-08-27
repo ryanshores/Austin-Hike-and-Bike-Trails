@@ -36,6 +36,13 @@
       "when": 1787600000000,
       "tag": "0004_private_ride_heatmap",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1787857621361,
+      "tag": "0005_resumable_heatmap_backfill",
+      "breakpoints": true
     }
   ]
 }

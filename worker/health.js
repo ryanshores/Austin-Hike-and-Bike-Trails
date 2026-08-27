@@ -1,6 +1,6 @@
 import { providerEndpoint, requestAllowed, sharedGeocoderRateLimitKey } from "./api-utils.js";
 
-export const EXPECTED_D1_MIGRATION = "0004_private_ride_heatmap.sql";
+export const EXPECTED_D1_MIGRATION = "0005_resumable_heatmap_backfill.sql";
 export const HEALTH_CHECK_TIMEOUT_MS = 3_000;
 
 function healthResponse(value, status) {

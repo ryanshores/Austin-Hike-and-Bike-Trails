@@ -161,23 +161,20 @@ export function heatCellContributionStatements(db, userId, rideId, points, compl
 }
 
 async function backfillCompletedRides(db, userId) {
-  const points = await db.prepare(
+  const rows = await db.prepare(
     `SELECT rides.id AS rideId, rides.ended_at AS endedAt,
             ride_points.latitude, ride_points.longitude
        FROM rides
-       JOIN ride_points ON ride_points.ride_id = rides.id
+       LEFT JOIN ride_points ON ride_points.ride_id = rides.id
       WHERE rides.user_id = ? AND rides.status = 'completed'
         AND rides.deleted_at IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM ride_heat_cell_contributions
-           WHERE ride_heat_cell_contributions.ride_id = rides.id
-        )
+        AND rides.heatmap_backfilled_at IS NULL
       ORDER BY rides.id ASC, ride_points.sequence ASC`,
   ).bind(userId).all();
   const rides = new Map();
-  for (const point of points.results ?? []) {
+  for (const point of rows.results ?? []) {
     const ride = rides.get(point.rideId) ?? { endedAt: point.endedAt, points: [] };
-    ride.points.push(point);
+    if (point.latitude !== null && point.longitude !== null) ride.points.push(point);
     rides.set(point.rideId, ride);
   }
   const statements = [];
@@ -186,6 +183,13 @@ async function backfillCompletedRides(db, userId) {
   }
   for (let index = 0; index < statements.length; index += MAX_BACKFILL_STATEMENTS) {
     await db.batch(statements.slice(index, index + MAX_BACKFILL_STATEMENTS));
+  }
+  const completed = [...rides.keys()].map((rideId) => db.prepare(
+    `UPDATE rides SET heatmap_backfilled_at = ended_at
+      WHERE id = ? AND user_id = ? AND heatmap_backfilled_at IS NULL`,
+  ).bind(rideId, userId));
+  for (let index = 0; index < completed.length; index += MAX_BACKFILL_STATEMENTS) {
+    await db.batch(completed.slice(index, index + MAX_BACKFILL_STATEMENTS));
   }
 }
 
@@ -213,11 +217,12 @@ function parseParameters(request, now) {
   const range = parameters.get("range") ?? "90d";
   if (!SUPPORTED_RANGES.has(range)) throw new HttpError(400, "Invalid heatmap range");
   const duration = SUPPORTED_RANGES.get(range);
+  const bucketStart = Math.floor(now / DAY_MS) * DAY_MS;
   return {
     bounds: parseBounds(parameters.get("bounds")),
     resolution: resolutionForZoom(zoom),
     range,
-    since: duration === null ? null : now - duration,
+    since: duration === null ? null : bucketStart - duration,
   };
 }
 
