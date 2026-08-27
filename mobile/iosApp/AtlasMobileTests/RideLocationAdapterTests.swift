@@ -7,15 +7,7 @@ import XCTest
 final class RideLocationAdapterTests: XCTestCase {
     func testBridgesCoreLocationIntoSharedGpsPolicy() {
         let adapter = RideLocationAdapter(nowMilliseconds: { 10_000 })
-        let location = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
-            altitude: 150,
-            horizontalAccuracy: 12,
-            verticalAccuracy: 8,
-            course: 90,
-            speed: 4,
-            timestamp: Date(timeIntervalSince1970: 10)
-        )
+        let location = self.location(timestamp: 10)
 
         adapter.accept(location)
 
@@ -27,15 +19,7 @@ final class RideLocationAdapterTests: XCTestCase {
 
     func testDoesNotAcceptLocationCallbacksUntilRecordingWasExplicitlyStarted() {
         let adapter = RideLocationAdapter(nowMilliseconds: { 10_000 })
-        let location = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
-            altitude: 150,
-            horizontalAccuracy: 12,
-            verticalAccuracy: 8,
-            course: 90,
-            speed: 4,
-            timestamp: Date(timeIntervalSince1970: 10)
-        )
+        let location = self.location(timestamp: 10)
 
         adapter.locationManager(CLLocationManager(), didUpdateLocations: [location])
 
@@ -71,6 +55,26 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertEqual(adapter.latestDecision?.action.wireValue, "keep-last-fix")
         XCTAssertEqual(adapter.latestTrustedFix?.latitude, trusted?.latitude)
         XCTAssertEqual(adapter.latestTrustedFix?.longitude, trusted?.longitude)
+        XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
+    }
+
+    func testAcceptedFixWithoutAValidCourseRetainsTheLastTrustedHeading() {
+        let adapter = RideLocationAdapter(nowMilliseconds: { 11_000 })
+        adapter.accept(location(timestamp: 10, course: 90))
+
+        adapter.accept(location(timestamp: 11, course: -1, courseAccuracy: -1))
+
+        XCTAssertTrue(adapter.latestDecision?.accepted ?? false)
+        XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
+    }
+
+    func testAcceptedFixWithInvalidCourseAccuracyRetainsTheLastTrustedHeading() {
+        let adapter = RideLocationAdapter(nowMilliseconds: { 11_000 })
+        adapter.accept(location(timestamp: 10, course: 90))
+
+        adapter.accept(location(timestamp: 11, course: 135, courseAccuracy: -1))
+
+        XCTAssertTrue(adapter.latestDecision?.accepted ?? false)
         XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
     }
 
@@ -128,14 +132,20 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertEqual(queue.activeRide()?.status.wireValue, "recording")
     }
 
-    private func location(timestamp: TimeInterval) -> CLLocation {
+    private func location(
+        timestamp: TimeInterval,
+        course: CLLocationDirection = 90,
+        courseAccuracy: CLLocationDirectionAccuracy = 12
+    ) -> CLLocation {
         CLLocation(
             coordinate: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
             altitude: 150,
             horizontalAccuracy: 12,
             verticalAccuracy: 8,
-            course: 90,
+            course: course,
+            courseAccuracy: courseAccuracy,
             speed: 4,
+            speedAccuracy: 1,
             timestamp: Date(timeIntervalSince1970: timestamp)
         )
     }
