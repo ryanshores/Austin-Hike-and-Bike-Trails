@@ -44,6 +44,7 @@ struct RideModeView: View {
             VStack(spacing: 12) {
                 statusCard
                 controls
+                diagnosticExport
             }
             .padding()
         }
@@ -136,6 +137,35 @@ struct RideModeView: View {
         .controlSize(.large)
     }
 
+    private var diagnosticExport: some View {
+        ShareLink(
+            item: diagnosticExportData,
+            preview: SharePreview("Atlas Ride Mode diagnostic")
+        ) {
+            Label("Export field diagnostic", systemImage: "square.and.arrow.up")
+        }
+        .font(.footnote.weight(.medium))
+        .accessibilityHint("Exports recording and GPS state without location history or credentials")
+    }
+
+    private var diagnosticExportData: Data {
+        let snapshot = RideDiagnosticExport(
+            exportedAt: .now,
+            appVersion: appVersion,
+            recordingState: recordingLabel,
+            locationAuthorization: locationAdapter.authorizationDiagnosticValue,
+            locationPrecision: locationAdapter.precisionDiagnosticValue,
+            gpsDecision: locationAdapter.latestDecision?.action.wireValue,
+            gpsQuality: locationAdapter.latestDecision?.quality.wireValue,
+            hasTrustworthyPosition: locationAdapter.latestTrustedFix != nil,
+            trustworthyAccuracyMeters: locationAdapter.latestTrustedFix?.accuracyMeters,
+            queuedPointCount: coordinator.queuedPointCount,
+            activeRideState: coordinator.activeRide?.status.wireValue,
+            identityChangeBlocked: coordinator.identityBlockedRide != nil
+        )
+        return (try? snapshot.jsonData()) ?? Data("{}".utf8)
+    }
+
     private var trustedCoordinate: CLLocationCoordinate2D? {
         guard let fix = locationAdapter.latestTrustedFix else { return nil }
         return CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude)
@@ -174,6 +204,12 @@ struct RideModeView: View {
     private var queueStatus: String {
         let count = coordinator.queuedPointCount
         return count == 0 ? "No accepted points queued" : "\(count) accepted \(count == 1 ? "point" : "points") queued for upload"
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        return "\(version) (\(build))"
     }
 
     private var atlasBaseURL: URL? {
