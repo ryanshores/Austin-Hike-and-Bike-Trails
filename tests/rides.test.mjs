@@ -185,6 +185,11 @@ test("private heatmap backfills completed rides that predate heatmap contributio
     "UPDATE rides SET status = 'completed', ended_at = ?, updated_at = ? WHERE id = ?",
   ).run(1_800_000_002_000, 1_800_000_002_000, rideId);
 
+  const preparing = await instance.heatmap(request(
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
+    { method: "GET", cookies: owner },
+  ));
+  assert.equal(preparing.status, 202);
   const response = await instance.heatmap(request(
     "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
     { method: "GET", cookies: owner },
@@ -227,6 +232,11 @@ test("private heatmap retries incomplete contribution backfills before marking a
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(rideId, userId, contribution.resolution, contribution.cellId, contribution.bucketStart, contribution.latitude, contribution.longitude, contribution.distanceMeters);
 
+  const preparing = await instance.heatmap(request(
+    "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
+    { method: "GET", cookies: owner },
+  ));
+  assert.equal(preparing.status, 202);
   const response = await instance.heatmap(request(
     "/api/heatmap?scope=mine&bounds=-97.75,30.26,-97.73,30.28&zoom=15&range=90d",
     { method: "GET", cookies: owner },
@@ -287,7 +297,7 @@ test("private heatmap advances a large historical backfill without replaying wri
   }
   const path = "/api/heatmap?scope=mine&bounds=-100,29,-96,31&zoom=15&range=90d";
 
-  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 200);
+  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 202);
   assert.equal(
     instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
     50,
@@ -297,7 +307,7 @@ test("private heatmap advances a large historical backfill without replaying wri
     null,
   );
 
-  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 200);
+  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 202);
   assert.equal(
     instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
     contributions.length,
@@ -305,6 +315,75 @@ test("private heatmap advances a large historical backfill without replaying wri
   assert.equal(
     instance.db.database.prepare("SELECT heatmap_backfilled_at AS heatmapBackfilledAt FROM rides WHERE id = ?").get(rideId).heatmapBackfilledAt,
     completedAt,
+  );
+  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 200);
+  instance.db.close();
+});
+
+test("ride completion advances a large contribution set without an unbounded D1 batch", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const userId = instance.db.database.prepare("SELECT id FROM users").get().id;
+  const rideId = "ride_test_completion_large0001";
+  const batchId = "batch_test_completion_large01";
+  const points = Array.from({ length: 20 }, (_, sequence) => point(
+    sequence,
+    1_800_000_000_000 + sequence * 1_000,
+    30.2672,
+    -99 + sequence / 10,
+  ));
+  const contributions = heatCellContributions(points, 1_800_000_000_000);
+  assert.ok(contributions.length > 50);
+  instance.db.database.prepare(
+    `INSERT INTO rides
+      (id, user_id, status, started_at, distance_meters, accepted_point_count)
+     VALUES (?, ?, 'recording', ?, 0, ?)`,
+  ).run(rideId, userId, points[0].recordedAt, points.length);
+  instance.db.database.prepare(
+    `INSERT INTO ride_upload_batches (id, ride_id, first_sequence, point_count)
+     VALUES (?, ?, 0, ?)`,
+  ).run(batchId, rideId, points.length);
+  const insertPoint = instance.db.database.prepare(
+    `INSERT INTO ride_points
+      (id, ride_id, upload_batch_id, sequence, recorded_at, latitude, longitude, accuracy_meters, quality)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const ridePoint of points) {
+    insertPoint.run(
+      `${rideId}_${ridePoint.sequence}`,
+      rideId,
+      batchId,
+      ridePoint.sequence,
+      ridePoint.recordedAt,
+      ridePoint.latitude,
+      ridePoint.longitude,
+      ridePoint.accuracyMeters,
+      ridePoint.quality,
+    );
+  }
+
+  const first = await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: owner }));
+  assert.equal(first.status, 202);
+  assert.equal(first.headers.get("retry-after"), "1");
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    50,
+  );
+  assert.equal(
+    instance.db.database.prepare("SELECT completion_started_at AS completionStartedAt FROM rides WHERE id = ?").get(rideId).completionStartedAt,
+    1_800_000_000_000,
+  );
+
+  let completed;
+  for (let attempts = 0; attempts < Math.ceil(contributions.length / 50); attempts += 1) {
+    completed = await instance.rides(request(`/api/rides/${rideId}/complete`, { cookies: owner }));
+    if (completed.status !== 202) break;
+  }
+  assert.equal(completed.status, 200);
+  assert.equal((await completed.json()).ride.status, "completed");
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    contributions.length,
   );
   instance.db.close();
 });

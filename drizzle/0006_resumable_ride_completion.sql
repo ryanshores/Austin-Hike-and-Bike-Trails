@@ -1,0 +1,1 @@
+ALTER TABLE `rides` ADD `completion_started_at` integer;

@@ -43,6 +43,13 @@
       "when": 1787857621361,
       "tag": "0005_resumable_heatmap_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787858734560,
+      "tag": "0006_resumable_ride_completion",
+      "breakpoints": true
     }
   ]
 }

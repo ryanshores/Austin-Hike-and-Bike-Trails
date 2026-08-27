@@ -14,13 +14,14 @@ const MAX_CELLS = 1_000;
 const MAX_BACKFILL_STATEMENTS = 50;
 const HEATMAP_RESOLUTIONS = [5, 6, 7];
 
-function response(body, status = 200) {
+function response(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "Cache-Control": "no-store",
       "Content-Type": "application/json; charset=utf-8",
       "X-Content-Type-Options": "nosniff",
+      ...headers,
     },
   });
 }
@@ -167,7 +168,7 @@ async function backfillCompletedRides(db, userId) {
         AND heatmap_backfilled_at IS NULL
       ORDER BY id ASC LIMIT 1`,
   ).bind(userId).first();
-  if (!ride) return;
+  if (!ride) return false;
   const points = await db.prepare(
     `SELECT latitude, longitude FROM ride_points
       WHERE ride_id = ? ORDER BY sequence ASC`,
@@ -195,6 +196,7 @@ async function backfillCompletedRides(db, userId) {
         WHERE id = ? AND user_id = ? AND heatmap_backfilled_at IS NULL`,
     ).bind(ride.id, userId).run();
   }
+  return true;
 }
 
 function parseBounds(value) {
@@ -233,7 +235,9 @@ function parseParameters(request, now) {
 async function getHeatmap(request, dependencies) {
   const user = await authenticateRequest(request, dependencies);
   const parameters = parseParameters(request, dependencies.now());
-  await backfillCompletedRides(dependencies.db, user.id);
+  if (await backfillCompletedRides(dependencies.db, user.id)) {
+    return response({ error: "Ride heatmap is still preparing; retry shortly" }, 202, { "Retry-After": "1" });
+  }
   const cells = await dependencies.db.prepare(
     `SELECT cell_id AS cellId,
             SUM(ride_count) AS rideCount, SUM(distance_meters) AS distanceMeters
