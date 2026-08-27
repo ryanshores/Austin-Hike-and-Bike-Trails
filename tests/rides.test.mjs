@@ -243,6 +243,72 @@ test("private heatmap retries incomplete contribution backfills before marking a
   instance.db.close();
 });
 
+test("private heatmap advances a large historical backfill without replaying written contributions", async () => {
+  const instance = fixture();
+  const owner = await anonymous(instance);
+  const userId = instance.db.database.prepare("SELECT id FROM users").get().id;
+  const rideId = "ride_test_heatmap_large0001";
+  const batchId = "batch_test_heatmap_large01";
+  const completedAt = 1_800_000_002_000;
+  const points = Array.from({ length: 20 }, (_, sequence) => point(
+    sequence,
+    1_800_000_000_000 + sequence * 1_000,
+    30.2672,
+    -99 + sequence / 10,
+  ));
+  const contributions = heatCellContributions(points, completedAt);
+  assert.ok(contributions.length > 50);
+  instance.db.database.prepare(
+    `INSERT INTO rides
+      (id, user_id, status, started_at, ended_at, distance_meters, accepted_point_count)
+     VALUES (?, ?, 'completed', ?, ?, 0, ?)`,
+  ).run(rideId, userId, points[0].recordedAt, completedAt, points.length);
+  instance.db.database.prepare(
+    `INSERT INTO ride_upload_batches (id, ride_id, first_sequence, point_count)
+     VALUES (?, ?, 0, ?)`,
+  ).run(batchId, rideId, points.length);
+  const insertPoint = instance.db.database.prepare(
+    `INSERT INTO ride_points
+      (id, ride_id, upload_batch_id, sequence, recorded_at, latitude, longitude, accuracy_meters, quality)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const ridePoint of points) {
+    insertPoint.run(
+      `${rideId}_${ridePoint.sequence}`,
+      rideId,
+      batchId,
+      ridePoint.sequence,
+      ridePoint.recordedAt,
+      ridePoint.latitude,
+      ridePoint.longitude,
+      ridePoint.accuracyMeters,
+      ridePoint.quality,
+    );
+  }
+  const path = "/api/heatmap?scope=mine&bounds=-100,29,-96,31&zoom=15&range=90d";
+
+  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 200);
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    50,
+  );
+  assert.equal(
+    instance.db.database.prepare("SELECT heatmap_backfilled_at AS heatmapBackfilledAt FROM rides WHERE id = ?").get(rideId).heatmapBackfilledAt,
+    null,
+  );
+
+  assert.equal((await instance.heatmap(request(path, { method: "GET", cookies: owner }))).status, 200);
+  assert.equal(
+    instance.db.database.prepare("SELECT count(*) AS count FROM ride_heat_cell_contributions WHERE ride_id = ?").get(rideId).count,
+    contributions.length,
+  );
+  assert.equal(
+    instance.db.database.prepare("SELECT heatmap_backfilled_at AS heatmapBackfilledAt FROM rides WHERE id = ?").get(rideId).heatmapBackfilledAt,
+    completedAt,
+  );
+  instance.db.close();
+});
+
 test("private heatmap combines daily rows with the same cell ID", async () => {
   const instance = fixture();
   const owner = await anonymous(instance);

@@ -11,7 +11,7 @@ const SUPPORTED_RANGES = new Map([
 ]);
 const MAX_VIEWPORT_DEGREES = 10;
 const MAX_CELLS = 1_000;
-const MAX_BACKFILL_STATEMENTS = 100;
+const MAX_BACKFILL_STATEMENTS = 50;
 const HEATMAP_RESOLUTIONS = [5, 6, 7];
 
 function response(body, status = 200) {
@@ -161,35 +161,39 @@ export function heatCellContributionStatements(db, userId, rideId, points, compl
 }
 
 async function backfillCompletedRides(db, userId) {
-  const rows = await db.prepare(
-    `SELECT rides.id AS rideId, rides.ended_at AS endedAt,
-            ride_points.latitude, ride_points.longitude
-       FROM rides
-       LEFT JOIN ride_points ON ride_points.ride_id = rides.id
-      WHERE rides.user_id = ? AND rides.status = 'completed'
-        AND rides.deleted_at IS NULL
-        AND rides.heatmap_backfilled_at IS NULL
-      ORDER BY rides.id ASC, ride_points.sequence ASC`,
-  ).bind(userId).all();
-  const rides = new Map();
-  for (const point of rows.results ?? []) {
-    const ride = rides.get(point.rideId) ?? { endedAt: point.endedAt, points: [] };
-    if (point.latitude !== null && point.longitude !== null) ride.points.push(point);
-    rides.set(point.rideId, ride);
-  }
-  const statements = [];
-  for (const [rideId, ride] of rides) {
-    statements.push(...contributionStatements(db, userId, rideId, ride.points, ride.endedAt));
-  }
-  for (let index = 0; index < statements.length; index += MAX_BACKFILL_STATEMENTS) {
-    await db.batch(statements.slice(index, index + MAX_BACKFILL_STATEMENTS));
-  }
-  const completed = [...rides.keys()].map((rideId) => db.prepare(
-    `UPDATE rides SET heatmap_backfilled_at = ended_at
-      WHERE id = ? AND user_id = ? AND heatmap_backfilled_at IS NULL`,
-  ).bind(rideId, userId));
-  for (let index = 0; index < completed.length; index += MAX_BACKFILL_STATEMENTS) {
-    await db.batch(completed.slice(index, index + MAX_BACKFILL_STATEMENTS));
+  const ride = await db.prepare(
+    `SELECT id, ended_at AS endedAt FROM rides
+      WHERE user_id = ? AND status = 'completed' AND deleted_at IS NULL
+        AND heatmap_backfilled_at IS NULL
+      ORDER BY id ASC LIMIT 1`,
+  ).bind(userId).first();
+  if (!ride) return;
+  const points = await db.prepare(
+    `SELECT latitude, longitude FROM ride_points
+      WHERE ride_id = ? ORDER BY sequence ASC`,
+  ).bind(ride.id).all();
+  const existing = await db.prepare(
+    `SELECT resolution, cell_id AS cellId, bucket_start AS bucketStart
+       FROM ride_heat_cell_contributions WHERE ride_id = ?`,
+  ).bind(ride.id).all();
+  const existingKeys = new Set((existing.results ?? []).map((contribution) => (
+    `${contribution.resolution}:${contribution.cellId}:${contribution.bucketStart}`
+  )));
+  const contributions = heatCellContributions(points.results ?? [], ride.endedAt);
+  const missing = contributions.filter((contribution) => !existingKeys.has(
+    `${contribution.resolution}:${contribution.cellId}:${contribution.bucketStart}`,
+  ));
+  const statements = contributionStatements(db, userId, ride.id, points.results ?? [], ride.endedAt)
+    .filter((_, index) => !existingKeys.has(
+      `${contributions[index].resolution}:${contributions[index].cellId}:${contributions[index].bucketStart}`,
+    ))
+    .slice(0, MAX_BACKFILL_STATEMENTS);
+  if (statements.length) await db.batch(statements);
+  if (missing.length <= MAX_BACKFILL_STATEMENTS) {
+    await db.prepare(
+      `UPDATE rides SET heatmap_backfilled_at = ended_at
+        WHERE id = ? AND user_id = ? AND heatmap_backfilled_at IS NULL`,
+    ).bind(ride.id, userId).run();
   }
 }
 
