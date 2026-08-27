@@ -54,6 +54,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     private let nowMilliseconds: () -> Int64
     private var policyState = GpsPolicyState(lastAcceptedFix: nil)
     private var recordingRequested = false
+    private static let maximumTrustedCourseAccuracyDegrees: CLLocationDirectionAccuracy = 45
 
     init(
         locationManager: CLLocationManager = CLLocationManager(),
@@ -162,7 +163,12 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         latestDecision = decision
         if let acceptedFix = decision.acceptedFix {
             latestTrustedFix = acceptedFix
-            if location.course.isFinite, location.course >= 0, location.course < 360, location.courseAccuracy >= 0 {
+            if location.course.isFinite,
+               location.course >= 0,
+               location.course < 360,
+               location.courseAccuracy.isFinite,
+               location.courseAccuracy >= 0,
+               location.courseAccuracy <= Self.maximumTrustedCourseAccuracyDegrees {
                 latestTrustedHeadingDegrees = location.course
             }
         }

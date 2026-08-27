@@ -68,14 +68,24 @@ final class RideLocationAdapterTests: XCTestCase {
         XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
     }
 
-    func testAcceptedFixWithInvalidCourseAccuracyRetainsTheLastTrustedHeading() {
+    func testAcceptedFixWithExcessiveCourseAccuracyRetainsTheLastTrustedHeading() {
         let adapter = RideLocationAdapter(nowMilliseconds: { 11_000 })
         adapter.accept(location(timestamp: 10, course: 90))
 
-        adapter.accept(location(timestamp: 11, course: 135, courseAccuracy: -1))
+        adapter.accept(location(timestamp: 11, course: 135, courseAccuracy: 45.1))
 
         XCTAssertTrue(adapter.latestDecision?.accepted ?? false)
         XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 90)
+    }
+
+    func testAcceptedFixAtMaximumCourseAccuracyUpdatesTheTrustedHeading() {
+        let adapter = RideLocationAdapter(nowMilliseconds: { 11_000 })
+        adapter.accept(location(timestamp: 10, course: 90))
+
+        adapter.accept(location(timestamp: 11, course: 135, courseAccuracy: 45))
+
+        XCTAssertTrue(adapter.latestDecision?.accepted ?? false)
+        XCTAssertEqual(adapter.latestTrustedHeadingDegrees, 135)
     }
 
     func testStaleRecoveredFixSeedsPolicyWithoutRecenteringTheMap() {
