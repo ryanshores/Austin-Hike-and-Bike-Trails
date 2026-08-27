@@ -2,6 +2,7 @@ const DATABASE_NAME = "austin-atlas-ride-recorder";
 const DATABASE_VERSION = 1;
 const ACTIVE_KEY = "active";
 const MAX_BATCH_POINTS = 100;
+const COMPLETION_RETRY_MS = 1_000;
 
 function requestResult(request) {
   return new Promise((resolve, reject) => {
@@ -197,10 +198,14 @@ export class RideRecorder {
     const active = await this.activeRide();
     if (!active) return;
     await this.flush();
-    const response = await this.requestWithRefresh(`/api/rides/${active.rideId}/complete`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
+    let response;
+    do {
+      response = await this.requestWithRefresh(`/api/rides/${active.rideId}/complete`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (response.status === 202) await new Promise((resolve) => setTimeout(resolve, COMPLETION_RETRY_MS));
+    } while (response.status === 202);
     if (!response.ok) throw new Error("Could not finish route history");
     const database = await this.databasePromise;
     const transaction = database.transaction(["state", "points"], "readwrite");

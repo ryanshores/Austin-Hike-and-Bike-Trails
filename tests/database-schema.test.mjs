@@ -55,6 +55,8 @@ test("route-history migrations create the required tables and indexes", () => {
     "auth_rate_limits",
     "auth_refresh_tokens",
     "auth_sessions",
+	    "ride_heat_cell_contributions",
+	    "ride_heat_cells",
     "ride_points",
     "ride_upload_batches",
     "rides",
@@ -72,6 +74,7 @@ test("route-history migrations create the required tables and indexes", () => {
   for (const requiredIndex of [
     "users_email_unique",
     "rides_user_started_idx",
+    "ride_heat_cells_owner_viewport_idx",
     "ride_points_ride_sequence_unique",
     "ride_upload_batches_ride_sequence_unique",
     "auth_sessions_refresh_token_hash_unique",

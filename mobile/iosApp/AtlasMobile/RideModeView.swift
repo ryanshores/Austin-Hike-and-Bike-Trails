@@ -5,10 +5,19 @@ import SwiftUI
 
 /// The iOS Ride Mode surface deliberately renders only shared-policy accepted positions.
 struct RideModeView: View {
+    private enum OrientationMode: Equatable {
+        case northUp
+        case forwardUp
+
+        var label: String { self == .northUp ? "North up" : "Forward up" }
+        var icon: String { self == .northUp ? "location.north.fill" : "location.fill" }
+    }
+
     @ObservedObject private var coordinator: RideRecordingCoordinator
     @ObservedObject private var locationAdapter: RideLocationAdapter
     @EnvironmentObject private var nativeSessionHost: NativeSessionHost
     @State private var mapPosition = MapCameraPosition.region(Self.austinRegion)
+    @State private var orientationMode = OrientationMode.northUp
     @StateObject private var bikeFacilities = BikeFacilityOverlayStore()
     @State private var pendingDiagnosticExport: DiagnosticExportPayload?
 
@@ -69,11 +78,10 @@ struct RideModeView: View {
             Text("This interrupted ride belongs to a different account. Keeping it preserves its local points until that account is restored.")
         }
         .onChange(of: trustedTimestamp) { _, _ in
-            guard let coordinate = trustedCoordinate else { return }
-            mapPosition = .region(MKCoordinateRegion(
-                center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
-            ))
+            recenterOnTrustedPosition()
+        }
+        .onChange(of: orientationMode) { _, _ in
+            recenterOnTrustedPosition()
         }
         .sheet(item: $pendingDiagnosticExport) { export in
             VStack(spacing: 20) {
@@ -115,6 +123,14 @@ struct RideModeView: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
+            Button {
+                orientationMode = orientationMode == .northUp ? .forwardUp : .northUp
+            } label: {
+                Label(orientationMode.label, systemImage: orientationMode.icon)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityHint("Changes the map orientation using only the last accepted location heading")
+
             if coordinator.identityBlockedRide != nil {
                 Label("Restore the previous account to continue this ride", systemImage: "lock.fill")
                     .font(.subheadline)
@@ -192,6 +208,19 @@ struct RideModeView: View {
 
     private var trustedTimestamp: Int64? {
         locationAdapter.latestTrustedFix?.timestampMilliseconds
+    }
+
+    private func recenterOnTrustedPosition() {
+        guard let coordinate = trustedCoordinate else { return }
+        let heading = orientationMode == .forwardUp
+            ? locationAdapter.latestTrustedHeadingDegrees ?? 0
+            : 0
+        mapPosition = .camera(MapCamera(
+            centerCoordinate: coordinate,
+            distance: 1_000,
+            heading: heading,
+            pitch: 0
+        ))
     }
 
     private var recordingLabel: String {

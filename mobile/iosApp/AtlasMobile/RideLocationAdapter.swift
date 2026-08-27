@@ -43,6 +43,8 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     /// The only position the Ride Mode map may render as the rider's location.
     /// It is retained when later callbacks are coarse, stale, or implausible.
     @Published private(set) var latestTrustedFix: AcceptedLocationFix?
+    /// Last valid course from an accepted location; callbacks without a valid course retain it.
+    @Published private(set) var latestTrustedHeadingDegrees: CLLocationDirection?
     @Published private(set) var latestPersistenceResult: PersistAcceptedFixResult?
 
     var onDecision: ((GpsDecision) -> Void)?
@@ -52,6 +54,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
     private let nowMilliseconds: () -> Int64
     private var policyState = GpsPolicyState(lastAcceptedFix: nil)
     private var recordingRequested = false
+    private static let maximumTrustedCourseAccuracyDegrees: CLLocationDirectionAccuracy = 45
 
     init(
         locationManager: CLLocationManager = CLLocationManager(),
@@ -86,6 +89,7 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         recordingRequested = true
         self.policyState = policyState
         latestTrustedFix = policyState.lastAcceptedFix.flatMap { isFreshForDisplay($0) ? $0 : nil }
+        latestTrustedHeadingDegrees = nil
         latestDecision = nil
         latestPersistenceResult = nil
         switch locationManager.authorizationStatus {
@@ -176,6 +180,14 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         latestDecision = decision
         if let acceptedFix = decision.acceptedFix {
             latestTrustedFix = acceptedFix
+            if location.course.isFinite,
+               location.course >= 0,
+               location.course < 360,
+               location.courseAccuracy.isFinite,
+               location.courseAccuracy >= 0,
+               location.courseAccuracy <= Self.maximumTrustedCourseAccuracyDegrees {
+                latestTrustedHeadingDegrees = location.course
+            }
         }
         latestPersistenceResult = acceptedFixRecorder?.persist(decision: decision)
         onDecision?(decision)

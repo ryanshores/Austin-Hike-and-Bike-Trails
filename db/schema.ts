@@ -126,6 +126,8 @@ export const rides = sqliteTable(
     title: text("title"),
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
     endedAt: integer("ended_at", { mode: "timestamp_ms" }),
+    completionStartedAt: integer("completion_started_at", { mode: "timestamp_ms" }),
+    heatmapBackfilledAt: integer("heatmap_backfilled_at", { mode: "timestamp_ms" }),
     distanceMeters: real("distance_meters").notNull().default(0),
     acceptedPointCount: integer("accepted_point_count").notNull().default(0),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
@@ -263,6 +265,68 @@ export const ridePoints = sqliteTable(
           and ${table.accuracyMeters} <= 100)
       )`,
     ),
+  ],
+);
+
+export const rideHeatCells = sqliteTable(
+  "ride_heat_cells",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    resolution: integer("resolution").notNull(),
+    cellId: text("cell_id").notNull(),
+    bucketStart: integer("bucket_start", { mode: "timestamp_ms" }).notNull(),
+    latitude: real("latitude").notNull(),
+    longitude: real("longitude").notNull(),
+    rideCount: integer("ride_count").notNull(),
+    distanceMeters: real("distance_meters").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.userId, table.resolution, table.cellId, table.bucketStart],
+    }),
+    index("ride_heat_cells_owner_viewport_idx").on(
+      table.userId,
+      table.resolution,
+      table.bucketStart,
+      table.latitude,
+      table.longitude,
+    ),
+    check("ride_heat_cells_resolution_check", sql`${table.resolution} in (5, 6, 7)`),
+    check("ride_heat_cells_count_check", sql`${table.rideCount} > 0`),
+    check("ride_heat_cells_distance_check", sql`${table.distanceMeters} >= 0`),
+    check("ride_heat_cells_latitude_check", sql`${table.latitude} between -90 and 90`),
+    check("ride_heat_cells_longitude_check", sql`${table.longitude} between -180 and 180`),
+  ],
+);
+
+export const rideHeatCellContributions = sqliteTable(
+  "ride_heat_cell_contributions",
+  {
+    rideId: text("ride_id")
+      .notNull()
+      .references(() => rides.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    resolution: integer("resolution").notNull(),
+    cellId: text("cell_id").notNull(),
+    bucketStart: integer("bucket_start", { mode: "timestamp_ms" }).notNull(),
+    latitude: real("latitude").notNull(),
+    longitude: real("longitude").notNull(),
+    distanceMeters: real("distance_meters").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.rideId, table.resolution, table.cellId, table.bucketStart],
+    }),
+    index("ride_heat_contributions_owner_idx").on(table.userId),
+    check("ride_heat_contributions_resolution_check", sql`${table.resolution} in (5, 6, 7)`),
+    check("ride_heat_contributions_distance_check", sql`${table.distanceMeters} > 0`),
   ],
 );
 

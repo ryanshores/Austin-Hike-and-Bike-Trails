@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import { createAuthHandler } from "./auth";
 import { createBikeFacilitiesHandler } from "./bike-facilities";
 import { createRideHandler } from "./rides";
+import { createHeatmapHandler } from "./heatmap";
 import { createGeocodeHandler } from "./geocode";
 import {
   createFullHealthHandler,
@@ -178,6 +179,13 @@ const worker = {
         db: env.DB,
         jwtSecret: env.JWT_SECRET,
         rateLimiter: env.ROUTE_RATE_LIMITER,
+      })(request);
+    }
+
+    if (url.pathname === "/api/heatmap") {
+      return createHeatmapHandler({
+        db: env.DB,
+        jwtSecret: env.JWT_SECRET,
       })(request);
     }
 
