@@ -10,6 +10,7 @@ struct RideModeView: View {
     @EnvironmentObject private var nativeSessionHost: NativeSessionHost
     @State private var mapPosition = MapCameraPosition.region(Self.austinRegion)
     @StateObject private var bikeFacilities = BikeFacilityOverlayStore()
+    @State private var pendingDiagnosticExport: DiagnosticExportPayload?
 
     init(coordinator: RideRecordingCoordinator) {
         _coordinator = ObservedObject(wrappedValue: coordinator)
@@ -73,6 +74,21 @@ struct RideModeView: View {
                 center: coordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
             ))
+        }
+        .sheet(item: $pendingDiagnosticExport) { export in
+            VStack(spacing: 20) {
+                Text("Share field diagnostic")
+                    .font(.headline)
+                Text("This export contains Ride Mode status only. It excludes location history and credentials.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                ShareLink(item: export.data, preview: SharePreview("Atlas Ride Mode diagnostic")) {
+                    Label("Share diagnostic", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+            .presentationDetents([.height(210)])
         }
     }
 
@@ -138,17 +154,16 @@ struct RideModeView: View {
     }
 
     private var diagnosticExport: some View {
-        ShareLink(
-            item: diagnosticExportData,
-            preview: SharePreview("Atlas Ride Mode diagnostic")
-        ) {
+        Button {
+            pendingDiagnosticExport = DiagnosticExportPayload(data: makeDiagnosticExportData())
+        } label: {
             Label("Export field diagnostic", systemImage: "square.and.arrow.up")
         }
         .font(.footnote.weight(.medium))
         .accessibilityHint("Exports recording and GPS state without location history or credentials")
     }
 
-    private var diagnosticExportData: Data {
+    private func makeDiagnosticExportData() -> Data {
         let snapshot = RideDiagnosticExport(
             exportedAt: .now,
             appVersion: appVersion,
@@ -235,4 +250,9 @@ struct RideModeView: View {
         center: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
         span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
     )
+}
+
+private struct DiagnosticExportPayload: Identifiable {
+    let id = UUID()
+    let data: Data
 }
