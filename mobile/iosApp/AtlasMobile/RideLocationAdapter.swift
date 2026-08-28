@@ -122,6 +122,23 @@ final class RideLocationAdapter: NSObject, @preconcurrency CLLocationManagerDele
         executionState = .foreground
     }
 
+    var authorizationDiagnosticValue: String {
+        switch authorizationState {
+        case .notDetermined: "not-determined"
+        case .needsAlwaysAuthorization: "when-in-use"
+        case .authorized: "always"
+        case .unavailable: "unavailable"
+        }
+    }
+
+    var precisionDiagnosticValue: String {
+        switch precisionState {
+        case .precise: "full"
+        case .reduced: "reduced"
+        case .unavailable: "unavailable"
+        }
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationState = Self.authorizationState(for: manager.authorizationStatus)
         precisionState = Self.precisionState(for: manager)
