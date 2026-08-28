@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Feature, FeatureCollection, LineString, MultiLineString } from "geojson";
-import type { Circle, CircleMarker, GeoJSON as LeafletGeoJSON, LatLng, Map as LeafletMap, Marker } from "leaflet";
+import type { Circle, CircleMarker, GeoJSON as LeafletGeoJSON, LatLng, LayerGroup, Map as LeafletMap, Marker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   isPlausibleLocationChange,
@@ -27,6 +27,7 @@ import {
 import { formatMiles, normalizePlannedRoute, routeErrorMessage } from "./route-planner-utils.js";
 import { RideRecorder } from "./ride-recorder";
 import { ensureUser } from "./account-history-api";
+import { HEATMAP_RANGES, heatmapMarkerStyle, heatmapRangeLabel, heatmapRequestUrl, heatmapZoomBucket } from "./ride-heatmap";
 import RoutePlanner, {
   type PlannedRoute,
   type PlanningEndpointKey,
@@ -66,6 +67,8 @@ type RouteGuidance = {
 type GuidanceProgress = ReturnType<typeof initialGuidanceProgress>;
 type OffRouteState = ReturnType<typeof initialOffRouteState>;
 type GuidancePoint = { accuracyMeters: number; latitude: number; longitude: number; timestamp: number };
+type HeatmapCell = { cellId: string; distanceMeters: number; latitude: number; longitude: number; rideCount: number };
+type HeatmapResponse = { cells: HeatmapCell[]; range: string; resolution: number; scope: "mine" };
 
 const categories: Record<Category, { label: string; note: string; color: string; dash?: string }> = {
   offRoadBike: { label: "Separated path, off road", note: "Lowest traffic exposure", color: "#1f6b4f" },
@@ -156,6 +159,14 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
   const rerouteControllerRef = useRef<AbortController | null>(null);
   const plannedRouteLayerRef = useRef<LeafletGeoJSON | null>(null);
   const divergenceLayerRef = useRef<LeafletGeoJSON | null>(null);
+  const heatmapLayerRef = useRef<LayerGroup | null>(null);
+  const heatmapRequestRef = useRef<AbortController | null>(null);
+  const heatmapRefreshRef = useRef<(() => void) | null>(null);
+  const loadedHeatmapBoundsRef = useRef<import("leaflet").LatLngBounds | null>(null);
+  const loadedHeatmapZoomBucketRef = useRef<number | null>(null);
+  const heatmapRetryRef = useRef<number | null>(null);
+  const showRideHeatRef = useRef(false);
+  const heatmapRangeRef = useRef("90d");
   const activeMapTargetRef = useRef<PlanningEndpointKey | null>(null);
   const planningEndpointsRef = useRef<PlanningEndpoints>({ start: null, destination: null });
   const [enabled, setEnabled] = useState<Record<Category, boolean>>({ offRoadBike: true, protectedBike: true, streetBike: true, offRoadHike: true });
@@ -182,6 +193,9 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
   const [rerouteMessage, setRerouteMessage] = useState("");
   const [showLoginReminder, setShowLoginReminder] = useState(false);
   const [checkingIdentity, setCheckingIdentity] = useState(false);
+  const [showRideHeat, setShowRideHeat] = useState(false);
+  const [heatmapRange, setHeatmapRange] = useState("90d");
+  const [heatmapStatus, setHeatmapStatus] = useState("off");
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return;
@@ -202,6 +216,11 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
       routePane.style.pointerEvents = "none";
       const markerPane = map.createPane("planned-route-markers");
       markerPane.style.zIndex = "610";
+      const heatmapPane = map.createPane("ride-heatmap");
+      heatmapPane.style.zIndex = "430";
+      heatmapPane.style.pointerEvents = "none";
+      const heatmapLayer = L.layerGroup();
+      heatmapLayerRef.current = heatmapLayer;
       const mapSizeSync = installMapSizeSync({ map, mapNode: mapNode.current });
       L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
@@ -243,6 +262,15 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
         });
       };
       map.on("zoomend", updateRouteWeights);
+
+      try {
+        const savedHeatmapPreference = localStorage.getItem("trails-ride-heat") === "true";
+        showRideHeatRef.current = savedHeatmapPreference;
+        setShowRideHeat(savedHeatmapPreference);
+        if (savedHeatmapPreference) heatmapLayer.addTo(map);
+      } catch {
+        // Showing a private layer remains an optional browser preference.
+      }
 
       let hikeCount = 0;
       let bikeCount = 0;
@@ -303,7 +331,65 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setStatus("Bike routes could not update. Try refreshing when you have a connection.");
       }); };
+      const loadRideHeatmap = async () => {
+        if (!showRideHeatRef.current) return;
+        const visibleBounds = map.getBounds();
+        const zoomBucket = heatmapZoomBucket(map.getZoom());
+        if (loadedHeatmapBoundsRef.current?.contains(visibleBounds)
+          && loadedHeatmapZoomBucketRef.current === zoomBucket) return;
+        heatmapRequestRef.current?.abort();
+        const controller = new AbortController();
+        heatmapRequestRef.current = controller;
+        setHeatmapStatus("loading");
+        try {
+          let response = await fetch(heatmapRequestUrl(visibleBounds.pad(0.2), map.getZoom(), heatmapRangeRef.current), {
+            credentials: "same-origin",
+            signal: controller.signal,
+          });
+          if (response.status === 401) {
+            await ensureUser();
+            response = await fetch(heatmapRequestUrl(visibleBounds.pad(0.2), map.getZoom(), heatmapRangeRef.current), {
+              credentials: "same-origin",
+              signal: controller.signal,
+            });
+          }
+          if (controller.signal.aborted || cancelled || !showRideHeatRef.current) return;
+          if (response.status === 202) {
+            setHeatmapStatus("preparing");
+            const retryAfterSeconds = Math.max(1, Number(response.headers.get("Retry-After")) || 1);
+            heatmapRetryRef.current = window.setTimeout(() => heatmapRefreshRef.current?.(), retryAfterSeconds * 1_000);
+            return;
+          }
+          if (!response.ok) throw new Error("Ride heatmap unavailable");
+          const data = await response.json() as HeatmapResponse;
+          if (controller.signal.aborted || cancelled || !showRideHeatRef.current) return;
+          const maximumDistance = Math.max(0, ...data.cells.map((cell) => cell.distanceMeters));
+          heatmapLayer.clearLayers();
+          data.cells.forEach((cell) => {
+            const style = heatmapMarkerStyle(cell.distanceMeters, maximumDistance);
+            L.circleMarker([cell.latitude, cell.longitude], {
+              pane: "ride-heatmap",
+              color: "#9f3d26",
+              fillColor: "#e37934",
+              interactive: false,
+              weight: 1,
+              ...style,
+            }).addTo(heatmapLayer);
+          });
+          loadedHeatmapBoundsRef.current = visibleBounds.pad(0.2);
+          loadedHeatmapZoomBucketRef.current = zoomBucket;
+          setHeatmapStatus(data.cells.length ? "ready" : "empty");
+        } catch {
+          if (controller.signal.aborted || cancelled) return;
+          setHeatmapStatus(navigator.onLine ? "unavailable" : "offline");
+        } finally {
+          if (heatmapRequestRef.current === controller) heatmapRequestRef.current = null;
+        }
+      };
+      heatmapRefreshRef.current = () => { void loadRideHeatmap(); };
       map.on("moveend", refreshBikes);
+      map.on("moveend", heatmapRefreshRef.current);
+      map.on("zoomend", heatmapRefreshRef.current);
       map.on("click", (event) => {
         const target = activeMapTargetRef.current;
         if (!target || isRide) return;
@@ -316,6 +402,7 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
       });
       loadHikes().catch(() => setStatus("Urban trails could not load. Try refreshing when you have a connection."));
       refreshBikes();
+      heatmapRefreshRef.current();
       map.once("load", mapSizeSync.syncMapSize);
       map.on("unload", mapSizeSync.disconnect);
       setMapVersion((version) => version + 1);
@@ -325,6 +412,11 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
     return () => {
       cancelled = true;
       bikeRequest?.abort();
+      heatmapRequestRef.current?.abort();
+      if (heatmapRetryRef.current !== null) window.clearTimeout(heatmapRetryRef.current);
+      heatmapRetryRef.current = null;
+      heatmapRefreshRef.current = null;
+      heatmapLayerRef.current = null;
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
       wakeLockRef.current?.release().catch(() => {});
@@ -555,6 +647,43 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
       if (next) layer.addTo(map);
       else layer.removeFrom(map);
     }
+  }
+
+  function toggleRideHeat() {
+    const next = !showRideHeatRef.current;
+    showRideHeatRef.current = next;
+    setShowRideHeat(next);
+    try {
+      localStorage.setItem("trails-ride-heat", String(next));
+    } catch {
+      // Layer preferences are optional.
+    }
+    const map = mapRef.current;
+    const layer = heatmapLayerRef.current;
+    if (!map || !layer) return;
+    if (next) {
+      layer.addTo(map);
+      heatmapRefreshRef.current?.();
+    } else {
+      heatmapRequestRef.current?.abort();
+      layer.clearLayers();
+      loadedHeatmapBoundsRef.current = null;
+      loadedHeatmapZoomBucketRef.current = null;
+      setHeatmapStatus("off");
+      layer.removeFrom(map);
+    }
+  }
+
+  function selectHeatmapRange(nextRange: string) {
+    if (!HEATMAP_RANGES.includes(nextRange)) return;
+    heatmapRequestRef.current?.abort();
+    if (heatmapRetryRef.current !== null) window.clearTimeout(heatmapRetryRef.current);
+    heatmapRetryRef.current = null;
+    heatmapRangeRef.current = nextRange;
+    setHeatmapRange(nextRange);
+    loadedHeatmapBoundsRef.current = null;
+    loadedHeatmapZoomBucketRef.current = null;
+    if (showRideHeatRef.current) heatmapRefreshRef.current?.();
   }
 
   async function requestWakeLock() {
@@ -1088,6 +1217,27 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
             </button>
           ))}
         </div>
+        <section className={`ride-heat-control ${showRideHeat ? "active" : ""}`} aria-label="My ride heat">
+          <button className="ride-heat-toggle" onClick={toggleRideHeat} aria-pressed={showRideHeat}>
+            <span className="ride-heat-swatch" aria-hidden="true" />
+            <span><strong>My ride heat</strong><small>Private, distance-based route activity</small></span>
+          </button>
+          {showRideHeat && (
+            <div className="ride-heat-details">
+              <label>Time range
+                <select value={heatmapRange} onChange={(event) => selectHeatmapRange(event.target.value)}>
+                  {HEATMAP_RANGES.map((range) => <option key={range} value={range}>{heatmapRangeLabel(range)}</option>)}
+                </select>
+              </label>
+              <span className={`ride-heat-status ${heatmapStatus}`} role="status">{heatmapStatus === "loading" ? "Loading private heat…"
+                : heatmapStatus === "preparing" ? "Preparing saved rides…"
+                  : heatmapStatus === "empty" ? "No saved rides in this view"
+                    : heatmapStatus === "offline" ? "Offline — private heat is unavailable"
+                      : heatmapStatus === "unavailable" ? "Private heat could not update"
+                        : "Low activity  ●  High activity"}</span>
+            </div>
+          )}
+        </section>
         <p className="legend-note">Use route markings as a planning aid, not a guarantee of current conditions. Check closures and use your judgment.</p>
       </aside>
     </main>
