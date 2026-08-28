@@ -19,6 +19,7 @@ struct RideModeView: View {
     @State private var mapPosition = MapCameraPosition.region(Self.austinRegion)
     @State private var orientationMode = OrientationMode.northUp
     @StateObject private var bikeFacilities = BikeFacilityOverlayStore()
+    @State private var pendingDiagnosticExport: DiagnosticExportPayload?
 
     init(coordinator: RideRecordingCoordinator) {
         _coordinator = ObservedObject(wrappedValue: coordinator)
@@ -53,6 +54,7 @@ struct RideModeView: View {
             VStack(spacing: 12) {
                 statusCard
                 controls
+                diagnosticExport
             }
             .padding()
         }
@@ -80,6 +82,21 @@ struct RideModeView: View {
         }
         .onChange(of: orientationMode) { _, _ in
             recenterOnTrustedPosition()
+        }
+        .sheet(item: $pendingDiagnosticExport) { export in
+            VStack(spacing: 20) {
+                Text("Share field diagnostic")
+                    .font(.headline)
+                Text("This export contains Ride Mode status only. It excludes location history and credentials.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                ShareLink(item: export.data, preview: SharePreview("Atlas Ride Mode diagnostic")) {
+                    Label("Share diagnostic", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+            .presentationDetents([.height(210)])
         }
     }
 
@@ -152,6 +169,34 @@ struct RideModeView: View {
         .controlSize(.large)
     }
 
+    private var diagnosticExport: some View {
+        Button {
+            pendingDiagnosticExport = DiagnosticExportPayload(data: makeDiagnosticExportData())
+        } label: {
+            Label("Export field diagnostic", systemImage: "square.and.arrow.up")
+        }
+        .font(.footnote.weight(.medium))
+        .accessibilityHint("Exports recording and GPS state without location history or credentials")
+    }
+
+    private func makeDiagnosticExportData() -> Data {
+        let snapshot = RideDiagnosticExport(
+            exportedAt: .now,
+            appVersion: appVersion,
+            recordingState: recordingLabel,
+            locationAuthorization: locationAdapter.authorizationDiagnosticValue,
+            locationPrecision: locationAdapter.precisionDiagnosticValue,
+            gpsDecision: locationAdapter.latestDecision?.action.wireValue,
+            gpsQuality: locationAdapter.latestDecision?.quality.wireValue,
+            hasTrustworthyPosition: locationAdapter.latestTrustedFix != nil,
+            trustworthyAccuracyMeters: locationAdapter.latestTrustedFix?.accuracyMeters,
+            queuedPointCount: coordinator.queuedPointCount,
+            activeRideState: coordinator.activeRide?.status.wireValue,
+            identityChangeBlocked: coordinator.identityBlockedRide != nil
+        )
+        return (try? snapshot.jsonData()) ?? Data("{}".utf8)
+    }
+
     private var trustedCoordinate: CLLocationCoordinate2D? {
         guard let fix = locationAdapter.latestTrustedFix else { return nil }
         return CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude)
@@ -205,6 +250,12 @@ struct RideModeView: View {
         return count == 0 ? "No accepted points queued" : "\(count) accepted \(count == 1 ? "point" : "points") queued for upload"
     }
 
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        return "\(version) (\(build))"
+    }
+
     private var atlasBaseURL: URL? {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "AtlasApiBaseURL") as? String else { return nil }
         return URL(string: value)
@@ -228,4 +279,9 @@ struct RideModeView: View {
         center: CLLocationCoordinate2D(latitude: 30.2672, longitude: -97.7431),
         span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
     )
+}
+
+private struct DiagnosticExportPayload: Identifiable {
+    let id = UUID()
+    let data: Data
 }
