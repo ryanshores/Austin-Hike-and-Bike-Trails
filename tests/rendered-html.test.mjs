@@ -42,6 +42,8 @@ test("server-renders Austin Trails", async () => {
   assert.match(html, /Bike facilities or safer/);
   assert.match(html, /Bicycle-legal streets may still be used/);
   assert.match(html, /Trail safety legend/);
+  assert.match(html, /My ride heat/);
+  assert.match(html, /Private, distance-based route activity/);
   assert.doesNotMatch(html, /\bETA\b|arrival time|trip duration/i);
   assert.match(html, /href="\/history"/);
   assert.match(html, /href="\/account"/);
@@ -64,6 +66,7 @@ test("server-renders the dedicated full-screen ride page", async () => {
   assert.match(html, /Ready to ride/);
   assert.match(html, /Start GPS/);
   assert.match(html, /GPS diagnostics/);
+  assert.match(html, /My ride heat/);
   assert.doesNotMatch(html, /Find a trail or bike route/);
 });
 

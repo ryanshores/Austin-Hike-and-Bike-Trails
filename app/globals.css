@@ -133,6 +133,18 @@ h2 { font-size: 22px; }
 .legend-item small { margin-top: 4px; color: var(--muted); font: 11px/1.2 Arial, sans-serif; }
 .route-swatch { flex: 0 0 35px; width: 35px; height: 0; border-top: 5px var(--route-dash) var(--route-color); border-radius: 5px; }
 .legend-note { margin: 11px 0 0; color: var(--muted); font: 11px/1.35 Arial, sans-serif; }
+.ride-heat-control { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.28); overflow: hidden; }
+.ride-heat-control.active { border-color: rgba(159, 61, 38, .48); background: rgba(227, 121, 52, .08); }
+.ride-heat-toggle { width: 100%; min-height: 58px; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.ride-heat-toggle strong, .ride-heat-toggle small { display: block; }
+.ride-heat-toggle strong { font: 700 12px/1.2 Arial, sans-serif; }
+.ride-heat-toggle small, .ride-heat-status { color: var(--muted); font: 11px/1.3 Arial, sans-serif; }
+.ride-heat-swatch { flex: 0 0 35px; width: 35px; height: 16px; border-radius: 999px; background: linear-gradient(90deg, rgba(227,121,52,.25), #e37934 55%, #9f3d26); box-shadow: inset 0 0 0 1px rgba(159,61,38,.22); }
+.ride-heat-details { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 0 10px 10px 55px; }
+.ride-heat-details label { display: grid; gap: 3px; color: var(--muted); font: 10px Arial, sans-serif; }
+.ride-heat-details select { min-height: 30px; border: 1px solid var(--line); border-radius: 7px; background: #fffaf0; color: var(--ink); font: 11px Arial, sans-serif; }
+.ride-heat-status { text-align: right; }
+.ride-heat-status.unavailable, .ride-heat-status.offline { color: #a54125; }
 
 .ride-shell { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh; min-height: 100svh; overflow: hidden; overscroll-behavior: none; background: #dce1c6; }
 .ride-map-frame { position: absolute; inset: 0; overflow: hidden; }
@@ -181,6 +193,10 @@ h2 { font-size: 22px; }
 .ride-layers .legend-item { flex: 1 0 150px; min-height: 48px; padding: 6px 8px; }
 .ride-layers .legend-item small { display: none; }
 .ride-layers .route-swatch { flex-basis: 28px; width: 28px; border-top-width: 4px; }
+.ride-layers .ride-heat-control { margin: 0 5px 5px; }
+.ride-layers .ride-heat-toggle { min-height: 48px; padding: 6px 8px; }
+.ride-layers .ride-heat-toggle small { display: none; }
+.ride-layers .ride-heat-details { padding: 0 8px 7px 46px; }
 .ride-shell .orientation-control { position: fixed; left: 12px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px); }
 .ride-shell .north-mark { position: fixed; right: 18px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 75px); }
 .ride-stop { position: fixed; z-index: 610; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px); min-height: 42px; transform: translateX(-50%); padding: 0 15px; border: 1px solid rgba(45, 59, 42, .22); border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--ink); box-shadow: 0 4px 14px rgba(43, 49, 33, .14); cursor: pointer; font: 700 12px Arial, sans-serif; }
