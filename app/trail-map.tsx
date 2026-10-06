@@ -683,7 +683,11 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
     setHeatmapRange(nextRange);
     loadedHeatmapBoundsRef.current = null;
     loadedHeatmapZoomBucketRef.current = null;
-    if (showRideHeatRef.current) heatmapRefreshRef.current?.();
+    heatmapLayerRef.current?.clearLayers();
+    if (showRideHeatRef.current) {
+      setHeatmapStatus("loading");
+      heatmapRefreshRef.current?.();
+    }
   }
 
   async function requestWakeLock() {
@@ -744,7 +748,13 @@ export default function TrailMap({ mode = "trails" }: { mode?: MapMode }) {
     setGpsQuality("idle");
     setStatus("Saving route history…");
     rideRecorderRef.current?.finish()
-      .then(() => { setHasInterruptedRide(false); setStatus("Ride mode stopped and saved"); })
+      .then(() => {
+        setHasInterruptedRide(false);
+        setStatus("Ride mode stopped and saved");
+        loadedHeatmapBoundsRef.current = null;
+        loadedHeatmapZoomBucketRef.current = null;
+        if (showRideHeatRef.current) heatmapRefreshRef.current?.();
+      })
       .catch(() => setStatus("Ride stopped. Route points will retry when you resume."));
   }
 
